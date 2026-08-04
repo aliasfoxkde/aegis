@@ -11,6 +11,22 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init-actions@v3
+        with:
+          languages: rust
+      - uses: github/codeql-action/analyze-actions@v3
+        with:
+          category: "/language:rust"
+
+  fmt:
   fmt:
     name: Format
     runs-on: ubuntu-latest
