@@ -1,0 +1,33 @@
+[package]
+name = "aegis-bundler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Pattern bundler for Aegis"
+categories = ["development-tools", "security"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+regex = { workspace = true }
+lazy_static = { workspace = true }
+flate2 = "1.0"
+sha2 = { workspace = true }
+hex = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+walkdir = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[bin]]
+name = "aegis-bundler"
+path = "src/main.rs"

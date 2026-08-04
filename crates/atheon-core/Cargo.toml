@@ -1,0 +1,66 @@
+[package]
+name = "atheon-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Core scanning engine for Atheon-Enhanced"
+categories = ["command-line-utilities", "development-tools", "security"]
+keywords = ["security", "scanning", "pattern-matching", "secrets-detection"]
+
+[dependencies]
+regex = { workspace = true }
+regex-syntax = { workspace = true }
+lazy_static = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["sync", "fs", "io-util"] }
+tracing = { workspace = true }
+futures = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+miette = { workspace = true }
+gzip = { workspace = true }
+jsonschema = { workspace = true }
+
+# Parallel processing
+rayon = "1.10"
+parking_lot = "0.12"
+
+# Glob patterns
+glob = "0.3"
+
+# Ignore files
+ignore = "0.4"
+
+# Walking directories
+walkdir = "2.5"
+
+# Diffs
+similar = "2.5"
+indicatif = { workspace = true }
+
+# Time
+time = { version = "0.3", features = ["formatting"] }
+
+# Env variables
+env_logger = "0.11"
+atty = "0.2"
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+tempfile = "3.10"
+pretty_assertions = "1.4"
+
+[[bench]]
+name = "core_bench"
+harness = false
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen", "dep:js-sys"]

@@ -1,0 +1,33 @@
+[package]
+name = "atheon-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "MCP server for Atheon-Enhanced"
+categories = ["command-line-utilities", "development-tools", "security"]
+
+[dependencies]
+atheon-core = { path = "../atheon-core" }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+
+# Rate limiting
+ratelimit = "0.9"
+
+# JSON-RPC
+jsonrpc-core = "18.0"
+
+[[bin]]
+name = "atheon-mcp"
+path = "src/main.rs"

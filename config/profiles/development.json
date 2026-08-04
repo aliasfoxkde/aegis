@@ -1,0 +1,12 @@
+{
+  "name": "development",
+  "enabled_categories": null,
+  "strict_mode": "standard",
+  "performance_mode": "debug",
+  "exit_on_findings": false,
+  "max_file_size_mb": 50,
+  "binary_file_detection": false,
+  "gitignore_respect": true,
+  "output_format": "human",
+  "timeout_seconds": 0
+}

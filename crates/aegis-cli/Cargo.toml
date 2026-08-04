@@ -1,0 +1,42 @@
+[package]
+name = "aegis-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CLI tool for Aegis"
+categories = ["command-line-utilities", "development-tools", "security"]
+keywords = ["security", "cli", "scanning", "secrets-detection"]
+
+[dependencies]
+aegis-core = { path = "../aegis-core" }
+clap = { workspace = true }
+colored = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+indicatif = { workspace = true }
+reqwest = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = { workspace = true }
+
+[[bin]]
+name = "aegis"
+path = "src/main.rs"
+
+[[bin]]
+name = "aegis-list"
+path = "src/list.rs"
+
+[[bin]]
+name = "aegis-update"
+path = "src/update.rs"

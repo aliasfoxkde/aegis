@@ -1,0 +1,22 @@
+[package]
+name = "atheon-patterns"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Pattern definitions for Atheon-Enhanced"
+categories = ["data", "development-tools"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+lazy_static = { workspace = true }
+regex = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }
+gzip = { workspace = true }
+walkdir = { workspace = true }

@@ -1,0 +1,28 @@
+[package]
+name = "aegis-daemon"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Daemon mode for Aegis"
+categories = ["command-line-utilities", "development-tools", "security"]
+
+[dependencies]
+aegis-core = { path = "../aegis-core" }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+
+# Unix sockets
+nix = "0.28"
+
+[[bin]]
+name = "aegis-daemon"
+path = "src/main.rs"

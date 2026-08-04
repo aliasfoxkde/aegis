@@ -1,0 +1,28 @@
+[package]
+name = "atheon-daemon"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Daemon mode for Atheon-Enhanced"
+categories = ["command-line-utilities", "development-tools", "security"]
+
+[dependencies]
+atheon-core = { path = "../atheon-core" }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+
+# Unix sockets
+nix = "0.28"
+
+[[bin]]
+name = "atheon-daemon"
+path = "src/main.rs"

@@ -1,0 +1,12 @@
+{
+  "name": "mcp-integration",
+  "enabled_categories": null,
+  "strict_mode": "standard",
+  "performance_mode": "optimized",
+  "exit_on_findings": false,
+  "max_file_size_mb": 10,
+  "binary_file_detection": true,
+  "gitignore_respect": true,
+  "output_format": "json",
+  "timeout_seconds": 30
+}
