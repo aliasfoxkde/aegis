@@ -29,19 +29,34 @@ pub struct Pattern {
 pub mod accessibility;
 pub mod ai_detection;
 pub mod ai_safety;
+pub mod api_integration;
+pub mod arm;
+pub mod cloudformation;
 pub mod cloud_native;
 pub mod code_quality;
 pub mod compliance;
+pub mod container;
+pub mod data_visualization;
 pub mod devops;
+pub mod finance;
+pub mod frameworks;
 pub mod git_hygiene;
+pub mod git_ops;
+pub mod graphql;
+pub mod healthcare;
 pub mod infrastructure;
+pub mod kubernetes;
+pub mod metadata;
 pub mod llm_guardrails;
 pub mod performance;
 pub mod pii;
+pub mod pwa;
 pub mod secrets;
 pub mod security_hardening;
 pub mod shift_left;
 pub mod supply_chain;
+pub mod terraform;
+pub mod web_development;
 pub mod web_security;
 
 /// Get all pattern definitions
@@ -60,10 +75,25 @@ pub fn all_patterns() -> Vec<Pattern> {
     patterns.extend(supply_chain::get());
     patterns.extend(infrastructure::get());
     patterns.extend(compliance::get());
+    patterns.extend(kubernetes::get());
+    patterns.extend(container::get());
     patterns.extend(git_hygiene::get());
+    patterns.extend(git_ops::get());
     patterns.extend(ai_safety::get());
     patterns.extend(llm_guardrails::get());
     patterns.extend(shift_left::get());
+    patterns.extend(api_integration::get());
+    patterns.extend(terraform::get());
+    patterns.extend(arm::get());
+    patterns.extend(cloudformation::get());
+    patterns.extend(data_visualization::get());
+    patterns.extend(finance::get());
+    patterns.extend(frameworks::get());
+    patterns.extend(graphql::get());
+    patterns.extend(healthcare::get());
+    patterns.extend(metadata::get());
+    patterns.extend(pwa::get());
+    patterns.extend(web_development::get());
     patterns
 }
 
@@ -83,10 +113,25 @@ pub fn by_category(category: &str) -> Vec<Pattern> {
         "supply-chain" => supply_chain::get(),
         "infrastructure" => infrastructure::get(),
         "compliance" => compliance::get(),
+        "kubernetes" => kubernetes::get(),
+        "container" => container::get(),
         "git-hygiene" => git_hygiene::get(),
+        "git-ops" => git_ops::get(),
         "ai-safety" => ai_safety::get(),
         "llm-guardrails" => llm_guardrails::get(),
         "shift-left" => shift_left::get(),
+        "api-integration" => api_integration::get(),
+        "terraform" => terraform::get(),
+        "arm" => arm::get(),
+        "cloudformation" => cloudformation::get(),
+        "data-visualization" => data_visualization::get(),
+        "finance" => finance::get(),
+        "frameworks" => frameworks::get(),
+        "graphql" => graphql::get(),
+        "healthcare" => healthcare::get(),
+        "metadata" => metadata::get(),
+        "pwa" => pwa::get(),
+        "web-development" => web_development::get(),
         _ => Vec::new(),
     }
 }

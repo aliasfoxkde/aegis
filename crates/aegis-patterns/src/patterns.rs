@@ -21,6 +21,21 @@ pub mod git_hygiene;
 pub mod ai_safety;
 pub mod llm_guardrails;
 pub mod shift_left;
+pub mod api_integration;
+pub mod kubernetes;
+pub mod container;
+pub mod git_ops;
+pub mod arm;
+pub mod cloudformation;
+pub mod data_visualization;
+pub mod finance;
+pub mod frameworks;
+pub mod graphql;
+pub mod healthcare;
+pub mod metadata;
+pub mod pwa;
+pub mod terraform;
+pub mod web_development;
 
 /// Get all patterns
 pub fn all_patterns() -> Vec<Pattern> {
@@ -42,6 +57,21 @@ pub fn all_patterns() -> Vec<Pattern> {
     patterns.extend(ai_safety::get());
     patterns.extend(llm_guardrails::get());
     patterns.extend(shift_left::get());
+    patterns.extend(api_integration::get());
+    patterns.extend(kubernetes::get());
+    patterns.extend(container::get());
+    patterns.extend(git_ops::get());
+    patterns.extend(arm::get());
+    patterns.extend(cloudformation::get());
+    patterns.extend(data_visualization::get());
+    patterns.extend(finance::get());
+    patterns.extend(frameworks::get());
+    patterns.extend(graphql::get());
+    patterns.extend(healthcare::get());
+    patterns.extend(metadata::get());
+    patterns.extend(pwa::get());
+    patterns.extend(terraform::get());
+    patterns.extend(web_development::get());
     patterns
 }
 
@@ -65,6 +95,21 @@ pub fn by_category(category: &str) -> Vec<Pattern> {
         "ai-safety" => ai_safety::get(),
         "llm-guardrails" => llm_guardrails::get(),
         "shift-left" => shift_left::get(),
+        "api-integration" => api_integration::get(),
+        "kubernetes" => kubernetes::get(),
+        "container" => container::get(),
+        "git-ops" => git_ops::get(),
+        "arm" => arm::get(),
+        "cloudformation" => cloudformation::get(),
+        "data-visualization" => data_visualization::get(),
+        "finance" => finance::get(),
+        "frameworks" => frameworks::get(),
+        "graphql" => graphql::get(),
+        "healthcare" => healthcare::get(),
+        "metadata" => metadata::get(),
+        "pwa" => pwa::get(),
+        "terraform" => terraform::get(),
+        "web-development" => web_development::get(),
         _ => Vec::new(),
     }
 }
@@ -85,7 +130,10 @@ mod tests {
             "secrets", "code-quality", "devops", "ai-detection",
             "security-hardening", "accessibility", "web-security", "pii",
             "cloud-native", "performance", "supply-chain", "infrastructure",
-            "compliance", "git-hygiene", "ai-safety", "llm-guardrails", "shift-left"
+            "compliance", "git-hygiene", "ai-safety", "llm-guardrails", "shift-left",
+            "api-integration", "kubernetes", "container", "git-ops", "arm",
+            "cloudformation", "data-visualization", "finance", "frameworks",
+            "graphql", "healthcare", "metadata", "pwa", "terraform", "web-development"
         ] {
             let patterns = by_category(cat);
             assert!(!patterns.is_empty(), "Category {} should have patterns", cat);
