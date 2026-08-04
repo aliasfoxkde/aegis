@@ -21,7 +21,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "graphql-field-cost-undefined".to_string(),
             category: "graphql".to_string(),
-            match_pattern: r#"(?:complexity|fieldCost|costAnalysis)\s*[:=]\s*(?:false|disabled|none)"#.to_string(),
+            match_pattern:
+                r#"(?:complexity|fieldCost|costAnalysis)\s*[:=]\s*(?:false|disabled|none)"#
+                    .to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -49,7 +51,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "graphql-query-depth-unlimited".to_string(),
             category: "graphql".to_string(),
-            match_pattern: r#"(?:maxDepth|defaultMaxDepth|queryDepth)\s*[:=]\s*(?:0|null|undefined|false)"#.to_string(),
+            match_pattern:
+                r#"(?:maxDepth|defaultMaxDepth|queryDepth)\s*[:=]\s*(?:0|null|undefined|false)"#
+                    .to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

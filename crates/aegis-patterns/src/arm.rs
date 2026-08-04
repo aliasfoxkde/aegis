@@ -12,7 +12,8 @@ pub fn get() -> Vec<Pattern> {
             severity: "high".to_string(),
             confidence: "high".to_string(),
             min_entropy: None,
-            description: "Detects Azure ARM template SQL server without proper firewall rules".to_string(),
+            description: "Detects Azure ARM template SQL server without proper firewall rules"
+                .to_string(),
             reference: None,
             tags: vec!["arm".to_string(), "azure".to_string(), "sql".to_string()],
             env_var: false,
@@ -26,9 +27,14 @@ pub fn get() -> Vec<Pattern> {
             severity: "high".to_string(),
             confidence: "high".to_string(),
             min_entropy: None,
-            description: "Detects Azure ARM template storage account with HTTPS traffic disabled".to_string(),
+            description: "Detects Azure ARM template storage account with HTTPS traffic disabled"
+                .to_string(),
             reference: None,
-            tags: vec!["arm".to_string(), "azure".to_string(), "storage".to_string()],
+            tags: vec![
+                "arm".to_string(),
+                "azure".to_string(),
+                "storage".to_string(),
+            ],
             env_var: false,
             binary: false,
         },
