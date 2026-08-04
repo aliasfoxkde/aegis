@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --workspace --release
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p release/
+          for target in x86_64-unknown-linux-gnu x86_64-apple-darwin x86_64-pc-windows-gnu; do
+            cargo build --workspace --release --target $target
+            basename=$(basename $target)
+            ext=""
+            if [[ "$target" == *"windows"* ]]; then ext=".exe"; fi
+            cp target/$target/release/aegis${ext} release/aegis-${basename}${ext} || true
+          done
+          # Fallback for current platform
+          cp target/release/aegis release/aegis-$(rustc -vV | sed -n 's/host: //p') || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

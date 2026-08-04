@@ -1,0 +1,22 @@
+# Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @aliasfoxkde
+
+# CI/CD and release workflows
+/.github/ @aliasfoxkde
+/.github/workflows/ @aliasfoxkde
+
+# Core scanning engine
+/crates/aegis-core/ @aliasfoxkde
+
+# Pattern engine and bundles
+/crates/aegis-patterns/ @aliasfoxkde
+/crates/aegis-bundler/ @aliasfoxkde
+
+# CLI and MCP entry points
+/crates/aegis-cli/ @aliasfoxkde
+/crates/aegis-mcp/ @aliasfoxkde
+
+# Documentation
+/docs/ @aliasfoxkde
