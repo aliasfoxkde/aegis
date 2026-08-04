@@ -27,7 +27,6 @@ jobs:
           category: "/language:rust"
 
   fmt:
-  fmt:
     name: Format
     runs-on: ubuntu-latest
     steps:
