@@ -19,10 +19,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init-actions@v3
+      - uses: github/codeql-action/init@v3
         with:
           languages: rust
-      - uses: github/codeql-action/analyze-actions@v3
+      - uses: github/codeql-action/analyze@v3
         with:
           category: "/language:rust"
 
