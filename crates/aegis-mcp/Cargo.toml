@@ -11,6 +11,7 @@ categories = ["command-line-utilities", "development-tools", "security"]
 
 [dependencies]
 aegis-core = { path = "../aegis-core" }
+aegis-patterns = { path = "../aegis-patterns" }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
