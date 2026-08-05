@@ -2,36 +2,36 @@
 # https://github.com/actions/labeler
 
 # Patterns
-patterns:
-  secrets:
-    - changed-files:
-        - any-glob: '**/secrets*'
+documentation:
+  - changed-files:
+      - any-glob: 'docs/**'
+      - any-glob: '**.md'
 
-  pii:
-    - changed-files:
-        - any-glob: '**/pii*'
+ci-cd:
+  - changed-files:
+      - any-glob: '.github/workflows/**'
+      - any-glob: '.github/*.yml'
 
-  documentation:
-    - changed-files:
-        - any-glob: 'docs/**'
-        - any-glob: '**.md'
+detection-patterns:
+  - changed-files:
+      - any-glob: 'crates/aegis-patterns/**'
 
-  ci-cd:
-    - changed-files:
-        - any-glob: '.github/workflows/**'
+core:
+  - changed-files:
+      - any-glob: 'crates/aegis-core/**'
 
-  patterns:
-    - changed-files:
-        - any-glob: 'crates/aegis-patterns/**'
+cli:
+  - changed-files:
+      - any-glob: 'crates/aegis-cli/**'
 
-  core:
-    - changed-files:
-        - any-glob: 'crates/aegis-core/**'
+mcp:
+  - changed-files:
+      - any-glob: 'crates/aegis-mcp/**'
 
-  cli:
-    - changed-files:
-        - any-glob: 'crates/aegis-cli/**'
+secrets:
+  - changed-files:
+      - any-glob: 'community/secrets/**'
 
-  mcp:
-    - changed-files:
-        - any-glob: 'crates/aegis-mcp/**'
+pii:
+  - changed-files:
+      - any-glob: 'community/pii/**'
