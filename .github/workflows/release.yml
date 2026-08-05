@@ -13,6 +13,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
@@ -23,7 +25,6 @@ jobs:
         with:
           draft: true
           prerelease: false
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -31,6 +32,8 @@ jobs:
   linux:
     name: Linux x86_64
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +58,8 @@ jobs:
   macos-x86:
     name: macOS x86_64
     runs-on: macos-latest
+    permissions:
+      contents: write
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +84,8 @@ jobs:
   macos-arm:
     name: macOS ARM64
     runs-on: macos-latest
+    permissions:
+      contents: write
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +112,8 @@ jobs:
   windows:
     name: Windows x86_64
     runs-on: windows-latest
+    permissions:
+      contents: write
     needs: create-release
     steps:
       - uses: actions/checkout@v4
