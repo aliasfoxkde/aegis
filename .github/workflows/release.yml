@@ -9,39 +9,119 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  release:
-    name: Release
+  # Create draft release
+  create-release:
+    name: Create Release
     runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Linux build
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-latest
+    needs: create-release
+    steps:
+      - uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
-
-      - name: Build release
+      - name: Build
         run: cargo build --workspace --release
+      - name: Package
+        run: |
+          tar -czf aegis-x86_64-unknown-linux-gnu.tar.gz -C target/release aegis
+      - name: Upload
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: aegis-x86_64-unknown-linux-gnu.tar.gz
+          asset_name: aegis-x86_64-unknown-linux-gnu.tar.gz
+          asset_content_type: application/gzip
 
+  # macOS x86_64
+  macos-x86:
+    name: macOS x86_64
+    runs-on: macos-latest
+    needs: create-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --release
+      - name: Package
+        run: |
+          tar -czf aegis-x86_64-apple-darwin.tar.gz -C target/release aegis
+      - name: Upload
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: aegis-x86_64-apple-darwin.tar.gz
+          asset_name: aegis-x86_64-apple-darwin.tar.gz
+          asset_content_type: application/gzip
+
+  # macOS ARM64 (Apple Silicon)
+  macos-arm:
+    name: macOS ARM64
+    runs-on: macos-latest
+    needs: create-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --release --target aarch64-apple-darwin
+      - name: Package
+        run: |
+          tar -czf aegis-aarch64-apple-darwin.tar.gz -C target/aarch64-apple-darwin/release aegis
+      - name: Upload
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: aegis-aarch64-apple-darwin.tar.gz
+          asset_name: aegis-aarch64-apple-darwin.tar.gz
+          asset_content_type: application/gzip
+
+  # Windows x86_64
+  windows:
+    name: Windows x86_64
+    runs-on: windows-latest
+    needs: create-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --release
       - name: Package
         shell: bash
         run: |
-          mkdir -p release/
-          for target in x86_64-unknown-linux-gnu x86_64-apple-darwin x86_64-pc-windows-gnu; do
-            cargo build --workspace --release --target $target
-            basename=$(basename $target)
-            ext=""
-            if [[ "$target" == *"windows"* ]]; then ext=".exe"; fi
-            cp target/$target/release/aegis${ext} release/aegis-${basename}${ext} || true
-          done
-          # Fallback for current platform
-          cp target/release/aegis release/aegis-$(rustc -vV | sed -n 's/host: //p') || true
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+          tar -czf aegis-x86_64-pc-windows-gnu.tar.gz -C target/release aegis.exe
+      - name: Upload
+        uses: actions/upload-release-asset@v1
         with:
-          files: release/*
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: aegis-x86_64-pc-windows-gnu.tar.gz
+          asset_name: aegis-x86_64-pc-windows-gnu.tar.gz
+          asset_content_type: application/gzip
