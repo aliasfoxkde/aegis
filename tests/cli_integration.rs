@@ -14,7 +14,12 @@ fn test_scan_detects_aws_key() {
         .unwrap();
 
     // Exit code 1 means findings were detected
-    assert_eq!(output.status.code(), Some(1), "stdout: {}", String::from_utf8_lossy(&output.stdout));
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 
     let _ = std::fs::remove_file(file_path);
 }
@@ -32,7 +37,12 @@ fn test_scan_no_findings() {
         .unwrap();
 
     // Exit code 0 means no findings
-    assert_eq!(output.status.code(), Some(0), "stdout: {}", String::from_utf8_lossy(&output.stdout));
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
 
     let _ = std::fs::remove_file(file_path);
 }
@@ -44,7 +54,11 @@ fn test_list_patterns() {
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Total:"), "stdout: {}", stdout);
     assert!(stdout.contains("patterns"), "stdout: {}", stdout);
