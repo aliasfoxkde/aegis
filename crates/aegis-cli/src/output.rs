@@ -268,14 +268,54 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 }
 
 pub fn list_patterns(
-    _enabled: bool,
-    _disabled: bool,
-    _category: Option<String>,
+    enabled: bool,
+    disabled: bool,
+    category: Option<String>,
 ) -> Result<(), anyhow::Error> {
-    // Load patterns from bundle
-    println!("Listing patterns...");
+    use aegis_core::Severity;
 
-    // In real implementation, this would load from bundle
-    println!("Pattern management not yet implemented");
+    let patterns = aegis_patterns::all_patterns();
+
+    // Filter by category if specified
+    let patterns: Vec<_> = match &category {
+        Some(cat) => patterns
+            .into_iter()
+            .filter(|p| &p.category == cat)
+            .collect(),
+        None => patterns,
+    };
+
+    // Filter by enabled/disabled status
+    let patterns: Vec<_> = if enabled && !disabled {
+        patterns.into_iter().filter(|p| p.enabled).collect()
+    } else if disabled && !enabled {
+        patterns.into_iter().filter(|p| !p.enabled).collect()
+    } else {
+        patterns
+    };
+
+    println!("Aegis Patterns");
+    println!("==============");
+    println!("Total: {} patterns", patterns.len());
+    if let Some(ref cat) = category {
+        println!("Category: {}", cat);
+    }
+    println!();
+
+    for p in &patterns {
+        let status = if p.enabled { "[+]" } else { "[ ]" };
+        let severity_str = match Severity::parse(&p.severity) {
+            Some(Severity::Critical) => "\x1b[31mCRITICAL\x1b[0m",
+            Some(Severity::High) => "\x1b[33mHIGH\x1b[0m",
+            Some(Severity::Medium) => "\x1b[35mMEDIUM\x1b[0m",
+            Some(Severity::Low) => "\x1b[36mLOW\x1b[0m",
+            None => &p.severity,
+        };
+        println!(
+            "{} {:15} {:8} {}",
+            status, p.name, severity_str, p.description
+        );
+    }
+
     Ok(())
 }

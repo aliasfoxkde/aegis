@@ -115,9 +115,19 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
 }
 
 pub async fn update_bundle(_force: bool) -> Result<()> {
-    println!("Updating pattern bundle...");
+    println!("Checking pattern bundle...");
 
-    // In a real implementation, this would download from a bundle server
-    println!("Bundle is up to date.");
+    // Patterns are bundled in the aegis-patterns crate
+    let patterns = aegis_patterns::all_patterns();
+    println!("Pattern bundle is up to date.");
+    println!(
+        "Loaded {} patterns from {} categories",
+        patterns.len(),
+        patterns
+            .iter()
+            .map(|p| &p.category)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    );
     Ok(())
 }
