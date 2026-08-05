@@ -23,7 +23,7 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 
 # Rate limiting
-ratelimit = "0.9"
+ratelimit = "2.0"
 
 # JSON-RPC
 jsonrpc-core = "18.0"

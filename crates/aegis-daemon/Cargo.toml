@@ -21,7 +21,7 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 
 # Unix sockets
-nix = "0.28"
+nix = "0.31"
 
 [[bin]]
 name = "aegis-daemon"
