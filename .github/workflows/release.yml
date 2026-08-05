@@ -24,6 +24,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-x86_64-unknown-linux-gnu.tar.gz -C target/release aegis
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-linux
+          path: aegis-x86_64-unknown-linux-gnu.tar.gz
 
   # macOS x86_64
   macos-x86:
@@ -40,6 +45,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-x86_64-apple-darwin.tar.gz -C target/release aegis
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-macos-x86
+          path: aegis-x86_64-apple-darwin.tar.gz
 
   # macOS ARM64 (Apple Silicon)
   macos-arm:
@@ -58,6 +68,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-aarch64-apple-darwin.tar.gz -C target/aarch64-apple-darwin/release aegis
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-macos-arm
+          path: aegis-aarch64-apple-darwin.tar.gz
 
   # Windows x86_64
   windows:
@@ -75,6 +90,11 @@ jobs:
         shell: bash
         run: |
           tar -czf aegis-x86_64-pc-windows-gnu.tar.gz -C target/release aegis.exe
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegis-windows
+          path: aegis-x86_64-pc-windows-gnu.tar.gz
 
   # Create release with all assets
   create-release:
@@ -89,7 +109,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release
-          pattern: '*'
+          pattern: 'aegis-*'
           merge-multiple: true
       - name: Display structure
         run: ls -la release/
@@ -98,10 +118,6 @@ jobs:
         with:
           draft: true
           prerelease: false
-          files: |
-            release/aegis-x86_64-unknown-linux-gnu.tar.gz
-            release/aegis-x86_64-apple-darwin.tar.gz
-            release/aegis-aarch64-apple-darwin.tar.gz
-            release/aegis-x86_64-pc-windows-gnu.tar.gz
+          files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
