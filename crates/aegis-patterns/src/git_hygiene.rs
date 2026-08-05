@@ -201,7 +201,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "github-actions-workflow".to_string(),
+            name: "git-hygiene-github-actions-workflow".to_string(),
             category: "git-hygiene".to_string(),
             match_pattern: r#"\.github/workflows/[^/]+\.ya?ml"#.to_string(),
             enabled: true,
@@ -215,7 +215,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "dependabot-config".to_string(),
+            name: "git-hygiene-dependabot-config".to_string(),
             category: "git-hygiene".to_string(),
             match_pattern: r#"dependabot\.yml"#.to_string(),
             enabled: true,
@@ -229,7 +229,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "renovate-config".to_string(),
+            name: "git-hygiene-renovate-config".to_string(),
             category: "git-hygiene".to_string(),
             match_pattern: r#"renovate\.json"#.to_string(),
             enabled: true,

@@ -22,7 +22,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ssn-no-dashes".to_string(),
             category: "pii".to_string(),
-            match_pattern: r"\b(?!000|666|9\d{2})\d{3}(?!00)\d{2}(?!0000)\d{4}\b".to_string(),
+            match_pattern: r"\b\d{3}\d{2}\d{4}\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),

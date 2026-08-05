@@ -61,7 +61,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "latest-tag".to_string(),
+            name: "kubernetes-latest-tag".to_string(),
             category: "kubernetes".to_string(),
             match_pattern: r#"(?i)image:\s*[^:\n]+:latest"#.to_string(),
             enabled: true,
@@ -117,7 +117,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "privileged-container".to_string(),
+            name: "kubernetes-privileged-container".to_string(),
             category: "kubernetes".to_string(),
             match_pattern: r#"(?i)securityContext:\s*\n\s*privileged:\s*true"#.to_string(),
             enabled: true,

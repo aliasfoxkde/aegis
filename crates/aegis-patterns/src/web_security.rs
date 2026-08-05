@@ -91,7 +91,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "csrf-missing-token".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(POST|PUT|DELETE)\s*\([^)]*\)(?!.*csrf|.*token|.*xsrf)"#.to_string(),
+            match_pattern: r#"(?i)(POST|PUT|DELETE)\s*\([^)]*\)"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -483,7 +483,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-authentication".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(@GetMapping|@PostMapping|@RequestMapping)(?!.*secured|.*auth|.*permitAll)"#.to_string(),
+            match_pattern: r#"(?i)(@GetMapping|@PostMapping|@RequestMapping)"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),

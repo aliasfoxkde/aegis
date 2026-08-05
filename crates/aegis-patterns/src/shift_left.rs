@@ -42,7 +42,7 @@ pub fn get() -> Vec<Pattern> {
         },
         // CI/CD patterns
         Pattern {
-            name: "github-actions-workflow".to_string(),
+            name: "shift-left-github-actions-workflow".to_string(),
             category: "shift-left".to_string(),
             match_pattern: r"\.github/workflows/[^/]+\.ya?ml".to_string(),
             enabled: true,
@@ -223,7 +223,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "dependabot-config".to_string(),
+            name: "shift-left-dependabot-config".to_string(),
             category: "shift-left".to_string(),
             match_pattern: r"dependabot\.yml".to_string(),
             enabled: true,

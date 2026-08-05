@@ -2,7 +2,10 @@
 
 use crate::output::Output;
 use crate::OutputFormat;
-use aegis_core::{Finding, RiskScore, ScanOptions as CoreOptions, ScanStats, Scanner};
+use aegis_core::{
+    Confidence, Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanStats,
+    Scanner, Severity,
+};
 use anyhow::Result;
 use std::path::PathBuf;
 use tokio::io::AsyncReadExt;
@@ -22,8 +25,26 @@ pub struct ScanOptions {
     pub quiet: bool,
 }
 
+/// Convert aegis_patterns::Pattern to aegis_core::PatternDefinition
+fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
+    PatternDefinition {
+        name: p.name,
+        category: p.category,
+        match_pattern: p.match_pattern,
+        enabled: p.enabled,
+        severity: Severity::parse(&p.severity).unwrap_or(Severity::Medium),
+        confidence: Confidence::parse(&p.confidence).unwrap_or(Confidence::Medium),
+        min_entropy: p.min_entropy,
+        description: p.description,
+        reference: p.reference,
+        tags: p.tags,
+        env_var: p.env_var,
+        binary: p.binary,
+    }
+}
+
 pub async fn run_scan(opts: ScanOptions) -> Result<()> {
-    // Build scanner
+    // Build scanner with patterns loaded
     let categories = opts
         .categories
         .map(|c| c.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
@@ -36,7 +57,12 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
         ..Default::default()
     };
 
-    let scanner = Scanner::new().with_options(core_opts);
+    // Load patterns from aegis-patterns crate
+    let patterns = aegis_patterns::all_patterns();
+    let definitions: Vec<PatternDefinition> = patterns.into_iter().map(convert_pattern).collect();
+    let scanner = Scanner::from_definitions(definitions)
+        .map_err(|e| anyhow::anyhow!("Failed to load patterns: {}", e))?
+        .with_options(core_opts);
 
     let (findings, stats): (Vec<Finding>, ScanStats) = if opts.scan_env {
         let findings = scanner.scan_env();
@@ -71,6 +97,9 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
     // Output results
     let mut output = Output::new(opts.format, opts.quiet);
     output.write_findings(&findings, &stats, &risk)?;
+
+    // Print to stdout
+    println!("{}", output);
 
     // Write to file if specified
     if let Some(ref path) = opts.output_file {

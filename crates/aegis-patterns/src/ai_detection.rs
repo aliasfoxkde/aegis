@@ -313,7 +313,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "magic-number".to_string(),
+            name: "ai-magic-number".to_string(),
             category: "ai-detection".to_string(),
             match_pattern: r#"\b\d{3,}\b"#.to_string(),
             enabled: true,
@@ -327,7 +327,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "empty-catch-block".to_string(),
+            name: "ai-detection-empty-catch-block".to_string(),
             category: "ai-detection".to_string(),
             match_pattern: r#"(?i)catch\s*\([^)]*\)\s*\{\s*\}"#.to_string(),
             enabled: true,

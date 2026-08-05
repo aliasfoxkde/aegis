@@ -439,7 +439,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "vue-template-injection".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#":[a-z]+=["']{{[^}]*request|:[a-z]+=["']{{[^}]*input|:[a-z]+=["']{{[^}]*params"#.to_string(),
+            match_pattern: r#":[a-z]+=["'][^"]*request|:[a-z]+=["'][^"]*input|:[a-z]+=["'][^"]*params"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

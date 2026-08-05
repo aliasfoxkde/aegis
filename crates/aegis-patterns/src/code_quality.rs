@@ -91,7 +91,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "magic-number".to_string(),
             category: "code-quality".to_string(),
-            match_pattern: r"(?<![a-zA-Z_])(?<!\.)(?<!\w)([0-9]{4,})(?!\w)".to_string(),
+            match_pattern: r"[^a-zA-Z][0-9]{4,}".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -159,7 +159,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "eval-usage".to_string(),
+            name: "code-quality-eval-usage".to_string(),
             category: "code-quality".to_string(),
             match_pattern: r#"eval\s*"#.to_string(),
             enabled: true,

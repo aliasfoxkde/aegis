@@ -38,6 +38,7 @@ name = "aegis-cli"
 version = "0.1.0"
 dependencies = [
  "aegis-core",
+ "aegis-patterns",
  "anyhow",
  "assert_cmd",
  "clap",

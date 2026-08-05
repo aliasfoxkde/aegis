@@ -12,6 +12,7 @@ keywords = ["security", "cli", "scanning", "secrets-detection"]
 
 [dependencies]
 aegis-core = { path = "../aegis-core" }
+aegis-patterns = { path = "../aegis-patterns" }
 clap = { workspace = true }
 colored = { workspace = true }
 tracing = { workspace = true }
