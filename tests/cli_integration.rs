@@ -57,10 +57,7 @@ fn test_scan_no_findings() {
 
 #[test]
 fn test_list_patterns() {
-    let output = aegis_cmd()
-        .arg("list")
-        .output()
-        .unwrap();
+    let output = aegis_cmd().arg("list").output().unwrap();
 
     assert!(
         output.status.success(),
@@ -74,10 +71,7 @@ fn test_list_patterns() {
 
 #[test]
 fn test_update_command() {
-    let output = aegis_cmd()
-        .arg("update")
-        .output()
-        .unwrap();
+    let output = aegis_cmd().arg("update").output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
