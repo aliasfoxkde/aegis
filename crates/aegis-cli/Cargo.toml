@@ -33,11 +33,3 @@ tempfile = { workspace = true }
 [[bin]]
 name = "aegis"
 path = "src/main.rs"
-
-[[bin]]
-name = "aegis-list"
-path = "src/list.rs"
-
-[[bin]]
-name = "aegis-update"
-path = "src/update.rs"
