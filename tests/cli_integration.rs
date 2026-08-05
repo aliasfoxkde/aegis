@@ -2,14 +2,21 @@
 
 use std::process::Command;
 
+fn aegis_cmd() -> Command {
+    let mut cmd = Command::new("cargo");
+    cmd.args(["run", "--package", "aegis-cli", "--bin", "aegis", "--"]);
+    cmd
+}
+
 #[test]
 fn test_scan_detects_aws_key() {
     let temp_dir = std::env::temp_dir();
     let file_path = temp_dir.join("aegis_test_aws.yaml");
     std::fs::write(&file_path, "aws_key: AKIAIOSFODNN7EXAMPLE").unwrap();
 
-    let output = Command::new("target/release/aegis")
-        .args(["scan", &file_path.to_string_lossy()])
+    let output = aegis_cmd()
+        .arg("scan")
+        .arg(file_path.to_string_lossy().as_ref())
         .output()
         .unwrap();
 
@@ -31,8 +38,9 @@ fn test_scan_no_findings() {
     // Use content that shouldn't trigger any patterns
     std::fs::write(&file_path, "fn main() { println!(\"Hello, World!\"); }").unwrap();
 
-    let output = Command::new("target/release/aegis")
-        .args(["scan", &file_path.to_string_lossy()])
+    let output = aegis_cmd()
+        .arg("scan")
+        .arg(file_path.to_string_lossy().as_ref())
         .output()
         .unwrap();
 
@@ -49,8 +57,8 @@ fn test_scan_no_findings() {
 
 #[test]
 fn test_list_patterns() {
-    let output = Command::new("target/release/aegis")
-        .args(["list"])
+    let output = aegis_cmd()
+        .arg("list")
         .output()
         .unwrap();
 
@@ -66,8 +74,8 @@ fn test_list_patterns() {
 
 #[test]
 fn test_update_command() {
-    let output = Command::new("target/release/aegis")
-        .args(["update"])
+    let output = aegis_cmd()
+        .arg("update")
         .output()
         .unwrap();
 
