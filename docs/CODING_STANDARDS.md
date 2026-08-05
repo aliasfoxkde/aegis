@@ -26,7 +26,7 @@
 - No clippy warnings allowed
 
 ### Naming Conventions
-- Crates: `kebab-case` (atheon-core, atheon-cli)
+- Crates: `kebab-case` (aegis-core, aegis-cli)
 - Modules: `snake_case.rs` (pattern.rs, scanner.rs)
 - Types: `PascalCase` (PatternRegistry, RiskScore)
 - Functions: `snake_case` (scan_file, calculate_entropy)

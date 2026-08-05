@@ -2,7 +2,7 @@
 
 ## Overview
 
-Atheon-Enhanced integrates with CI/CD pipelines for early issue detection.
+Aegis integrates with CI/CD pipelines for early issue detection.
 
 ## GitHub Actions
 
@@ -11,29 +11,29 @@ name: Security Scan
 on: [push, pull_request]
 
 jobs:
-  atheon-scan:
+  aegis-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Atheon
+      - name: Install Aegis
         run: |
-          curl -sSL https://get.atheon.dev | sh
-          atheon update
+          curl -sSL https://get.aegis.dev | sh
+          aegis update
       
       - name: Run Scan
-        run: atheon scan . --severity-threshold=medium --json > atheon-results.json
+        run: aegis scan . --severity-threshold=medium --json > aegis-results.json
       
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: atheon-results
-          path: atheon-results.json
+          name: aegis-results
+          path: aegis-results.json
       
       - name: Fail on Critical
         if: always()
         run: |
-          if grep -q '"severity":"critical"' atheon-results.json; then
+          if grep -q '"severity":"critical"' aegis-results.json; then
             echo "Critical findings detected!"
             exit 1
           fi
@@ -44,15 +44,15 @@ jobs:
 ```yaml
 security_scan:
   stage: test
-  image: golang:1.21  # or atheon-container
+  image: golang:1.21  # or aegis-container
   script:
-    - wget https://get.atheon.dev -O atheon
-    - chmod +x atheon
-    - ./atheon update
-    - ./atheon scan . --json --severity-threshold=medium > atheon-results.json
+    - wget https://get.aegis.dev -O aegis
+    - chmod +x aegis
+    - ./aegis update
+    - ./aegis scan . --json --severity-threshold=medium > aegis-results.json
   artifacts:
     reports:
-      sast: atheon-results.json
+      sast: aegis-results.json
     when: always
   rules:
     - if: $CI_MERGE_REQUEST_IID
@@ -68,16 +68,16 @@ pipeline {
         stage('Security Scan') {
             steps {
                 sh '''
-                    curl -sSL https://get.atheon.dev -o atheon
-                    chmod +x atheon
-                    ./atheon update
-                    ./atheon scan . --json --severity-threshold=medium > atheon-results.json
+                    curl -sSL https://get.aegis.dev -o aegis
+                    chmod +x aegis
+                    ./aegis update
+                    ./aegis scan . --json --severity-threshold=medium > aegis-results.json
                 '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'atheon-results.json'
-                    insertText: find pattern: '"severity":"critical"', text: readFile('atheon-results.json')
+                    archiveArtifacts artifacts: 'aegis-results.json'
+                    insertText: find pattern: '"severity":"critical"', text: readFile('aegis-results.json')
                 }
             }
         }
@@ -97,22 +97,22 @@ pool:
 
 steps:
   - task: Bash@3
-    displayName: 'Atheon Security Scan'
+    displayName: 'Aegis Security Scan'
     inputs:
       script: |
-        curl -sSL https://get.atheon.dev -o atheon
-        chmod +x atheon
-        ./atheon update
-        ./atheon scan . --json --severity-threshold=medium > atheon-results.json
+        curl -sSL https://get.aegis.dev -o aegis
+        chmod +x aegis
+        ./aegis update
+        ./aegis scan . --json --severity-threshold=medium > aegis-results.json
       cwd: '$(System.DefaultWorkingDirectory)'
   
   - task: PublishBuildArtifacts@1
     inputs:
-      pathtoPublish: 'atheon-results.json'
+      pathtoPublish: 'aegis-results.json'
   
   - task: VulnerabilityCheck@0
     inputs:
-      artifacts: 'atheon-results.json'
+      artifacts: 'aegis-results.json'
       severityThreshold: 'Medium'
 ```
 
@@ -125,9 +125,9 @@ Install as pre-commit hook:
 repos:
   - repo: local
     hooks:
-      - id: atheon-scan
-        name: Atheon Security Scan
-        entry: atheon scan
+      - id: aegis-scan
+        name: Aegis Security Scan
+        entry: aegis scan
         args: ['--severity-threshold=high', '--quiet']
         language: system
         files: .
@@ -137,30 +137,30 @@ repos:
 
 ```bash
 # Scan Docker image
-docker run --rm -v $(pwd):/src atheon scan /src
+docker run --rm -v $(pwd):/src aegis scan /src
 
 # Scan container filesystem
-docker run --rm -v /var/lib/docker/overlay2:/mnt ubuntu atheon scan /mnt
+docker run --rm -v /var/lib/docker/overlay2:/mnt ubuntu aegis scan /mnt
 ```
 
 ## Kubernetes Admission Controller
 
-Use Atheon as a Kubernetes admission controller to scan container images before deployment.
+Use Aegis as a Kubernetes admission controller to scan container images before deployment.
 
 ```yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: atheon-scan
+  name: aegis-scan
 webhooks:
-  - name: scan.atheon.dev
+  - name: scan.aegis.dev
     rules:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE"]
         resources: ["pods"]
     clientConfig:
-      url: https://atheon.example.com/validate
+      url: https://aegis.example.com/validate
       caBundle: <base64-ca>
 ```
 
@@ -168,17 +168,17 @@ webhooks:
 
 1. **Baseline**: Create a baseline of current findings
    ```bash
-   atheon scan . --json > baseline.json
+   aegis scan . --json > baseline.json
    ```
 
 2. **Diff Mode**: Only report new findings
    ```bash
-   atheon scan . --diff=baseline.json --json
+   aegis scan . --diff=baseline.json --json
    ```
 
 3. **Severity Threshold**: Start with critical only
    ```bash
-   atheon scan . --severity-threshold=critical
+   aegis scan . --severity-threshold=critical
    ```
 
 4. **Exit Codes**: Use for pipeline failure
@@ -187,7 +187,7 @@ webhooks:
 
 5. **Cache Bundles**: Don't download on every run
    ```bash
-   atheon update  # weekly or on-demand
+   aegis update  # weekly or on-demand
    ```
 
 ## SARIF Output
@@ -198,7 +198,7 @@ Upload SARIF to GitHub Security tab:
 - name: Upload to GitHub Security
   uses: github/codeql-action/upload-sarif@v3
   with:
-    sarif_file: atheon-results.sarif
+    sarif_file: aegis-results.sarif
 ```
 
 ---

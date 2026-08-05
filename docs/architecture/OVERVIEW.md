@@ -1,8 +1,8 @@
-# Atheon-Enhanced Architecture
+# Aegis Architecture
 
 ## Overview
 
-Atheon-Enhanced is a pattern matching engine designed for:
+Aegis is a pattern matching engine designed for:
 - Secrets detection
 - AI-generated code identification
 - Code quality enforcement
@@ -35,7 +35,7 @@ Input (file/dir/string/env)
        │
        ▼
 ┌─────────────────┐
-│ Pre-processing  │ ← .atheonignore, gitignore
+│ Pre-processing  │ ← .aegisignore, gitignore
 └────────┬────────┘
          │
          ▼
@@ -117,12 +117,12 @@ Bundle v2:
 ### CLI Interface
 
 ```
-atheon scan <path>           # Scan directory or file
-atheon list                   # List all patterns
-atheon list --enabled         # List enabled only
-atheon enable <pattern>       # Enable pattern
-atheon disable <pattern>      # Disable pattern
-atheon update                 # Update bundle
+aegis scan <path>           # Scan directory or file
+aegis list                   # List all patterns
+aegis list --enabled         # List enabled only
+aegis enable <pattern>       # Enable pattern
+aegis disable <pattern>      # Disable pattern
+aegis update                 # Update bundle
 ```
 
 ### MCP Server
@@ -138,9 +138,9 @@ JSON-RPC 2.0 interface with tools:
 
 ### Ignore Handling
 
-1. `.atheonignore` - Atheon-specific ignore patterns
+1. `.aegisignore` - Aegis-specific ignore patterns
 2. `.gitignore` - Standard git ignore
-3. `# atheon:ignore` - Line-level suppression
+3. `# aegis:ignore` - Line-level suppression
 4. `--baseline` - Baseline file suppression
 
 ### Output Formats
@@ -195,9 +195,9 @@ JSON-RPC 2.0 interface with tools:
 ## Directory Structure
 
 ```
-atheon/
+aegis/
 ├── crates/
-│   ├── atheon-core/         # Core engine
+│   ├── aegis-core/         # Core engine
 │   │   ├── src/
 │   │   │   ├── lib.rs       # Public API
 │   │   │   ├── pattern.rs   # Pattern management
@@ -211,11 +211,11 @@ atheon/
 │   │   │   ├── cfg.rs       # Control flow
 │   │   │   └── ignore.rs    # Ignore handling
 │   │   └── tests/           # Integration tests
-│   ├── atheon-cli/          # CLI tool
-│   ├── atheon-mcp/           # MCP server
-│   ├── atheon-daemon/        # Daemon
-│   ├── atheon-bundler/       # Bundler tool
-│   └── atheon-patterns/     # Pattern definitions
+│   ├── aegis-cli/          # CLI tool
+│   ├── aegis-mcp/           # MCP server
+│   ├── aegis-daemon/        # Daemon
+│   ├── aegis-bundler/       # Bundler tool
+│   └── aegis-patterns/     # Pattern definitions
 ├── config/
 │   └── profiles/             # Config profiles
 ├── docs/                     # Documentation
