@@ -14,6 +14,14 @@ Welcome to the Aegis wiki! This wiki contains project documentation that syncs w
 - Risk scoring and intelligent prioritization
 - YAML-based pattern contribution
 
+## Downloads
+
+**Latest Release: v0.1.0**
+- [Linux x86_64](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-unknown-linux-gnu.tar.gz)
+- [macOS Intel](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-apple-darwin.tar.gz)
+- [macOS ARM64](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-aarch64-apple-darwin.tar.gz)
+- [Windows](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-pc-windows-gnu.tar.gz)
+
 ## Quick Links
 
 See the **Sidebar** for navigation, or browse:

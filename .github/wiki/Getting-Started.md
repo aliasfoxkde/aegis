@@ -5,15 +5,24 @@
 ### Binary Releases (Recommended)
 
 ```bash
-# Linux
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
-tar -xzf aegis-linux-x86_64.tar.gz
+# Linux x86_64
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf aegis-x86_64-unknown-linux-gnu.tar.gz
 sudo mv aegis /usr/local/bin/
 
-# macOS
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-macos.tar.gz
-tar -xzf aegis-macos.tar.gz
+# macOS Intel
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-apple-darwin.tar.gz
+tar -xzf aegis-x86_64-apple-darwin.tar.gz
 sudo mv aegis /usr/local/bin/
+
+# macOS Apple Silicon
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-aarch64-apple-darwin.tar.gz
+tar -xzf aegis-aarch64-apple-darwin.tar.gz
+sudo mv aegis /usr/local/bin/
+
+# Windows
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-pc-windows-gnu.tar.gz
+tar -xzf aegis-x86_64-pc-windows-gnu.tar.gz
 
 # Verify
 aegis --version
