@@ -150,14 +150,19 @@ impl AegisTools {
     }
 
     /// Update bundle
+    #[allow(dead_code)]
     pub async fn update_bundle(
-        _state: &ServerState,
+        state: &ServerState,
+        _bundle_path: Option<String>,
         _force: bool,
     ) -> jsonrpc_core::Result<UpdateResponse> {
-        // In a real implementation, this would download and update the bundle
+        // Note: The actual update_bundle implementation is in main.rs
+        // This tool exists for potential future direct tool calls
+        let scanner = state.scanner.read().await;
+        let _ = scanner;
         Ok(UpdateResponse {
             success: true,
-            message: "Bundle is up to date".to_string(),
+            message: "Use RPC update_bundle method".to_string(),
             pattern_count: 0,
         })
     }

@@ -5,7 +5,7 @@
 mod sandbox;
 mod tools;
 
-use aegis_core::{Config, PatternDefinition, Scanner};
+use aegis_core::{Bundle, Config, PatternDefinition, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub use tools::*;
 pub struct ServerState {
     pub scanner: RwLock<Scanner>,
     pub config: RwLock<Config>,
+    pub bundle_version: RwLock<String>,
+    pub bundle_checksum: RwLock<String>,
 }
 
 impl ServerState {
@@ -28,6 +30,8 @@ impl ServerState {
         Self {
             scanner: RwLock::new(Scanner::new()),
             config: RwLock::new(config),
+            bundle_version: RwLock::new(String::from("0.0.0")),
+            bundle_checksum: RwLock::new(String::new()),
         }
     }
 }
@@ -67,7 +71,7 @@ pub trait AegisRpc {
 
     /// Update bundle
     #[rpc(name = "update_bundle")]
-    fn update_bundle(&self, force: bool) -> BoxFuture<Result<UpdateResponse>>;
+    fn update_bundle(&self, bundle_path: Option<String>, force: bool) -> BoxFuture<Result<UpdateResponse>>;
 }
 
 /// Scan response
@@ -257,14 +261,85 @@ impl AegisRpc for AegisRpcImpl {
         })
     }
 
-    fn update_bundle(&self, _force: bool) -> BoxFuture<Result<UpdateResponse>> {
+    fn update_bundle(&self, bundle_path: Option<String>, _force: bool) -> BoxFuture<Result<UpdateResponse>> {
+        let state = self.state.clone();
         Box::pin(async move {
-            // Patterns are bundled in the aegis-patterns crate
-            let patterns = aegis_patterns::all_patterns();
+            // If no path provided, use embedded patterns
+            let bundle = if let Some(path) = bundle_path {
+                let path = PathBuf::from(&path);
+
+                // Security: validate path
+                if !sandbox::is_path_safe(&path) {
+                    return Err(jsonrpc_core::Error {
+                        code: jsonrpc_core::ErrorCode::InvalidParams,
+                        message: "Path is outside allowed directory".to_string(),
+                        data: None,
+                    });
+                }
+
+                // Load bundle from file
+                Bundle::load(&path).map_err(|e| jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: format!("Failed to load bundle: {}", e),
+                    data: None,
+                })?
+            } else {
+                // Use embedded patterns from aegis-patterns crate
+                let patterns: Vec<PatternDefinition> = aegis_patterns::all_patterns()
+                    .into_iter()
+                    .map(|p| PatternDefinition {
+                        name: p.name,
+                        category: p.category,
+                        match_pattern: p.match_pattern,
+                        enabled: p.enabled,
+                        severity: aegis_core::Severity::parse(&p.severity)
+                            .unwrap_or(aegis_core::Severity::Medium),
+                        confidence: aegis_core::Confidence::parse(&p.confidence)
+                            .unwrap_or(aegis_core::Confidence::Medium),
+                        min_entropy: p.min_entropy,
+                        description: p.description,
+                        reference: p.reference,
+                        tags: p.tags,
+                        env_var: p.env_var,
+                        binary: p.binary,
+                    })
+                    .collect();
+                Bundle::new(patterns)
+            };
+
+            // Validate bundle
+            bundle.validate().map_err(|e| jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::InternalError,
+                message: format!("Invalid bundle: {}", e),
+                data: None,
+            })?;
+
+            // Create scanner from bundle
+            let new_scanner = Scanner::from_bundle(&bundle).map_err(|e| jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::InternalError,
+                message: format!("Failed to create scanner: {}", e),
+                data: None,
+            })?;
+
+            // Update state
+            {
+                let mut scanner = state.scanner.write().await;
+                *scanner = new_scanner;
+            }
+            {
+                let mut version = state.bundle_version.write().await;
+                *version = bundle.metadata().version.to_string();
+            }
+            {
+                let mut checksum = state.bundle_checksum.write().await;
+                *checksum = bundle.metadata().checksum;
+            }
+
+            let pattern_count = bundle.len();
             Ok(UpdateResponse {
                 success: true,
-                message: "Bundle is up to date".to_string(),
-                pattern_count: patterns.len(),
+                message: format!("Bundle updated with {} patterns", pattern_count),
+                pattern_count,
             })
         })
     }
