@@ -12,7 +12,7 @@ use crate::bundle::Bundle;
 use crate::config::Config;
 use crate::finding::{Finding, FindingKind, Location, ScanStats};
 use crate::ignore::IgnoreManager;
-use crate::pattern::PatternRegistry;
+use crate::pattern::{PatternDefinition, PatternRegistry};
 
 /// Scan options
 #[derive(Debug, Clone)]
@@ -79,6 +79,16 @@ impl Scanner {
     /// Create a scanner with a bundle
     pub fn from_bundle(bundle: &Bundle) -> Result<Self, crate::pattern::PatternError> {
         let registry = PatternRegistry::from_definitions(bundle.patterns.clone())?;
+        Ok(Self {
+            registry: Arc::new(registry),
+            ignore_manager: Arc::new(IgnoreManager::new()),
+            options: ScanOptions::default(),
+        })
+    }
+
+    /// Create a scanner from pattern definitions
+    pub fn from_definitions(definitions: Vec<PatternDefinition>) -> Result<Self, crate::pattern::PatternError> {
+        let registry = PatternRegistry::from_definitions(definitions)?;
         Ok(Self {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),

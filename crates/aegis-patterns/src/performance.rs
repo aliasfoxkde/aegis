@@ -105,7 +105,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-database-index".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)CREATE\s+TABLE(?!\s+.*INDEX)"#.to_string(),
+            match_pattern: r#"(?i)CREATE\s+TABLE"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "low".to_string(),
@@ -141,7 +141,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-limit".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)LIMIT\s+(?!\d)"#.to_string(),
+            match_pattern: r#"(?i)LIMIT\s+"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -177,7 +177,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "unsized-image".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"<img(?![^>]*width)[^>]*>"#.to_string(),
+            match_pattern: r#"<img[^>]*>"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -287,7 +287,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gzip-not-enabled".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)Accept-Encoding(?!.*gzip)"#.to_string(),
+            match_pattern: r#"(?i)Accept-Encoding"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -344,7 +344,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "no-connection-pool".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)db\.connect|new\s+Connection\(.*\)(?!\s*pool)"#.to_string(),
+            match_pattern: r#"(?i)db\.connect|new\s+Connection\(.*\)"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -362,7 +362,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "event-listener-leak".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)addEventListener(?!\s*.*removeEventListener)"#.to_string(),
+            match_pattern: r#"(?i)addEventListener"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -398,7 +398,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "console-log-production".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)console\.(log|debug|info)(?!\s*\(.*\)).*\/|\s*\(.*\).*eslint"#
+            match_pattern: r#"(?i)console\.(log|debug|info).*\/|\s*\(.*\).*eslint"#
                 .to_string(),
             enabled: true,
             severity: "low".to_string(),

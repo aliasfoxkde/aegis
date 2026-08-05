@@ -7,7 +7,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-alt-text".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<img(?![^>]*alt=)[^>]*>".to_string(),
+            match_pattern: r"<img[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -25,7 +25,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-aria-label".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<button(?![^>]*aria-label)[^>]*>".to_string(),
+            match_pattern: r"<button[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -39,7 +39,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-lang-attribute".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<(?:!DOCTYPE|html)(?![^>]*lang)[^>]*>".to_string(),
+            match_pattern: r"<(?:!DOCTYPE|html)[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -57,7 +57,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "empty-link-text".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<a(?![^>]*>[\s\S]+?</a>)[^>]*>\s*</a>".to_string(),
+            match_pattern: r"<a[^>]*>\s*</a>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -78,7 +78,7 @@ pub fn get() -> Vec<Pattern> {
             name: "missing-form-label".to_string(),
             category: "accessibility".to_string(),
             match_pattern:
-                r"<input(?![^>]*aria-label)(?![^>]*aria-labelledby)(?![^>]*<label[^>]*>)[^>]*>"
+                r"<input[^>]*>"
                     .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -99,7 +99,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-title".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<head>(?!.*<title>).*</head>"#.to_string(),
+            match_pattern: r#"<head>.*</head>"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -117,7 +117,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-meta-viewport".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<head>(?!.*viewport).*</head>"#.to_string(),
+            match_pattern: r#"<head>.*</head>"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -157,7 +157,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-skip-link".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<body>(?!.*skip-link)(?!.*skip\s*link).*</body>"#.to_string(),
+            match_pattern: r#"<body>.*</body>"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -177,7 +177,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-main-landmark".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<body>(?!.*<main).*</body>"#.to_string(),
+            match_pattern: r#"<body>.*</body>"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -197,7 +197,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-heading-level".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<h([6-9]|[1-9][0-9])(?![^>]*>)".to_string(),
+            match_pattern: r"<h([6-9]|[1-9][0-9])".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -217,7 +217,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "autocomplete-missing".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<input(?![^>]*autocomplete)[^>]*>"#.to_string(),
+            match_pattern: r#"<input[^>]*>"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -257,7 +257,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-table-headers".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"<table(?![^>]*>[\s\S]*?<th).*</table>"#.to_string(),
+            match_pattern: r#"<table.*</table>"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -277,7 +277,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "video-missing-captions".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<video(?![^>]*caption)[^>]*>".to_string(),
+            match_pattern: r"<video[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -297,7 +297,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "audio-missing-transcript".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<audio(?![^>]*transcript)[^>]*>".to_string(),
+            match_pattern: r"<audio[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -317,7 +317,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "iframe-missing-title".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r"<iframe(?![^>]*title)[^>]*>".to_string(),
+            match_pattern: r"<iframe[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

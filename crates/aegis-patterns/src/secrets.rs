@@ -5,7 +5,7 @@ use crate::Pattern;
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
-            name: "aws-access-key".to_string(),
+            name: "secrets-aws-access-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
             enabled: true,
@@ -19,7 +19,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "aws-secret-key".to_string(),
+            name: "secrets-aws-secret-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r#"(?i)aws(.{0,20})?['"][0-9a-zA-Z/+]{40}['"]"#.to_string(),
             enabled: true,
@@ -33,7 +33,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "github-token".to_string(),
+            name: "secrets-github-token".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"gh[pousr]_[A-Za-z0-9_]{36,}".to_string(),
             enabled: true,
@@ -61,7 +61,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "slack-token".to_string(),
+            name: "secrets-slack-token".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"xox[baprs]-[0-9]{10,13}-[0-9]{10,13}[a-zA-Z0-9-]*".to_string(),
             enabled: true,
@@ -75,7 +75,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "stripe-api-key".to_string(),
+            name: "secrets-stripe-api-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"sk_live_[0-9a-zA-Z]{24}".to_string(),
             enabled: true,
@@ -89,7 +89,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "stripe-publishable-key".to_string(),
+            name: "secrets-stripe-publishable-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"pk_live_[0-9a-zA-Z]{24}".to_string(),
             enabled: true,
@@ -103,7 +103,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "sendgrid-api-key".to_string(),
+            name: "secrets-sendgrid-api-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"SG\.[0-9a-zA-Z_-]{22}\.[0-9a-zA-Z_-]{43}".to_string(),
             enabled: true,
@@ -117,7 +117,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "twilio-api-key".to_string(),
+            name: "secrets-twilio-api-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"SK[0-9a-fA-F]{32}".to_string(),
             enabled: true,
@@ -343,7 +343,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "database-connection-string".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r#"(?i)(mongodb|postgres|mysql|redis|mssql)://[^\s'"]{{10,}}"#.to_string(),
+            match_pattern: r#"(?i)(mongodb|postgres|mysql|redis|mssql)://[^\s'"]{10,}"#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),

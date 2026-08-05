@@ -5,7 +5,7 @@ use crate::Pattern;
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
-            name: "force-push-detected".to_string(),
+            name: "git-ops-force-push-detected".to_string(),
             category: "git-ops".to_string(),
             match_pattern: r#"(?i)(git\s+push\s+--force|git\s+push\s+-f\s+origin|push\s+--force-with-lease|--force-with-lease)"#.to_string(),
             enabled: true,

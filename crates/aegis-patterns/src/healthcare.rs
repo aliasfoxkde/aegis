@@ -61,7 +61,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "medical-record-number".to_string(),
+            name: "healthcare-medical-record-number".to_string(),
             category: "healthcare".to_string(),
             match_pattern: r#"\bMRN[0-9]{8,12}\b"#.to_string(),
             enabled: true,
@@ -89,7 +89,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "prescription-number".to_string(),
+            name: "healthcare-prescription-number".to_string(),
             category: "healthcare".to_string(),
             match_pattern: r#"\bRX[0-9]{7,10}\b"#.to_string(),
             enabled: true,

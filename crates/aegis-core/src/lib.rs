@@ -38,7 +38,7 @@ pub use bundle::{Bundle, BundleMetadata};
 pub use config::Config;
 pub use entropy::shannon_entropy;
 pub use finding::{Finding, FindingKind, Location, ScanStats};
-pub use pattern::{Category, Confidence, Pattern, PatternRegistry, Severity};
+pub use pattern::{Category, Confidence, Pattern, PatternDefinition, PatternRegistry, Severity};
 pub use risk::{RiskClassification, RiskLevel, RiskScore};
 pub use scanner::{ScanOptions, Scanner};
 pub use suppression::Suppression;

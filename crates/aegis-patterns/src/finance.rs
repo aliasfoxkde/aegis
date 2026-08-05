@@ -23,7 +23,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "bitcoin-address".to_string(),
+            name: "finance-bitcoin-address".to_string(),
             category: "finance".to_string(),
             match_pattern: r"\b(?:bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}\b".to_string(),
             enabled: true,
@@ -59,7 +59,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "iban".to_string(),
+            name: "finance-iban".to_string(),
             category: "finance".to_string(),
             match_pattern: r"\b[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}\b".to_string(),
             enabled: true,

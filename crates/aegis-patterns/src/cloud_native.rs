@@ -6,7 +6,7 @@ pub fn get() -> Vec<Pattern> {
     vec![
         // Kubernetes patterns (additional beyond infrastructure.rs)
         Pattern {
-            name: "kubernetes-secret".to_string(),
+            name: "cloud-native-kubernetes-secret".to_string(),
             category: "cloud-native".to_string(),
             match_pattern: r"(?i)kind:\s*Secret".to_string(),
             enabled: true,
@@ -248,7 +248,7 @@ pub fn get() -> Vec<Pattern> {
         },
         // Service discovery
         Pattern {
-            name: "kubernetes-service".to_string(),
+            name: "cloud-native-kubernetes-service".to_string(),
             category: "cloud-native".to_string(),
             match_pattern: r"(?i)kind:\s*Service".to_string(),
             enabled: true,

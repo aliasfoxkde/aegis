@@ -61,7 +61,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "command-injection".to_string(),
+            name: "security-hardening-command-injection".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)(exec|system|popen|shell_exec)\s*\(\s*["'].*\$\{?[\w_]"#.to_string(),
             enabled: true,
@@ -75,7 +75,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "path-traversal".to_string(),
+            name: "security-hardening-path-traversal".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)\.\.[\\/]|\.\.%2f|%2e%2e"#.to_string(),
             enabled: true,
@@ -215,7 +215,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "aws-access-key".to_string(),
+            name: "security-hardening-aws-access-key".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}"#.to_string(),
             enabled: true,
@@ -327,7 +327,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "jwt-none-algorithm".to_string(),
+            name: "security-hardening-jwt-none-algorithm".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)(alg.*none|algorithm.*none|none.*algorithm)"#.to_string(),
             enabled: true,
@@ -341,7 +341,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "xml-external-entity".to_string(),
+            name: "security-hardening-xml-external-entity".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\""#.to_string(),
             enabled: true,

@@ -45,7 +45,7 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
         },
         Pattern {
-            name: "prompt-injection".to_string(),
+            name: "llm-guardrails-prompt-injection".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern: r#"(?i)(ignore|disregard|bypass)\s+(previous|above|initial|system)"#
                 .to_string(),
