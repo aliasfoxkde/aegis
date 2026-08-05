@@ -7,6 +7,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/aegis/aegis"
 description = "Aegis - Security scanning for DevOps and CI/CD"
 
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+
 [workspace]
 resolver = "2"
 members = [

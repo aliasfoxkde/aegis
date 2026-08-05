@@ -2,7 +2,7 @@
 
 ## Overview
 
-Patterns are the core detection units in Atheon-Enhanced. They are defined in YAML format and bundled into a gzip+JSON archive for efficient loading.
+Patterns are the core detection units in Aegis. They are defined in YAML format and bundled into a gzip+JSON archive for efficient loading.
 
 ## Pattern Format
 

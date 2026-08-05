@@ -1,8 +1,8 @@
-# Atheon-Enhanced Rust Rewrite Plan
+# Aegis Rust Rewrite Plan
 
 ## Project Overview
 
-**Atheon-Enhanced** is a high-performance pattern matching engine for secrets detection, AI-generated code identification, code quality enforcement, and DevOps/CI/CD issue detection. This is a complete rewrite from Go to Rust for enhanced performance, safety, and reliability.
+**Aegis** is a high-performance pattern matching engine for secrets detection, AI-generated code identification, code quality enforcement, and DevOps/CI/CD issue detection. This is a complete rewrite from Go to Rust for enhanced performance, safety, and reliability.
 
 ### Goals
 - Complete rewrite in Rust (from Go)
@@ -18,14 +18,14 @@
 ### Workspace Structure
 
 ```
-atheon/
+aegis/
 ├── crates/
-│   ├── atheon-core/        # Core scanning engine
-│   ├── atheon-cli/         # CLI application
-│   ├── atheon-mcp/         # MCP server
-│   ├── atheon-daemon/      # Daemon mode
-│   ├── atheon-bundler/     # Pattern bundler tool
-│   └── atheon-patterns/    # Pattern definitions (409 → 500+)
+│   ├── aegis-core/        # Core scanning engine
+│   ├── aegis-cli/         # CLI application
+│   ├── aegis-mcp/         # MCP server
+│   ├── aegis-daemon/      # Daemon mode
+│   ├── aegis-bundler/     # Pattern bundler tool
+│   └── aegis-patterns/    # Pattern definitions (409 → 500+)
 ├── config/
 │   └── profiles/           # Configuration profiles
 ├── docs/                   # Documentation
@@ -35,7 +35,7 @@ atheon/
 
 ### Crate Responsibilities
 
-#### atheon-core
+#### aegis-core
 Core scanning engine with no external dependencies.
 - Pattern registry and management
 - Bundle loading (gzip+JSON)
@@ -46,27 +46,27 @@ Core scanning engine with no external dependencies.
 - CFG analysis
 - Ignore pattern handling
 
-#### atheon-cli
+#### aegis-cli
 Command-line interface.
 - scan, list, enable, disable, update subcommands
 - JSON/SARIF output formats
 - Config profile support
 
-#### atheon-mcp
+#### aegis-mcp
 Model Context Protocol server.
 - JSON-RPC 2.0 interface
 - Security sandboxing
 - Rate limiting
 
-#### atheon-daemon
+#### aegis-daemon
 Long-running daemon mode.
 
-#### atheon-bundler
+#### aegis-bundler
 Pattern bundling utility.
 - YAML → gzip+JSON conversion
 - Validation
 
-#### atheon-patterns
+#### aegis-patterns
 Generated pattern definitions.
 - 29 categories
 - 500+ patterns
