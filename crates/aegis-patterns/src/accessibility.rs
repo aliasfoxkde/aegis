@@ -77,9 +77,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-form-label".to_string(),
             category: "accessibility".to_string(),
-            match_pattern:
-                r"<input[^>]*>"
-                    .to_string(),
+            match_pattern: r"<input[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),

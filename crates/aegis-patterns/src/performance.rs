@@ -398,8 +398,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "console-log-production".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)console\.(log|debug|info).*\/|\s*\(.*\).*eslint"#
-                .to_string(),
+            match_pattern: r#"(?i)console\.(log|debug|info).*\/|\s*\(.*\).*eslint"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

@@ -87,7 +87,9 @@ impl Scanner {
     }
 
     /// Create a scanner from pattern definitions
-    pub fn from_definitions(definitions: Vec<PatternDefinition>) -> Result<Self, crate::pattern::PatternError> {
+    pub fn from_definitions(
+        definitions: Vec<PatternDefinition>,
+    ) -> Result<Self, crate::pattern::PatternError> {
         let registry = PatternRegistry::from_definitions(definitions)?;
         Ok(Self {
             registry: Arc::new(registry),
