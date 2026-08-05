@@ -4,18 +4,16 @@ Aegis provides a Model Context Protocol (MCP) server for integration with AI too
 
 ## Starting the Server
 
+The MCP server communicates over stdio (standard input/output):
+
 ```bash
-# Start with default settings
+# Start the MCP server (listens on stdin/stdout)
 aegis-mcp
-
-# Start on custom port
-aegis-mcp --port 8765
-
-# Start with verbose logging
-aegis-mcp --verbose
 ```
 
 ## Available Tools
+
+The server accepts JSON-RPC requests over stdin and responds on stdout.
 
 ### scan_string
 
@@ -23,11 +21,10 @@ Scan in-memory content for security issues.
 
 ```json
 {
-  "tool": "scan_string",
-  "args": {
-    "content": "const apiKey = 'AKIAIOSFODNN7EXAMPLE';",
-    "category": "secrets"
-  }
+  "jsonrpc": "2.0",
+  "method": "scan_string",
+  "params": ["const apiKey = 'AKIAIOSFODNN7EXAMPLE';", "config.js"],
+  "id": 1
 }
 ```
 
@@ -37,10 +34,10 @@ Scan a single file.
 
 ```json
 {
-  "tool": "scan_file",
-  "args": {
-    "path": "/path/to/config.json"
-  }
+  "jsonrpc": "2.0",
+  "method": "scan_file",
+  "params": ["/path/to/config.json"],
+  "id": 2
 }
 ```
 
@@ -50,11 +47,10 @@ Scan a directory recursively.
 
 ```json
 {
-  "tool": "scan_dir",
-  "args": {
-    "path": "/path/to/project",
-    "severity_threshold": "high"
-  }
+  "jsonrpc": "2.0",
+  "method": "scan_dir",
+  "params": ["/path/to/project"],
+  "id": 3
 }
 ```
 
@@ -64,8 +60,10 @@ Scan environment variables.
 
 ```json
 {
-  "tool": "scan_env",
-  "args": {}
+  "jsonrpc": "2.0",
+  "method": "scan_env",
+  "params": [],
+  "id": 4
 }
 ```
 
@@ -75,10 +73,10 @@ List available patterns.
 
 ```json
 {
-  "tool": "list_patterns",
-  "args": {
-    "category": "secrets"
-  }
+  "jsonrpc": "2.0",
+  "method": "list_patterns",
+  "params": ["secrets"],
+  "id": 5
 }
 ```
 
@@ -88,8 +86,23 @@ List all pattern categories.
 
 ```json
 {
-  "tool": "list_categories",
-  "args": {}
+  "jsonrpc": "2.0",
+  "method": "list_categories",
+  "params": [],
+  "id": 6
+}
+```
+
+### update_bundle
+
+Update pattern bundle (checks if updates are available).
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "update_bundle",
+  "params": [false],
+  "id": 7
 }
 ```
 
@@ -103,8 +116,7 @@ Add to your Claude Desktop configuration:
 {
   "mcpServers": {
     "aegis": {
-      "command": "aegis-mcp",
-      "args": ["--port", "8765"]
+      "command": "aegis-mcp"
     }
   }
 }
@@ -112,28 +124,47 @@ Add to your Claude Desktop configuration:
 
 ### Cursor / Other AI IDEs
 
-Consult your IDE's documentation for MCP server configuration.
+Consult your IDE's documentation for MCP server configuration. The server uses the standard MCP protocol over stdio.
 
 ## Response Format
 
+Responses are JSON-RPC 2.0:
+
 ```json
 {
-  "findings": [
-    {
-      "pattern": "aws-access-key",
-      "severity": "critical",
-      "confidence": "high",
-      "line": 1,
-      "content": "const apiKey = 'AKIAIOSFODNN7EXAMPLE';",
-      "description": "AWS access key ID detected"
-    }
-  ],
-  "summary": {
-    "total": 1,
-    "critical": 1,
-    "high": 0,
-    "medium": 0,
-    "low": 0
-  }
+  "jsonrpc": "2.0",
+  "result": {
+    "findings": [
+      {
+        "pattern": "aws-access-key",
+        "severity": "critical",
+        "confidence": "high",
+        "location": {
+          "file": "config.js",
+          "line": 1,
+          "column": 20
+        },
+        "matched_content": "AKIAIOSFODNN7EXAMPLE",
+        "description": "AWS access key ID detected"
+      }
+    ],
+    "finding_count": 1,
+    "risk_level": "high",
+    "risk_score": 85
+  },
+  "id": 1
+}
+```
+
+## Error Responses
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params: path is outside allowed directory"
+  },
+  "id": 2
 }
 ```

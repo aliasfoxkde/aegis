@@ -121,6 +121,11 @@ impl Scanner {
         &self.registry
     }
 
+    /// Initialize ignore manager with a root directory
+    pub fn init_ignore_root(&self, root: &Path) -> std::io::Result<()> {
+        self.ignore_manager.set_root(root)
+    }
+
     /// Update options
     pub fn with_options(mut self, options: ScanOptions) -> Self {
         self.options = options;
@@ -243,6 +248,11 @@ impl Scanner {
     /// Scan a directory recursively
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
+
+        // Initialize ignore manager with the root directory
+        if let Err(e) = self.ignore_manager.set_root(root) {
+            tracing::debug!("Failed to load ignore files: {}", e);
+        }
 
         let walker = if self.options.follow_symlinks {
             WalkDir::new(root).follow_links(true)
