@@ -8,6 +8,8 @@ use std::sync::Arc;
 use std::time::Instant;
 use walkdir::WalkDir;
 
+use crate::suppression::SuppressionManager;
+
 use crate::bundle::Bundle;
 use crate::config::Config;
 use crate::finding::{Finding, FindingKind, Location, ScanStats};
@@ -63,6 +65,8 @@ fn num_cpus() -> usize {
 pub struct Scanner {
     registry: Arc<PatternRegistry>,
     ignore_manager: Arc<IgnoreManager>,
+    #[allow(dead_code)]
+    suppression_manager: SuppressionManager,
     options: ScanOptions,
 }
 
@@ -72,6 +76,7 @@ impl Scanner {
         Self {
             registry: Arc::new(PatternRegistry::new()),
             ignore_manager: Arc::new(IgnoreManager::new()),
+            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
         }
     }
@@ -82,6 +87,7 @@ impl Scanner {
         Ok(Self {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
+            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
         })
     }
@@ -94,6 +100,7 @@ impl Scanner {
         Ok(Self {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
+            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
         })
     }
@@ -135,6 +142,11 @@ impl Scanner {
     /// Scan a string
     pub fn scan_string(&self, content: &str, source: &str) -> Vec<Finding> {
         let start = Instant::now();
+
+        // Parse suppressions from content
+        let mut suppression_mgr = SuppressionManager::new();
+        suppression_mgr.parse_content(content);
+
         let patterns = self.registry.enabled();
         let mut findings = Vec::new();
 
@@ -145,7 +157,19 @@ impl Scanner {
 
             let matches = pattern.find_matches(content);
             for m in matches {
-                let location = Location::new(source, 1, m.start, m.matched_text.to_string());
+                let line_num = content[..m.start].matches('\n').count() as u32 + 1;
+
+                // Check if this finding should be suppressed
+                if suppression_mgr.is_suppressed(pattern.name(), line_num) {
+                    continue;
+                }
+
+                let location = Location::new(
+                    source,
+                    line_num as usize,
+                    m.start,
+                    m.matched_text.to_string(),
+                );
                 let mut finding = Finding::new(
                     pattern.name(),
                     pattern.category(),
