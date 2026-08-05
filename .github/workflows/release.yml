@@ -9,32 +9,10 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Create draft release
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   # Linux build
   linux:
     name: Linux x86_64
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    needs: create-release
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -46,21 +24,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-x86_64-unknown-linux-gnu.tar.gz -C target/release aegis
-      - name: Upload
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: aegis-x86_64-unknown-linux-gnu.tar.gz
-          asset_name: aegis-x86_64-unknown-linux-gnu.tar.gz
-          asset_content_type: application/gzip
 
   # macOS x86_64
   macos-x86:
     name: macOS x86_64
     runs-on: macos-latest
-    permissions:
-      contents: write
-    needs: create-release
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -72,21 +40,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-x86_64-apple-darwin.tar.gz -C target/release aegis
-      - name: Upload
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: aegis-x86_64-apple-darwin.tar.gz
-          asset_name: aegis-x86_64-apple-darwin.tar.gz
-          asset_content_type: application/gzip
 
   # macOS ARM64 (Apple Silicon)
   macos-arm:
     name: macOS ARM64
     runs-on: macos-latest
-    permissions:
-      contents: write
-    needs: create-release
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -100,21 +58,11 @@ jobs:
       - name: Package
         run: |
           tar -czf aegis-aarch64-apple-darwin.tar.gz -C target/aarch64-apple-darwin/release aegis
-      - name: Upload
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: aegis-aarch64-apple-darwin.tar.gz
-          asset_name: aegis-aarch64-apple-darwin.tar.gz
-          asset_content_type: application/gzip
 
   # Windows x86_64
   windows:
     name: Windows x86_64
     runs-on: windows-latest
-    permissions:
-      contents: write
-    needs: create-release
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -127,10 +75,33 @@ jobs:
         shell: bash
         run: |
           tar -czf aegis-x86_64-pc-windows-gnu.tar.gz -C target/release aegis.exe
-      - name: Upload
-        uses: actions/upload-release-asset@v1
+
+  # Create release with all assets
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [linux, macos-x86, macos-arm, windows]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: aegis-x86_64-pc-windows-gnu.tar.gz
-          asset_name: aegis-x86_64-pc-windows-gnu.tar.gz
-          asset_content_type: application/gzip
+          path: release
+          pattern: '*'
+          merge-multiple: true
+      - name: Display structure
+        run: ls -la release/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          files: |
+            release/aegis-x86_64-unknown-linux-gnu.tar.gz
+            release/aegis-x86_64-apple-darwin.tar.gz
+            release/aegis-aarch64-apple-darwin.tar.gz
+            release/aegis-x86_64-pc-windows-gnu.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
