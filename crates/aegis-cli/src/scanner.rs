@@ -120,9 +120,14 @@ pub async fn update_bundle(_force: bool) -> Result<()> {
     // Patterns are bundled in the aegis-patterns crate
     let patterns = aegis_patterns::all_patterns();
     println!("Pattern bundle is up to date.");
-    println!("Loaded {} patterns from {} categories",
+    println!(
+        "Loaded {} patterns from {} categories",
         patterns.len(),
-        patterns.iter().map(|p| &p.category).collect::<std::collections::HashSet<_>>().len()
+        patterns
+            .iter()
+            .map(|p| &p.category)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     );
     Ok(())
 }

@@ -278,7 +278,10 @@ pub fn list_patterns(
 
     // Filter by category if specified
     let patterns: Vec<_> = match &category {
-        Some(cat) => patterns.into_iter().filter(|p| &p.category == cat).collect(),
+        Some(cat) => patterns
+            .into_iter()
+            .filter(|p| &p.category == cat)
+            .collect(),
         None => patterns,
     };
 
@@ -308,7 +311,10 @@ pub fn list_patterns(
             Some(Severity::Low) => "\x1b[36mLOW\x1b[0m",
             None => &p.severity,
         };
-        println!("{} {:15} {:8} {}", status, p.name, severity_str, p.description);
+        println!(
+            "{} {:15} {:8} {}",
+            status, p.name, severity_str, p.description
+        );
     }
 
     Ok(())
