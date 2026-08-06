@@ -3,8 +3,8 @@
 //! Handles .atheonignore and .gitignore files.
 
 use glob::Pattern;
+use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 
 /// Manages ignore patterns for scanning
 pub struct IgnoreManager {
@@ -28,7 +28,7 @@ impl IgnoreManager {
 
     /// Set the root directory and load ignore files
     pub fn set_root(&self, root: &Path) -> std::io::Result<()> {
-        *self.root.write().unwrap() = Some(root.to_path_buf());
+        *self.root.write() = Some(root.to_path_buf());
 
         // Load .atheonignore
         let atheon_path = root.join(".atheonignore");
@@ -48,7 +48,7 @@ impl IgnoreManager {
     /// Load patterns from .atheonignore
     fn load_atheonignore(&self, path: &Path) -> std::io::Result<()> {
         let content = std::fs::read_to_string(path)?;
-        let mut patterns = self.atheonignore.write().unwrap();
+        let mut patterns = self.atheonignore.write();
 
         for line in content.lines() {
             let line = line.trim();
@@ -79,7 +79,7 @@ impl IgnoreManager {
     /// Load patterns from .gitignore
     fn load_gitignore(&self, path: &Path) -> std::io::Result<()> {
         let content = std::fs::read_to_string(path)?;
-        let mut patterns = self.gitignore.write().unwrap();
+        let mut patterns = self.gitignore.write();
 
         for line in content.lines() {
             let line = line.trim();
@@ -106,7 +106,7 @@ impl IgnoreManager {
         let path_str = path.to_string_lossy();
 
         // Check .atheonignore patterns
-        let atheon_patterns = self.atheonignore.read().unwrap();
+        let atheon_patterns = self.atheonignore.read();
         for pattern in atheon_patterns.iter() {
             if pattern.matches(&path_str) {
                 return true;
@@ -114,7 +114,7 @@ impl IgnoreManager {
         }
 
         // Check .gitignore patterns
-        let git_patterns = self.gitignore.read().unwrap();
+        let git_patterns = self.gitignore.read();
         for pattern in git_patterns.iter() {
             if pattern.matches(&path_str) {
                 return true;
@@ -137,15 +137,15 @@ impl IgnoreManager {
     pub fn add_pattern(&self, pattern: &str) -> Result<(), PatternError> {
         let p =
             Pattern::new(pattern).map_err(|_| PatternError::InvalidPattern(pattern.to_string()))?;
-        self.atheonignore.write().unwrap().push(p);
+        self.atheonignore.write().push(p);
         Ok(())
     }
 
     /// Clear all patterns
     pub fn clear(&self) {
-        self.atheonignore.write().unwrap().clear();
-        self.gitignore.write().unwrap().clear();
-        *self.root.write().unwrap() = None;
+        self.atheonignore.write().clear();
+        self.gitignore.write().clear();
+        *self.root.write() = None;
     }
 }
 
@@ -160,9 +160,9 @@ impl std::fmt::Debug for IgnoreManager {
         f.debug_struct("IgnoreManager")
             .field(
                 "atheonignore_count",
-                &self.atheonignore.read().unwrap().len(),
+                &self.atheonignore.read().len(),
             )
-            .field("gitignore_count", &self.gitignore.read().unwrap().len())
+            .field("gitignore_count", &self.gitignore.read().len())
             .finish()
     }
 }

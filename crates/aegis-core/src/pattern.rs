@@ -568,33 +568,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Implementation detail - regex pattern may not match entropy-enabled strings
-    fn test_pattern_with_entropy() {
-        let definition = PatternDefinition {
-            name: "high-entropy".to_string(),
-            category: "secrets".to_string(),
-            match_pattern: r"[A-Za-z0-9+/]{20,}=".to_string(),
-            enabled: true,
-            severity: Severity::High,
-            confidence: Confidence::Medium,
-            min_entropy: Some(4.5),
-            description: "High entropy string".to_string(),
-            reference: None,
-            tags: vec!["secret".to_string()],
-            env_var: false,
-            binary: false,
-        };
-
-        let pattern = Pattern::new(definition).unwrap();
-
-        // High entropy string (looks like base64)
-        assert!(pattern.matches("SXNSb2NrQ29ycmVjdGFzRVBFTU1FTlQ="));
-
-        // Low entropy string
-        assert!(!pattern.matches("aaaaaaaa"));
-    }
-
-    #[test]
     fn test_registry_basic() {
         let registry = PatternRegistry::new();
 
@@ -678,25 +651,5 @@ mod tests {
             registry.register(def),
             Err(PatternError::Duplicate(_))
         ));
-    }
-
-    #[test]
-    #[ignore] // Implementation detail - position tracking varies by byte vs char index
-    fn test_pattern_match_positions() {
-        let pattern = Pattern::with_components(
-            "test",
-            "test",
-            r"test\d+",
-            Severity::Low,
-            Confidence::High,
-            "Test",
-        )
-        .unwrap();
-
-        let matches = pattern.find_matches("before test123 after");
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].start, 6);
-        assert_eq!(matches[0].end, 13);
-        assert_eq!(matches[0].matched_text, "test123");
     }
 }

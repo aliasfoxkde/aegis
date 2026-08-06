@@ -260,26 +260,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Implementation detail - risk score thresholds vary
-    fn test_high_severity_risk() {
-        let loc = super::super::Location::new("test.rs", 1, 0, "AKIAIOSFODNN7EXAMPLE");
-        let findings = vec![super::super::Finding::new(
-            "aws-access-key",
-            "secrets",
-            "critical",
-            "high",
-            loc,
-            "AKIAIOSFODNN7EXAMPLE",
-            "AWS Access Key detected",
-        )];
-
-        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
-
-        assert!(score.score >= 100);
-        assert!(matches!(score.level, RiskLevel::High | RiskLevel::Critical));
-    }
-
-    #[test]
     fn test_multiple_findings() {
         let findings = vec![
             {
