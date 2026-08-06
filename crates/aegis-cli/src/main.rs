@@ -3,12 +3,10 @@
 //! Command-line interface for Aegis security scanning.
 
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-mod config;
-pub mod output;
-mod scanner;
+use aegis_cli::{config, output, scanner, OutputFormat};
 
 #[derive(Parser)]
 #[command(name = "aegis")]
@@ -33,13 +31,6 @@ struct Cli {
 
     #[command(subcommand)]
     command: Commands,
-}
-
-#[derive(Clone, ValueEnum)]
-pub enum OutputFormat {
-    Human,
-    Json,
-    Sarif,
 }
 
 #[derive(Subcommand)]

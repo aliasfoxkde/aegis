@@ -1,6 +1,6 @@
 //! Output formatting
 
-use super::OutputFormat;
+use crate::OutputFormat;
 use aegis_core::{Finding, RiskScore, ScanStats};
 
 pub struct Output {
@@ -250,7 +250,7 @@ impl std::fmt::Display for Output {
     }
 }
 
-fn severity_to_sarif_level(severity: &str) -> String {
+pub(crate) fn severity_to_sarif_level(severity: &str) -> String {
     match severity {
         "critical" | "high" => "error".to_string(),
         "medium" => "warning".to_string(),
@@ -259,7 +259,7 @@ fn severity_to_sarif_level(severity: &str) -> String {
     }
 }
 
-fn truncate_string(s: &str, max_len: usize) -> String {
+pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
@@ -318,4 +318,123 @@ pub fn list_patterns(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aegis_core::{Finding, Location, RiskScore, ScanStats};
+
+    fn make_test_finding() -> Finding {
+        Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            "abc",
+            "Hardcoded secret detected",
+        )
+    }
+
+    fn make_test_stats() -> ScanStats {
+        let mut stats = ScanStats::new();
+        stats.files_scanned = 10;
+        stats.bytes_scanned = 1024;
+        stats.finding_count = 1;
+        stats
+    }
+
+    fn make_test_risk() -> RiskScore {
+        RiskScore::new(&[], &Default::default(), &Default::default())
+    }
+
+    #[test]
+    fn test_output_new() {
+        let output = Output::new(OutputFormat::Human, false);
+        assert!(output.buffer.is_empty());
+    }
+
+    #[test]
+    fn test_output_write_findings_human() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(!output.buffer.is_empty());
+    }
+
+    #[test]
+    fn test_output_write_findings_json() {
+        let mut output = Output::new(OutputFormat::Json, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("findings"));
+    }
+
+    #[test]
+    fn test_output_write_findings_sarif() {
+        let mut output = Output::new(OutputFormat::Sarif, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("\"version\""));
+    }
+
+    #[test]
+    fn test_output_quiet_mode() {
+        let mut output = Output::new(OutputFormat::Human, true);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Quiet mode should not print header
+        assert!(!output.buffer.contains("Aegis Security Scan"));
+    }
+
+    #[test]
+    fn test_output_empty_findings() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("No findings detected"));
+    }
+
+    #[test]
+    fn test_output_display() {
+        let output = Output::new(OutputFormat::Human, false);
+        let display = format!("{}", output);
+        assert_eq!(display, "");
+    }
+
+    #[test]
+    fn test_severity_to_sarif_level() {
+        assert_eq!(severity_to_sarif_level("critical"), "error");
+        assert_eq!(severity_to_sarif_level("high"), "error");
+        assert_eq!(severity_to_sarif_level("medium"), "warning");
+        assert_eq!(severity_to_sarif_level("low"), "note");
+        assert_eq!(severity_to_sarif_level("unknown"), "none");
+    }
+
+    #[test]
+    fn test_truncate_string() {
+        assert_eq!(truncate_string("short", 10), "short");
+        assert_eq!(truncate_string("this is a long string", 10), "this is a ...");
+        assert_eq!(truncate_string("exactly10!", 10), "exactly10!");
+    }
 }

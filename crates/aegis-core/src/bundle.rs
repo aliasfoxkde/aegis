@@ -277,4 +277,144 @@ mod tests {
         let bundle2 = Bundle::new(patterns);
         assert_eq!(bundle2.checksum(), checksum);
     }
+
+    #[test]
+    fn test_bundle_len_and_empty() {
+        let bundle = Bundle::new(vec![]);
+        assert!(bundle.is_empty());
+        assert_eq!(bundle.len(), 0);
+
+        let bundle = Bundle::new(vec![test_pattern()]);
+        assert!(!bundle.is_empty());
+        assert_eq!(bundle.len(), 1);
+    }
+
+    #[test]
+    fn test_bundle_metadata() {
+        let patterns = vec![test_pattern()];
+        let bundle = Bundle::new(patterns);
+        let metadata = bundle.metadata();
+
+        assert_eq!(metadata.version, BUNDLE_VERSION);
+        assert_eq!(metadata.pattern_count, 1);
+        assert!(!metadata.checksum.is_empty());
+        assert!(!metadata.created_at.is_empty());
+    }
+
+    #[test]
+    fn test_bundle_default() {
+        let bundle = Bundle::default();
+        assert_eq!(bundle.schema_version, 2);
+        assert!(bundle.patterns.is_empty());
+    }
+
+    #[test]
+    fn test_bundle_validation_invalid_version() {
+        let mut bundle = Bundle::new(vec![]);
+        bundle.schema_version = 99;
+        assert!(matches!(
+            bundle.validate(),
+            Err(BundleError::InvalidVersion(99))
+        ));
+    }
+
+    #[test]
+    fn test_bundle_validation_invalid_regex() {
+        let patterns = vec![PatternDefinition {
+            name: "bad-pattern".to_string(),
+            category: "test".to_string(),
+            match_pattern: "(".to_string(), // Invalid regex
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Medium,
+            min_entropy: None,
+            description: "Bad pattern".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }];
+        let bundle = Bundle::new(patterns);
+        assert!(matches!(
+            bundle.validate(),
+            Err(BundleError::InvalidRegex(_))
+        ));
+    }
+
+    #[test]
+    fn test_bundle_validation_empty_match() {
+        let patterns = vec![PatternDefinition {
+            name: "empty-pattern".to_string(),
+            category: "test".to_string(),
+            match_pattern: "".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Medium,
+            min_entropy: None,
+            description: "Empty pattern".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }];
+        let bundle = Bundle::new(patterns);
+        assert!(matches!(
+            bundle.validate(),
+            Err(BundleError::InvalidPattern(_))
+        ));
+    }
+
+    #[test]
+    fn test_bundle_save_and_load() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let bundle_path = temp_dir.path().join("test.bundle");
+
+        let bundle = Bundle::new(vec![test_pattern()]);
+        bundle.save(&bundle_path).unwrap();
+
+        let loaded = Bundle::load(&bundle_path).unwrap();
+        assert_eq!(loaded.patterns.len(), 1);
+        assert_eq!(loaded.patterns[0].name, "test-pattern");
+    }
+
+    #[test]
+    fn test_bundle_load_not_found() {
+        let result = Bundle::load(std::path::Path::new("/nonexistent/bundle.json.gz"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bundle_from_gzip_invalid() {
+        let result = Bundle::from_gzip(b"not gzip data");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bundle_error_display() {
+        let error = BundleError::InvalidVersion(99);
+        assert!(error.to_string().contains("99"));
+
+        let error = BundleError::DuplicatePattern("test".to_string());
+        assert!(error.to_string().contains("test"));
+
+        let error = BundleError::InvalidRegex("bad".to_string());
+        assert!(error.to_string().contains("bad"));
+    }
+
+    #[test]
+    fn test_bundle_metadata_serialization() {
+        let metadata = BundleMetadata {
+            version: 2,
+            created_at: "1234567890".to_string(),
+            pattern_count: 10,
+            checksum: "abc123".to_string(),
+        };
+
+        let json = serde_json::to_string(&metadata).unwrap();
+        let deserialized: BundleMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.version, 2);
+        assert_eq!(deserialized.pattern_count, 10);
+    }
 }
