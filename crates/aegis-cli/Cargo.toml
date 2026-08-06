@@ -30,7 +30,9 @@ assert_cmd = "2.0"
 predicates = "3.1"
 tempfile = { workspace = true }
 
-
+[lib]
+name = "aegis_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "aegis"

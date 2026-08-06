@@ -26,7 +26,7 @@ pub struct ScanOptions {
 }
 
 /// Convert aegis_patterns::Pattern to aegis_core::PatternDefinition
-fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
+pub fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
     PatternDefinition {
         name: p.name,
         category: p.category,
@@ -130,4 +130,62 @@ pub async fn update_bundle(_force: bool) -> Result<()> {
             .len()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_convert_pattern() {
+        let pattern = aegis_patterns::Pattern {
+            name: "test-pattern".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret".to_string(),
+            severity: "high".to_string(),
+            confidence: "high".to_string(),
+            description: "Test pattern".to_string(),
+            enabled: true,
+            min_entropy: None,
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let converted = convert_pattern(pattern);
+        assert_eq!(converted.name, "test-pattern");
+        assert_eq!(converted.category, "secrets");
+        assert_eq!(converted.severity, Severity::High);
+        assert_eq!(converted.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn test_convert_pattern_medium_defaults() {
+        let pattern = aegis_patterns::Pattern {
+            name: "test-pattern".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            severity: "invalid".to_string(), // Invalid severity
+            confidence: "invalid".to_string(), // Invalid confidence
+            description: "Test".to_string(),
+            enabled: true,
+            min_entropy: None,
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let converted = convert_pattern(pattern);
+        // Should default to Medium for invalid values
+        assert_eq!(converted.severity, Severity::Medium);
+        assert_eq!(converted.confidence, Confidence::Medium);
+    }
+
+    #[tokio::test]
+    async fn test_update_bundle() {
+        let result = update_bundle(false).await;
+        assert!(result.is_ok());
+    }
 }
