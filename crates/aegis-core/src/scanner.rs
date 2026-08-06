@@ -147,47 +147,78 @@ impl Scanner {
         let mut suppression_mgr = SuppressionManager::new();
         suppression_mgr.parse_content(content);
 
-        let patterns = self.registry.enabled();
-        let mut findings = Vec::new();
+        let patterns: Vec<_> = self.registry.enabled()
+            .into_iter()
+            .filter(|p| !p.is_env_var_only())
+            .collect();
 
-        for pattern in &patterns {
-            if pattern.is_env_var_only() {
-                continue; // Skip env-var only patterns for string scans
-            }
-
-            let matches = pattern.find_matches(content);
-            for m in matches {
-                let line_num = content[..m.start].matches('\n').count() as u32 + 1;
-
-                // Check if this finding should be suppressed
-                if suppression_mgr.is_suppressed(pattern.name(), line_num) {
-                    continue;
+        // Parallelize when many patterns (threshold: 50 patterns)
+        let findings: Vec<Finding> = if patterns.len() > 50 {
+            patterns.par_iter().flat_map(|pattern| {
+                let mut pattern_findings = Vec::new();
+                let matches = pattern.find_matches(content);
+                for m in matches {
+                    let line_num = content[..m.start].matches('\n').count() as u32 + 1;
+                    if suppression_mgr.is_suppressed(pattern.name(), line_num) {
+                        continue;
+                    }
+                    let location = Location::new(
+                        source,
+                        line_num as usize,
+                        m.start,
+                        m.matched_text.to_string(),
+                    );
+                    let mut finding = Finding::new(
+                        pattern.name(),
+                        pattern.category(),
+                        pattern.severity().to_string(),
+                        pattern.confidence().to_string(),
+                        location,
+                        m.matched_text,
+                        pattern.description(),
+                    )
+                    .with_kind(FindingKind::Pattern);
+                    if let Some(reference) = pattern.reference() {
+                        finding = finding.with_reference(reference);
+                    }
+                    pattern_findings.push(finding);
                 }
-
-                let location = Location::new(
-                    source,
-                    line_num as usize,
-                    m.start,
-                    m.matched_text.to_string(),
-                );
-                let mut finding = Finding::new(
-                    pattern.name(),
-                    pattern.category(),
-                    pattern.severity().to_string(),
-                    pattern.confidence().to_string(),
-                    location,
-                    m.matched_text,
-                    pattern.description(),
-                )
-                .with_kind(FindingKind::Pattern);
-
-                if let Some(reference) = pattern.reference() {
-                    finding = finding.with_reference(reference);
+                pattern_findings
+            }).collect()
+        } else {
+            // Sequential for small number of patterns
+            let mut findings = Vec::new();
+            for pattern in &patterns {
+                let matches = pattern.find_matches(content);
+                for m in matches {
+                    let line_num = content[..m.start].matches('\n').count() as u32 + 1;
+                    if suppression_mgr.is_suppressed(pattern.name(), line_num) {
+                        continue;
+                    }
+                    let location = Location::new(
+                        source,
+                        line_num as usize,
+                        m.start,
+                        m.matched_text.to_string(),
+                    );
+                    let mut finding = Finding::new(
+                        pattern.name(),
+                        pattern.category(),
+                        pattern.severity().to_string(),
+                        pattern.confidence().to_string(),
+                        location,
+                        m.matched_text,
+                        pattern.description(),
+                    )
+                    .with_kind(FindingKind::Pattern);
+                    if let Some(reference) = pattern.reference() {
+                        finding = finding.with_reference(reference);
+                    }
+                    findings.push(finding);
                 }
-
-                findings.push(finding);
             }
-        }
+            findings
+        };
 
         let _ = start.elapsed(); // Used for timing in non-test
         findings
