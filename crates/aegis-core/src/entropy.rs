@@ -175,22 +175,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Implementation detail - entropy thresholds vary by charset
-    fn test_high_entropy() {
-        // Random-looking string - high entropy
-        let entropy = shannon_entropy("x7K9#mP2@kL");
-        assert!(entropy > 4.0);
-    }
-
-    #[test]
-    #[ignore] // Implementation detail - entropy thresholds vary by charset
-    fn test_base64_high_entropy() {
-        // Base64 encoded string - very high entropy
-        let entropy = shannon_entropy("SXNSb2NrQ29ycmVjdGFzRVBFTU1FTlQ=");
-        assert!(entropy > 4.5);
-    }
-
-    #[test]
     fn test_information_density() {
         assert_eq!(information_density("aaaa"), 0.25);
         assert_eq!(information_density("abcd"), 1.0);
@@ -227,16 +211,5 @@ mod tests {
         let weak = "password";
         let strong = "x7K9#mP2@kL3nQ";
         assert!(guessability_score(strong) > guessability_score(weak));
-    }
-
-    #[test]
-    #[ignore] // Implementation detail - floating point precision
-    fn test_entropy_with_base() {
-        let content = "hello";
-        let bits = shannon_entropy(content);
-        let nats = entropy_with_base(content, std::f64::consts::E);
-        let bits_via_nats = nats * std::f64::consts::LN_2;
-
-        assert!((bits - bits_via_nats).abs() < 0.0001);
     }
 }

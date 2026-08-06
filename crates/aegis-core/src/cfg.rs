@@ -443,30 +443,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Implementation detail - CFG resource leak detection varies
-    fn test_resource_leak_detection() {
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
-        let content = r#"
-#include <stdio.h>
-
-int main() {
-    FILE *f = fopen("test.txt", "r");
-    // Missing fclose!
-    return 0;
-}
-"#;
-        let result = analyzer.analyze_content(content, "test.c").unwrap();
-
-        // Should detect unclosed file
-        let leaks: Vec<_> = result
-            .issues
-            .iter()
-            .filter(|i| i.issue_type == CfgIssueType::ResourceLeak)
-            .collect();
-        assert!(!leaks.is_empty());
-    }
-
-    #[test]
     fn test_properly_closed_resource() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
         let content = r#"

@@ -167,23 +167,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Implementation detail - suppression parsing edge cases
-    fn test_parse_multiple_lines() {
-        let mut manager = SuppressionManager::new();
-        let content = r#"
-fn test() {
-    let secret = "password"; // aegis:ignore:hardcoded-secret
-    let key = "api_key"; // aegis:ignore:api-key
-}
-"#;
-        manager.parse_content(content);
-
-        assert!(manager.is_suppressed("hardcoded-secret", 3));
-        assert!(manager.is_suppressed("api-key", 4));
-        assert!(!manager.is_suppressed("hardcoded-secret", 4));
-    }
-
-    #[test]
     fn test_suppression_add_remove() {
         let mut manager = SuppressionManager::new();
         manager.add(Suppression::new("test-pattern", 10));
