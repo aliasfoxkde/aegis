@@ -177,6 +177,9 @@ pub enum PatternError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::TempDir;
 
     #[test]
     fn test_ignore_manager_new() {
@@ -197,11 +200,90 @@ mod tests {
         let manager = IgnoreManager::new();
         assert!(manager.should_ignore(Path::new("node_modules/package.json")));
         assert!(manager.should_ignore(Path::new("target/debug/binary")));
+        assert!(manager.should_ignore(Path::new(".git/config")));
     }
 
     #[test]
     fn test_invalid_pattern() {
         let manager = IgnoreManager::new();
         assert!(manager.add_pattern("[").is_err());
+    }
+
+    #[test]
+    fn test_set_root_nonexistent() {
+        let manager = IgnoreManager::new();
+        // Should not error when root doesn't exist
+        let result = manager.set_root(Path::new("/nonexistent/path/12345"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_set_root_with_atheonignore() {
+        let temp_dir = TempDir::new().unwrap();
+        let ignore_file = temp_dir.path().join(".atheonignore");
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"*.log\n!important.log\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        let result = manager.set_root(temp_dir.path());
+        assert!(result.is_ok());
+        // *.log should be ignored
+        assert!(manager.should_ignore(Path::new("debug.log")));
+    }
+
+    #[test]
+    fn test_set_root_with_gitignore() {
+        let temp_dir = TempDir::new().unwrap();
+        let gitignore = temp_dir.path().join(".gitignore");
+        File::create(&gitignore)
+            .unwrap()
+            .write_all(b"*.tmp\nbuild/\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        let result = manager.set_root(temp_dir.path());
+        assert!(result.is_ok());
+        assert!(manager.should_ignore(Path::new("debug.tmp")));
+    }
+
+    #[test]
+    fn test_clear_patterns() {
+        let manager = IgnoreManager::new();
+        manager.add_pattern("*.log").unwrap();
+        assert!(manager.should_ignore(Path::new("debug.log")));
+
+        manager.clear();
+        // After clear, should not ignore (unless default rules apply)
+        // Note: node_modules/target/.git are always ignored
+        assert!(!manager.should_ignore(Path::new("debug.log")));
+    }
+
+    #[test]
+    fn test_multiple_patterns() {
+        let manager = IgnoreManager::new();
+        manager.add_pattern("*.log").unwrap();
+        manager.add_pattern("*.tmp").unwrap();
+        assert!(manager.should_ignore(Path::new("debug.log")));
+        assert!(manager.should_ignore(Path::new("file.tmp")));
+        assert!(!manager.should_ignore(Path::new("file.txt")));
+    }
+
+    #[test]
+    fn test_debug_trait() {
+        let manager = IgnoreManager::new();
+        manager.add_pattern("*.log").unwrap();
+        let debug_str = format!("{:?}", manager);
+        assert!(debug_str.contains("IgnoreManager"));
+        assert!(debug_str.contains("atheonignore_count"));
+    }
+
+    #[test]
+    fn test_should_ignore_with_star_pattern() {
+        let manager = IgnoreManager::new();
+        manager.add_pattern("*secret*").unwrap();
+        assert!(manager.should_ignore(Path::new("my_secret.txt")));
+        assert!(manager.should_ignore(Path::new("src/secret/config.rs")));
     }
 }
