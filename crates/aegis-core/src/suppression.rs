@@ -4,6 +4,7 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::RwLock;
 
 /// Suppression for a finding
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -33,17 +34,17 @@ impl Suppression {
     }
 }
 
-/// Manages finding suppressions
-#[derive(Debug, Clone, Default)]
+/// Manages finding suppressions - RwLock allows parallel reads
+#[derive(Debug, Default)]
 pub struct SuppressionManager {
-    suppressions: HashSet<Suppression>,
+    suppressions: RwLock<HashSet<Suppression>>,
 }
 
 impl SuppressionManager {
     /// Create a new manager
     pub fn new() -> Self {
         Self {
-            suppressions: HashSet::new(),
+            suppressions: RwLock::new(HashSet::new()),
         }
     }
 
@@ -83,7 +84,7 @@ impl SuppressionManager {
         if let Some(pattern_part) = rest.strip_prefix(':') {
             let pattern = pattern_part.trim();
             if !pattern.is_empty() {
-                self.suppressions.insert(Suppression::new(pattern, line));
+                self.suppressions.write().unwrap().insert(Suppression::new(pattern, line));
             }
         } else if let Some(reason_part) = rest.strip_prefix("reason:") {
             // aegis:ignore reason:...
@@ -105,45 +106,39 @@ impl SuppressionManager {
 
     /// Check if a finding should be suppressed
     pub fn is_suppressed(&self, pattern: &str, line: u32) -> bool {
-        // Check exact match
-        if self.suppressions.contains(&Suppression::new(pattern, line)) {
-            return true;
-        }
-
-        // Check if there's a blanket suppression for this line (no pattern specified)
-        // This would require tracking line-level suppressions separately
-        // For now, we require explicit pattern matching
-        false
+        // Check exact match using composite key
+        let guard = self.suppressions.read().unwrap();
+        guard.contains(&Suppression::new(pattern, line))
     }
 
     /// Add a suppression
     pub fn add(&mut self, suppression: Suppression) {
-        self.suppressions.insert(suppression);
+        self.suppressions.write().unwrap().insert(suppression);
     }
 
     /// Remove a suppression
     pub fn remove(&mut self, suppression: &Suppression) {
-        self.suppressions.remove(suppression);
+        self.suppressions.write().unwrap().remove(suppression);
     }
 
     /// Get all suppressions
-    pub fn all(&self) -> Vec<&Suppression> {
-        self.suppressions.iter().collect()
+    pub fn all(&self) -> Vec<Suppression> {
+        self.suppressions.read().unwrap().iter().cloned().collect()
     }
 
     /// Clear all suppressions
     pub fn clear(&mut self) {
-        self.suppressions.clear();
+        self.suppressions.write().unwrap().clear();
     }
 
     /// Get suppression count
     pub fn len(&self) -> usize {
-        self.suppressions.len()
+        self.suppressions.read().unwrap().len()
     }
 
     /// Check if empty
     pub fn is_empty(&self) -> bool {
-        self.suppressions.is_empty()
+        self.suppressions.read().unwrap().is_empty()
     }
 }
 
