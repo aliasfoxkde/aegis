@@ -249,4 +249,136 @@ mod tests {
         let patterns = read_patterns_from_dir(temp_dir.path()).unwrap();
         assert_eq!(patterns.len(), 0);
     }
+
+    #[test]
+    fn test_read_patterns_from_dir_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        // Don't create any yaml files
+        let patterns = read_patterns_from_dir(temp_dir.path()).unwrap();
+        assert_eq!(patterns.len(), 0);
+    }
+
+    #[test]
+    fn test_read_patterns_from_dir_ignores_non_yaml() {
+        let temp_dir = TempDir::new().unwrap();
+        let txt_file = temp_dir.path().join("readme.txt");
+        std::fs::write(&txt_file, "not a yaml file").unwrap();
+
+        let patterns = read_patterns_from_dir(temp_dir.path()).unwrap();
+        assert_eq!(patterns.len(), 0);
+    }
+
+    #[test]
+    fn test_create_bundle_with_timestamp() {
+        let patterns = vec![Pattern {
+            name: "test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: "medium".to_string(),
+            confidence: "medium".to_string(),
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }];
+
+        let bundle = create_bundle(patterns);
+        // Timestamp should be set
+        assert!(!bundle.created_at.is_empty());
+        assert_eq!(bundle.schema_version, 2);
+    }
+
+    #[test]
+    fn test_create_bundle_from_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let yaml_file = temp_dir.path().join("patterns.yaml");
+        let yaml_content = r#"
+- name: test-pattern
+  category: test
+  match: "test"
+  enabled: true
+  severity: medium
+  confidence: medium
+  description: Test
+"#;
+        std::fs::write(&yaml_file, yaml_content).unwrap();
+
+        let result = create_bundle_from_dir(temp_dir.path());
+        assert!(result.is_ok());
+        let compressed = result.unwrap();
+        assert!(!compressed.is_empty());
+    }
+
+    #[test]
+    fn test_pattern_yaml_deserialization() {
+        let yaml_content = r#"
+- name: yaml-test
+  category: secrets
+  match: "password123"
+  enabled: true
+  severity: high
+  confidence: high
+  description: Test pattern
+  min_entropy: 4.0
+"#;
+        let patterns: Vec<Pattern> = serde_yaml::from_str(yaml_content).unwrap();
+        assert_eq!(patterns.len(), 1);
+        assert_eq!(patterns[0].name, "yaml-test");
+        assert_eq!(patterns[0].min_entropy, Some(4.0));
+    }
+
+    #[test]
+    fn test_pattern_with_all_fields() {
+        let pattern = Pattern {
+            name: "full-pattern".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret".to_string(),
+            enabled: true,
+            severity: "critical".to_string(),
+            confidence: "high".to_string(),
+            min_entropy: Some(4.5),
+            description: "Full test pattern".to_string(),
+            reference: Some("https://example.com".to_string()),
+            tags: vec!["tag1".to_string(), "tag2".to_string()],
+            env_var: true,
+            binary: false,
+        };
+
+        // Test serialization
+        let json = serde_json::to_string(&pattern).unwrap();
+        assert!(json.contains("full-pattern"));
+        assert!(json.contains("tag1"));
+
+        // Test deserialization
+        let deserialized: Pattern = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "full-pattern");
+        assert_eq!(deserialized.tags, vec!["tag1", "tag2"]);
+    }
+
+    #[test]
+    fn test_bundle_deserialization() {
+        let patterns = vec![Pattern {
+            name: "test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: "medium".to_string(),
+            confidence: "medium".to_string(),
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }];
+
+        let bundle = create_bundle(patterns);
+        let json = serde_json::to_string(&bundle).unwrap();
+        let deserialized: Bundle = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.schema_version, 2);
+        assert_eq!(deserialized.patterns.len(), 1);
+    }
 }
