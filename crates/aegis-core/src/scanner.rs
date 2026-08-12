@@ -147,6 +147,9 @@ impl Scanner {
         let mut suppression_mgr = SuppressionManager::new();
         suppression_mgr.parse_content(content);
 
+        // Pre-compute line index for O(log n) line number lookup
+        let line_index = LineIndex::new(content);
+
         let patterns: Vec<_> = self
             .registry
             .enabled()
@@ -162,7 +165,7 @@ impl Scanner {
                     let mut pattern_findings = Vec::new();
                     let matches = pattern.find_matches(content);
                     for m in matches {
-                        let line_num = content[..m.start].matches('\n').count() as u32 + 1;
+                        let line_num = line_index.get_line_number(m.start) as u32;
                         if suppression_mgr.is_suppressed(pattern.name(), line_num) {
                             continue;
                         }
@@ -196,7 +199,7 @@ impl Scanner {
             for pattern in &patterns {
                 let matches = pattern.find_matches(content);
                 for m in matches {
-                    let line_num = content[..m.start].matches('\n').count() as u32 + 1;
+                    let line_num = line_index.get_line_number(m.start) as u32;
                     if suppression_mgr.is_suppressed(pattern.name(), line_num) {
                         continue;
                     }
@@ -397,6 +400,40 @@ fn is_binary_file(path: &Path) -> Result<bool, std::io::Error> {
     let n = file.read(&mut buffer)?;
 
     Ok(buffer[..n].contains(&0))
+}
+
+/// Pre-computed line index for O(log n) line number lookups
+/// Uses binary search instead of counting newlines for each match
+struct LineIndex {
+    /// Byte offsets where each line starts (including newline)
+    line_starts: Vec<usize>,
+}
+
+impl LineIndex {
+    /// Build a line index from content
+    fn new(content: &str) -> Self {
+        let mut line_starts = vec![0]; // Line 1 starts at index 0
+        for (i, c) in content.char_indices() {
+            if c == '\n' {
+                line_starts.push(i + 1);
+            }
+        }
+        Self { line_starts }
+    }
+
+    /// Get line number for a byte offset using binary search
+    fn get_line_number(&self, byte_offset: usize) -> usize {
+        match self.line_starts.binary_search(&byte_offset) {
+            Ok(line) => line + 1, // 1-indexed
+            Err(pos) => {
+                if pos == 0 {
+                    1
+                } else {
+                    pos
+                }
+            }
+        }
+    }
 }
 
 /// Scan error types
