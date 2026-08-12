@@ -91,7 +91,11 @@ fn test_scan_json_output() {
 
     // Should complete (findings or not)
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("findings") || stdout.contains("No findings"), "stdout: {}", stdout);
+    assert!(
+        stdout.contains("findings") || stdout.contains("No findings"),
+        "stdout: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -107,15 +111,16 @@ fn test_scan_sarif_output() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     // SARIF output should contain version
-    assert!(stdout.contains("version") || stdout.contains("2.1"), "stdout: {}", stdout);
+    assert!(
+        stdout.contains("version") || stdout.contains("2.1"),
+        "stdout: {}",
+        stdout
+    );
 }
 
 #[test]
 fn test_list_enabled_only() {
-    let output = aegis_cmd()
-        .args(["list", "--enabled"])
-        .output()
-        .unwrap();
+    let output = aegis_cmd().args(["list", "--enabled"]).output().unwrap();
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -142,7 +147,11 @@ fn test_enable_pattern() {
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Enabled"), "stdout: {}", stdout);
 }

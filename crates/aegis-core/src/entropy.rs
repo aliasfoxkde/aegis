@@ -212,4 +212,51 @@ mod tests {
         let strong = "x7K9#mP2@kL3nQ";
         assert!(guessability_score(strong) > guessability_score(weak));
     }
+
+    #[test]
+    fn test_entropy_with_base() {
+        // entropy_with_base with base 2 should give base-2 entropy
+        let content = "test";
+        let base2 = entropy_with_base(content, 2.0);
+        assert!(base2 > 0.0);
+    }
+
+    #[test]
+    fn test_entropy_with_base_natural() {
+        // Base e (natural log) should give natural entropy
+        let content = "hello";
+        let natural = entropy_with_base(content, std::f64::consts::E);
+        assert!(natural > 0.0);
+    }
+
+    #[test]
+    fn test_empty_entropy_with_base() {
+        assert_eq!(entropy_with_base("", 2.0), 0.0);
+    }
+
+    #[test]
+    fn test_is_base64_short() {
+        // Too short
+        assert!(!is_base64_suggestive("abc"));
+        assert!(!is_base64_suggestive(""));
+    }
+
+    #[test]
+    fn test_is_base64_invalid_chars() {
+        // Has invalid characters
+        assert!(!is_base64_suggestive("SGVsbG8gV29ybGQ!"));
+    }
+
+    #[test]
+    fn test_is_hex_invalid_length() {
+        // Odd length
+        assert!(!is_hex_suggestive("abc"));
+        // Too short
+        assert!(!is_hex_suggestive("ab"));
+    }
+
+    #[test]
+    fn test_guessability_empty() {
+        assert_eq!(guessability_score(""), 0.0);
+    }
 }

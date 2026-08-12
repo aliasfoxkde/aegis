@@ -89,4 +89,30 @@ mod tests {
         assert!(workers >= 1);
         assert!(workers <= 64);
     }
+
+    #[test]
+    fn test_version_not_empty() {
+        assert!(!VERSION.is_empty());
+        assert!(VERSION.len() >= 5); // At least x.y.z format
+    }
+
+    #[test]
+    fn test_default_workers_calculation() {
+        let workers = default_workers();
+        // Workers should be reasonable
+        assert!(workers >= 1);
+        assert!(workers <= 128); // Capped at some reasonable max
+    }
+
+    #[test]
+    fn test_default_bundle_path() {
+        let path = default_bundle_path();
+        assert!(path.to_string_lossy().contains("aegis"));
+    }
+
+    #[test]
+    fn test_default_cache_dir() {
+        let path = default_cache_dir();
+        assert!(path.to_string_lossy().contains("aegis"));
+    }
 }

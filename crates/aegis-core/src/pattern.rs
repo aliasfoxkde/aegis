@@ -652,4 +652,625 @@ mod tests {
             Err(PatternError::Duplicate(_))
         ));
     }
+
+    #[test]
+    fn test_severity_weight() {
+        assert_eq!(Severity::Critical.weight(), 40);
+        assert_eq!(Severity::High.weight(), 25);
+        assert_eq!(Severity::Medium.weight(), 10);
+        assert_eq!(Severity::Low.weight(), 3);
+    }
+
+    #[test]
+    fn test_confidence_multiplier() {
+        assert_eq!(Confidence::High.multiplier(), 1.0);
+        assert_eq!(Confidence::Medium.multiplier(), 0.7);
+        assert_eq!(Confidence::Low.multiplier(), 0.4);
+    }
+
+    #[test]
+    fn test_severity_display() {
+        assert_eq!(format!("{}", Severity::Critical), "critical");
+        assert_eq!(format!("{}", Severity::High), "high");
+        assert_eq!(format!("{}", Severity::Medium), "medium");
+        assert_eq!(format!("{}", Severity::Low), "low");
+    }
+
+    #[test]
+    fn test_confidence_display() {
+        assert_eq!(format!("{}", Confidence::High), "high");
+        assert_eq!(format!("{}", Confidence::Medium), "medium");
+        assert_eq!(format!("{}", Confidence::Low), "low");
+    }
+
+    #[test]
+    fn test_pattern_new() {
+        let def = PatternDefinition {
+            name: "test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test\\d+".to_string(),
+            enabled: true,
+            severity: Severity::Medium,
+            confidence: Confidence::Medium,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let pattern = Pattern::new(def).unwrap();
+        assert_eq!(pattern.name(), "test");
+        assert!(pattern.matches("test123"));
+        assert!(!pattern.matches("test"));
+    }
+
+    #[test]
+    fn test_pattern_definition() {
+        let def = PatternDefinition {
+            name: "def-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "pattern".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Definition test".to_string(),
+            reference: Some("https://example.com".to_string()),
+            tags: vec!["tag1".to_string()],
+            env_var: false,
+            binary: false,
+        };
+
+        let pattern = Pattern::new(def).unwrap();
+        assert_eq!(pattern.definition().name, "def-test");
+        assert!(pattern.reference().is_some());
+        assert_eq!(pattern.tags().len(), 1);
+    }
+
+    #[test]
+    fn test_registry_by_category() {
+        let registry = PatternRegistry::new();
+
+        let def1 = PatternDefinition {
+            name: "secret-1".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret1".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: Confidence::High,
+            min_entropy: None,
+            description: "Secret 1".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let def2 = PatternDefinition {
+            name: "secret-2".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret2".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: Confidence::High,
+            min_entropy: None,
+            description: "Secret 2".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let def3 = PatternDefinition {
+            name: "pii-1".to_string(),
+            category: "pii".to_string(),
+            match_pattern: "pii1".to_string(),
+            enabled: true,
+            severity: Severity::Medium,
+            confidence: Confidence::Medium,
+            min_entropy: None,
+            description: "PII 1".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        registry.register(def1).unwrap();
+        registry.register(def2).unwrap();
+        registry.register(def3).unwrap();
+
+        let secrets = registry.by_category("secrets");
+        assert_eq!(secrets.len(), 2);
+
+        let pii = registry.by_category("pii");
+        assert_eq!(pii.len(), 1);
+
+        let unknown = registry.by_category("unknown");
+        assert_eq!(unknown.len(), 0);
+    }
+
+    #[test]
+    fn test_registry_all() {
+        let registry = PatternRegistry::new();
+        let all = registry.all();
+        assert!(all.is_empty());
+
+        let def = PatternDefinition {
+            name: "test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        registry.register(def).unwrap();
+
+        let all = registry.all();
+        assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn test_registry_names() {
+        let registry = PatternRegistry::new();
+
+        let def = PatternDefinition {
+            name: "unique-name".to_string(),
+            category: "test".to_string(),
+            match_pattern: "pattern".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        registry.register(def).unwrap();
+
+        let names = registry.names();
+        assert_eq!(names.len(), 1);
+        assert!(names.contains(&"unique-name".to_string()));
+    }
+
+    #[test]
+    fn test_registry_get() {
+        let registry = PatternRegistry::new();
+
+        let def = PatternDefinition {
+            name: "get-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "pattern".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        registry.register(def).unwrap();
+
+        let found = registry.get("get-test");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().name(), "get-test");
+
+        let not_found = registry.get("nonexistent");
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_registry_categories() {
+        let registry = PatternRegistry::new();
+
+        let def1 = PatternDefinition {
+            name: "test1".to_string(),
+            category: "cat1".to_string(),
+            match_pattern: "test1".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test 1".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let def2 = PatternDefinition {
+            name: "test2".to_string(),
+            category: "cat2".to_string(),
+            match_pattern: "test2".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test 2".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        registry.register(def1).unwrap();
+        registry.register(def2).unwrap();
+
+        let cats = registry.categories();
+        assert_eq!(cats.len(), 2);
+        assert!(cats.contains(&"cat1".to_string()));
+        assert!(cats.contains(&"cat2".to_string()));
+    }
+
+    #[test]
+    fn test_pattern_error_display() {
+        let error = PatternError::Duplicate("test".to_string());
+        assert!(error.to_string().contains("test"));
+
+        let error = PatternError::InvalidRegex("bad".to_string());
+        assert!(error.to_string().contains("bad"));
+    }
+
+    #[test]
+    fn test_pattern_is_env_var_only() {
+        let def = PatternDefinition {
+            name: "env-only".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: Confidence::High,
+            min_entropy: None,
+            description: "Env only".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: true,
+            binary: false,
+        };
+
+        let pattern = Pattern::new(def).unwrap();
+        assert!(pattern.is_env_var_only());
+    }
+
+    #[test]
+    fn test_pattern_allows_binary() {
+        let def_enabled = PatternDefinition {
+            name: "binary-allowed".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: true,
+        };
+
+        let def_disabled = PatternDefinition {
+            name: "binary-not-allowed".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let pattern_enabled = Pattern::new(def_enabled).unwrap();
+        let pattern_disabled = Pattern::new(def_disabled).unwrap();
+
+        assert!(pattern_enabled.allows_binary());
+        assert!(!pattern_disabled.allows_binary());
+    }
+
+    #[test]
+    fn test_severity_serialization() {
+        let json = serde_json::to_string(&Severity::High).unwrap();
+        assert_eq!(json, "\"high\"");
+
+        let deserialized: Severity = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, Severity::High);
+    }
+
+    #[test]
+    fn test_confidence_serialization() {
+        let json = serde_json::to_string(&Confidence::Medium).unwrap();
+        assert_eq!(json, "\"medium\"");
+
+        let deserialized: Confidence = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, Confidence::Medium);
+    }
+
+    #[test]
+    fn test_pattern_definition_serialization() {
+        let def = PatternDefinition {
+            name: "serial-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "pattern".to_string(),
+            enabled: true,
+            severity: Severity::Medium,
+            confidence: Confidence::Medium,
+            min_entropy: Some(4.0),
+            description: "Serialization test".to_string(),
+            reference: Some("https://test.com".to_string()),
+            tags: vec!["test".to_string()],
+            env_var: false,
+            binary: true,
+        };
+
+        let json = serde_json::to_string(&def).unwrap();
+        let deserialized: PatternDefinition = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "serial-test");
+        assert_eq!(deserialized.min_entropy, Some(4.0));
+    }
+
+    #[test]
+    fn test_pattern_find_matches() {
+        let def = PatternDefinition {
+            name: "find-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "\\d+".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Find test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let pattern = Pattern::new(def).unwrap();
+        let matches = pattern.find_matches("abc 123 def 456 ghi");
+        assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn test_category_new() {
+        let cat = Category::new("test-category", "A test category", 1.5);
+        assert_eq!(cat.name, "test-category");
+        assert_eq!(cat.description, "A test category");
+        assert_eq!(cat.weight, 1.5);
+    }
+
+    #[test]
+    fn test_category_fields() {
+        let cat = Category::new("fields-test", "Test fields", 3.0);
+        assert_eq!(cat.name, "fields-test");
+        assert_eq!(cat.weight, 3.0);
+        assert_eq!(cat.description, "Test fields");
+    }
+
+    #[test]
+    fn test_pattern_is_enabled() {
+        let def = PatternDefinition {
+            name: "enabled-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        let pattern = Pattern::new(def).unwrap();
+        assert!(pattern.is_enabled());
+    }
+
+    #[test]
+    fn test_pattern_min_entropy() {
+        let def = PatternDefinition {
+            name: "entropy-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "\\d+".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: Some(3.5),
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        let pattern = Pattern::new(def).unwrap();
+        assert_eq!(pattern.min_entropy(), Some(3.5));
+    }
+
+    #[test]
+    fn test_pattern_matches_with_entropy_filter() {
+        // Create a pattern with entropy requirement
+        let def = PatternDefinition {
+            name: "entropy-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "\\d+".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: Confidence::High,
+            min_entropy: Some(3.0), // Entropy threshold
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        let pattern = Pattern::new(def).unwrap();
+
+        // Very low entropy (all same char) - should not match even though regex would match
+        assert!(!pattern.matches("1111111111111111"));
+
+        // Higher entropy digits - should match
+        assert!(pattern.matches("1234567890"));
+    }
+
+    #[test]
+    fn test_find_matches_with_entropy_filter() {
+        // Test find_matches with entropy filtering
+        let def = PatternDefinition {
+            name: "find-entropy-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "\\d+".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: Confidence::High,
+            min_entropy: Some(3.0),
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        let pattern = Pattern::new(def).unwrap();
+
+        // Low entropy content - find_matches should return empty
+        let matches = pattern.find_matches("1111111111");
+        assert!(matches.is_empty());
+
+        // Higher entropy content - should find matches
+        let matches = pattern.find_matches("abc 9876543210 def");
+        assert!(!matches.is_empty());
+    }
+
+    #[test]
+    fn test_pattern_pattern_str() {
+        let def = PatternDefinition {
+            name: "str-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: r"\d+".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        let pattern = Pattern::new(def).unwrap();
+        assert_eq!(pattern.pattern_str(), r"\d+");
+    }
+
+    #[test]
+    fn test_registry_enable_nonexistent() {
+        let registry = PatternRegistry::new();
+        // Should return false for nonexistent pattern
+        assert!(!registry.enable("nonexistent"));
+    }
+
+    #[test]
+    fn test_registry_disable_nonexistent() {
+        let registry = PatternRegistry::new();
+        // Should return false for nonexistent pattern
+        assert!(!registry.disable("nonexistent"));
+    }
+
+    #[test]
+    fn test_registry_set_category_enabled() {
+        let registry = PatternRegistry::new();
+
+        let def1 = PatternDefinition {
+            name: "cat-test1".to_string(),
+            category: "test-cat".to_string(),
+            match_pattern: "test1".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let def2 = PatternDefinition {
+            name: "cat-test2".to_string(),
+            category: "test-cat".to_string(),
+            match_pattern: "test2".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        registry.register(def1).unwrap();
+        registry.register(def2).unwrap();
+
+        // Disable all in category
+        registry.set_category_enabled("test-cat", false);
+        assert!(!registry.is_enabled("cat-test1"));
+        assert!(!registry.is_enabled("cat-test2"));
+
+        // Re-enable
+        registry.set_category_enabled("test-cat", true);
+        assert!(registry.is_enabled("cat-test1"));
+        assert!(registry.is_enabled("cat-test2"));
+    }
+
+    #[test]
+    fn test_registry_is_empty() {
+        let registry = PatternRegistry::new();
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn test_registry_debug() {
+        let registry = PatternRegistry::new();
+        let def = PatternDefinition {
+            name: "debug-test".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+        registry.register(def).unwrap();
+        let debug_str = format!("{:?}", registry);
+        assert!(debug_str.contains("PatternRegistry"));
+    }
+
+    #[test]
+    fn test_registry_default() {
+        // Test Default trait implementation
+        let registry: PatternRegistry = Default::default();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+    }
 }

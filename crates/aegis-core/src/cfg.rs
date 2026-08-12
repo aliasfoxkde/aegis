@@ -487,4 +487,354 @@ func main() {
             .collect();
         assert!(!unended.is_empty());
     }
+
+    #[test]
+    fn test_cfg_node_display() {
+        let node = CfgNode {
+            id: 1,
+            kind: CfgNodeKind::Entry,
+            start_line: 1,
+            end_line: 1,
+            successors: vec![2],
+            predecessors: vec![],
+        };
+        assert!(!format!("{:?}", node).is_empty());
+    }
+
+    #[test]
+    fn test_cfg_node_kinds() {
+        // Test all node kinds can be created
+        let kinds = vec![
+            CfgNodeKind::Entry,
+            CfgNodeKind::Exit,
+            CfgNodeKind::Statement,
+            CfgNodeKind::Conditional,
+            CfgNodeKind::Loop,
+            CfgNodeKind::Try,
+            CfgNodeKind::Catch,
+            CfgNodeKind::Finally,
+            CfgNodeKind::Return,
+            CfgNodeKind::Unwind,
+        ];
+
+        for kind in kinds {
+            let node = CfgNode {
+                id: 1,
+                kind: kind.clone(),
+                start_line: 1,
+                end_line: 1,
+                successors: vec![],
+                predecessors: vec![],
+            };
+            assert_eq!(node.kind, kind);
+        }
+    }
+
+    #[test]
+    fn test_resource_kinds() {
+        let resource = Resource {
+            name: "test".to_string(),
+            acquire_line: 1,
+            release_line: Some(5),
+            kind: ResourceKind::File,
+        };
+        assert_eq!(resource.name, "test");
+        assert_eq!(resource.kind, ResourceKind::File);
+    }
+
+    #[test]
+    fn test_resource_no_release() {
+        let resource = Resource {
+            name: "unreleased".to_string(),
+            acquire_line: 10,
+            release_line: None,
+            kind: ResourceKind::Memory,
+        };
+        assert!(resource.release_line.is_none());
+    }
+
+    #[test]
+    fn test_cfg_issue_display() {
+        let issue = CfgIssue {
+            issue_type: CfgIssueType::ResourceLeak,
+            description: "Resource leak detected".to_string(),
+            file: "test.rs".to_string(),
+            line: 10,
+            severity: "high".to_string(),
+            confidence: "medium".to_string(),
+        };
+        let display = format!("{:?}", issue);
+        assert!(!display.is_empty());
+    }
+
+    #[test]
+    fn test_cfg_issue_types() {
+        let types = vec![
+            CfgIssueType::ResourceLeak,
+            CfgIssueType::TransactionNotEnded,
+            CfgIssueType::LockNotReleased,
+            CfgIssueType::UnreachableCode,
+            CfgIssueType::InfiniteLoop,
+            CfgIssueType::UncheckedError,
+        ];
+
+        for t in types {
+            let issue = CfgIssue {
+                issue_type: t.clone(),
+                description: "Test".to_string(),
+                file: "test.rs".to_string(),
+                line: 1,
+                severity: "warning".to_string(),
+                confidence: "medium".to_string(),
+            };
+            assert_eq!(issue.line, 1);
+        }
+    }
+
+    #[test]
+    fn test_cfg_analysis_with_no_issues() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let content = "fn main() {}";
+        let result = analyzer.analyze_content(content, "empty.rs").unwrap();
+        // Should have a valid CFG even with no issues
+        assert!(result.cfg.nodes.len() >= 2); // At least entry and exit
+    }
+
+    #[test]
+    fn test_control_flow_graph_default() {
+        let cfg = ControlFlowGraph::default();
+        assert!(cfg.nodes.is_empty());
+    }
+
+    #[test]
+    fn test_cfg_issue_type_display() {
+        assert_eq!(CfgIssueType::ResourceLeak.to_string(), "resource-leak");
+        assert_eq!(
+            CfgIssueType::LockNotReleased.to_string(),
+            "lock-not-released"
+        );
+        assert_eq!(
+            CfgIssueType::TransactionNotEnded.to_string(),
+            "transaction-not-ended"
+        );
+        assert_eq!(
+            CfgIssueType::UnreachableCode.to_string(),
+            "unreachable-code"
+        );
+        assert_eq!(CfgIssueType::InfiniteLoop.to_string(), "infinite-loop");
+        assert_eq!(CfgIssueType::UncheckedError.to_string(), "unchecked-error");
+    }
+
+    #[test]
+    fn test_lock_acquisition_and_release() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
+        let content = r#"
+#include <pthread.h>
+int main() {
+    pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&mu);
+    pthread_mutex_unlock(&mu);
+    return 0;
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.c").unwrap();
+        // Should not detect lock issues when properly released
+        let locks: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.issue_type == CfgIssueType::LockNotReleased)
+            .collect();
+        assert!(locks.is_empty());
+    }
+
+    #[test]
+    fn test_lock_not_released() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
+        let content = r#"
+#include <pthread.h>
+int main() {
+    pthread_mutex_init(&mu, NULL);
+    pthread_mutex_lock(&mu);
+    return 0;
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.c").unwrap();
+        // Should detect lock not released
+        let locks: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.issue_type == CfgIssueType::LockNotReleased)
+            .collect();
+        assert!(!locks.is_empty());
+    }
+
+    #[test]
+    fn test_transaction_with_commit() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Go);
+        let content = r#"
+package main
+func main() {
+    db.begin()
+    doSomething()
+    commit()
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        // Should not detect transaction issues when properly ended
+        let txns: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.issue_type == CfgIssueType::TransactionNotEnded)
+            .collect();
+        assert!(txns.is_empty());
+    }
+
+    #[test]
+    fn test_transaction_with_rollback() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Go);
+        let content = r#"
+package main
+func main() {
+    db.begin()
+    doSomething()
+    rollback()
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        let txns: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.issue_type == CfgIssueType::TransactionNotEnded)
+            .collect();
+        assert!(txns.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_resource_leak() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
+        let content = r#"
+int main() {
+    FILE *f1 = fopen("a.txt", "r");
+    FILE *f2 = fopen("b.txt", "r");
+    fclose(f1);
+    return 0;
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.c").unwrap();
+        // f2 is not closed, should detect leak
+        let leaks: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.issue_type == CfgIssueType::ResourceLeak)
+            .collect();
+        assert!(!leaks.is_empty());
+    }
+
+    #[test]
+    fn test_custom_resource_kind() {
+        let resource = Resource {
+            name: "custom".to_string(),
+            acquire_line: 1,
+            release_line: Some(5),
+            kind: ResourceKind::Custom,
+        };
+        assert_eq!(resource.kind, ResourceKind::Custom);
+    }
+
+    #[test]
+    fn test_socket_resource_kind() {
+        let resource = Resource {
+            name: "socket".to_string(),
+            acquire_line: 1,
+            release_line: None,
+            kind: ResourceKind::Socket,
+        };
+        assert_eq!(resource.kind, ResourceKind::Socket);
+        assert!(resource.release_line.is_none());
+    }
+
+    #[test]
+    fn test_cfg_node_with_successors() {
+        let node = CfgNode {
+            id: 1,
+            kind: CfgNodeKind::Conditional,
+            start_line: 1,
+            end_line: 3,
+            successors: vec![2, 3],
+            predecessors: vec![0],
+        };
+        assert_eq!(node.successors.len(), 2);
+        assert_eq!(node.predecessors.len(), 1);
+    }
+
+    #[test]
+    fn test_cfg_analyzer_default_language() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let content = "fn main() {}\n";
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert!(!result.cfg.nodes.is_empty());
+        assert!(result.issues.is_empty());
+    }
+
+    #[test]
+    fn test_cfg_error_io() {
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let result = analyzer.analyze_file(std::path::Path::new("/nonexistent/file.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cfg_classify_statement_panic() {
+        // Test that classify_statement correctly classifies panic
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let kind = analyzer.classify_statement("panic!(\"error\")");
+        // panic is classified as Unwind (cfg node kind)
+        assert_eq!(kind, CfgNodeKind::Unwind);
+    }
+
+    #[test]
+    fn test_cfg_try_block() {
+        // Test that try blocks are classified
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let content = r#"
+fn main() {
+    let result = do_something()?;
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        // The content should be analyzed without error
+        assert!(!result.cfg.nodes.is_empty());
+    }
+
+    #[test]
+    fn test_cfg_classify_statement_try_with_braces() {
+        // Test that "try {" with braces is classified as Try
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let kind = analyzer.classify_statement("try {");
+        assert_eq!(kind, CfgNodeKind::Try);
+    }
+
+    #[test]
+    fn test_cfg_classify_statement_return_arrow() {
+        // Test that "->" is classified as Return (but only when it starts the statement)
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let kind = analyzer.classify_statement("-> SomeType");
+        assert_eq!(kind, CfgNodeKind::Return);
+    }
+
+    #[test]
+    fn test_cfg_classify_statement_match() {
+        // Test that "match" is classified as Conditional
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let kind = analyzer.classify_statement("match x {");
+        assert_eq!(kind, CfgNodeKind::Conditional);
+    }
+
+    #[test]
+    fn test_cfg_classify_statement_for() {
+        // Test that "for" is classified as Loop
+        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
+        let kind = analyzer.classify_statement("for i in 0..10 {");
+        assert_eq!(kind, CfgNodeKind::Loop);
+    }
 }

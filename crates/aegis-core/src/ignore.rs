@@ -158,10 +158,7 @@ impl Default for IgnoreManager {
 impl std::fmt::Debug for IgnoreManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("IgnoreManager")
-            .field(
-                "atheonignore_count",
-                &self.atheonignore.read().len(),
-            )
+            .field("atheonignore_count", &self.atheonignore.read().len())
             .field("gitignore_count", &self.gitignore.read().len())
             .finish()
     }
@@ -285,5 +282,90 @@ mod tests {
         manager.add_pattern("*secret*").unwrap();
         assert!(manager.should_ignore(Path::new("my_secret.txt")));
         assert!(manager.should_ignore(Path::new("src/secret/config.rs")));
+    }
+
+    #[test]
+    fn test_ignore_manager_default() {
+        // Test Default trait
+        let manager: IgnoreManager = Default::default();
+        // Default manager should not ignore regular files
+        assert!(!manager.should_ignore(Path::new("src/main.rs")));
+    }
+
+    #[test]
+    fn test_should_ignore_with_gitignore_pattern() {
+        // Create a temp dir with .gitignore containing a pattern
+        let temp_dir = TempDir::new().unwrap();
+        let gitignore = temp_dir.path().join(".gitignore");
+        File::create(&gitignore)
+            .unwrap()
+            .write_all(b"*.secret\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        manager.set_root(temp_dir.path()).ok();
+
+        // Should ignore files matching the gitignore pattern
+        assert!(manager.should_ignore(Path::new("test.secret")));
+        assert!(manager.should_ignore(Path::new("src/my.secret")));
+    }
+
+    #[test]
+    fn test_load_atheonignore_with_empty_lines_and_comments() {
+        // Test that empty lines and comments are properly skipped
+        let temp_dir = TempDir::new().unwrap();
+        let ignore_file = temp_dir.path().join(".atheonignore");
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"# Comment line\n\n*.log\n# Another comment\n*.tmp\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        let result = manager.set_root(temp_dir.path());
+        assert!(result.is_ok());
+
+        // Should ignore *.log and *.tmp files
+        assert!(manager.should_ignore(Path::new("debug.log")));
+        assert!(manager.should_ignore(Path::new("file.tmp")));
+        // Should not ignore other files
+        assert!(!manager.should_ignore(Path::new("debug.txt")));
+    }
+
+    #[test]
+    fn test_load_gitignore_with_invalid_patterns() {
+        // Test that invalid patterns are gracefully skipped
+        let temp_dir = TempDir::new().unwrap();
+        let gitignore = temp_dir.path().join(".gitignore");
+        // Write invalid glob patterns that will fail to parse
+        File::create(&gitignore)
+            .unwrap()
+            .write_all(b"[invalid\n*.tmp\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        let result = manager.set_root(temp_dir.path());
+        assert!(result.is_ok());
+
+        // Should still load the *.tmp pattern even though [invalid fails
+        assert!(manager.should_ignore(Path::new("debug.tmp")));
+    }
+
+    #[test]
+    fn test_load_atheonignore_with_negated_invalid_pattern() {
+        // Test that negated patterns with invalid syntax are skipped (line 66)
+        let temp_dir = TempDir::new().unwrap();
+        let ignore_file = temp_dir.path().join(".atheonignore");
+        // Write a negated pattern with invalid regex-like syntax
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"![invalid\n*.tmp\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        let result = manager.set_root(temp_dir.path());
+        assert!(result.is_ok());
+
+        // The *.tmp pattern should still work
+        assert!(manager.should_ignore(Path::new("debug.tmp")));
     }
 }

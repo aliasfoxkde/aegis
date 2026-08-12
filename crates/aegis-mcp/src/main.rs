@@ -71,7 +71,11 @@ pub trait AegisRpc {
 
     /// Update bundle
     #[rpc(name = "update_bundle")]
-    fn update_bundle(&self, bundle_path: Option<String>, force: bool) -> BoxFuture<Result<UpdateResponse>>;
+    fn update_bundle(
+        &self,
+        bundle_path: Option<String>,
+        force: bool,
+    ) -> BoxFuture<Result<UpdateResponse>>;
 }
 
 /// Scan response
@@ -261,7 +265,11 @@ impl AegisRpc for AegisRpcImpl {
         })
     }
 
-    fn update_bundle(&self, bundle_path: Option<String>, _force: bool) -> BoxFuture<Result<UpdateResponse>> {
+    fn update_bundle(
+        &self,
+        bundle_path: Option<String>,
+        _force: bool,
+    ) -> BoxFuture<Result<UpdateResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
             // If no path provided, use embedded patterns
@@ -435,4 +443,176 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_init_scanner_has_patterns() {
+        let scanner = init_scanner();
+        let registry = scanner.registry();
+        let patterns = registry.all();
+        assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
+    }
+
+    #[test]
+    fn test_server_state_new() {
+        let state = ServerState::new();
+        assert!(state.scanner.try_read().is_ok());
+        assert!(state.config.try_read().is_ok());
+    }
+
+    #[test]
+    fn test_server_state_default() {
+        let state = ServerState::default();
+        assert!(state.scanner.try_read().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_server_state_with_scanner() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let scanner = state.scanner.read().await;
+        let registry = scanner.registry();
+        assert!(!registry.all().is_empty());
+    }
+
+    #[test]
+    fn test_scan_response_serialization() {
+        let response = ScanResponse {
+            findings: vec![],
+            finding_count: 0,
+            risk_level: "none".to_string(),
+            risk_score: 0,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("finding_count"));
+        assert!(json.contains("risk_level"));
+    }
+
+    #[test]
+    fn test_list_patterns_response_serialization() {
+        let response = ListPatternsResponse {
+            patterns: vec![PatternInfo {
+                name: "test".to_string(),
+                category: "secrets".to_string(),
+                severity: "high".to_string(),
+                confidence: "high".to_string(),
+                description: "Test pattern".to_string(),
+            }],
+            total: 1,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("total"));
+        assert!(json.contains("patterns"));
+    }
+
+    #[test]
+    fn test_update_response_serialization() {
+        let response = UpdateResponse {
+            success: true,
+            message: "Updated".to_string(),
+            pattern_count: 100,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("success"));
+        assert!(json.contains("pattern_count"));
+    }
+
+    #[test]
+    fn test_aegis_rpc_impl_new() {
+        let state = Arc::new(ServerState::new());
+        let _rpc = AegisRpcImpl::new(state);
+    }
+
+    #[tokio::test]
+    async fn test_scan_string_empty() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc
+            .scan_string("".to_string(), "test.txt".to_string())
+            .await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.finding_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_scan_string_with_secret() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc
+            .scan_string("AKIAIOSFODNN7EXAMPLE".to_string(), "test.txt".to_string())
+            .await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.finding_count > 0, "Should detect AWS key");
+    }
+
+    #[tokio::test]
+    async fn test_scan_env() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc.scan_env().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_list_patterns() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc.list_patterns(None).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.total > 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_patterns_by_category() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc.list_patterns(Some("secrets".to_string())).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.total > 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_categories() {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+        let rpc = AegisRpcImpl::new(state);
+        let result = rpc.list_categories().await;
+        assert!(result.is_ok());
+        let categories = result.unwrap();
+        assert!(!categories.is_empty());
+    }
 }

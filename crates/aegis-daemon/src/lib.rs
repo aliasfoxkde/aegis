@@ -322,4 +322,119 @@ mod tests {
         assert!(response.success);
         assert_eq!(response.finding_count, 0);
     }
+
+    #[test]
+    fn test_daemon_response_error_message() {
+        let response = DaemonResponse::error("Connection refused".to_string());
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("Connection refused"));
+    }
+
+    #[test]
+    fn test_daemon_state_new() {
+        let state = DaemonState::new(PathBuf::from("/tmp/test.sock"));
+        assert_eq!(state.socket_path, PathBuf::from("/tmp/test.sock"));
+    }
+
+    #[test]
+    fn test_init_scanner() {
+        let scanner = init_scanner();
+        let registry = scanner.registry();
+        let patterns = registry.all();
+        assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_scan_env() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+
+        let request = serde_json::json!({
+            "method": "scan_env",
+            "params": null,
+            "id": 7
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(response.success);
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_missing_content() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+
+        // scan_string with no content param
+        let request = serde_json::json!({
+            "method": "scan_string",
+            "params": [],
+            "id": 8
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("Missing content"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_missing_source() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+
+        // scan_string with content but no source
+        let request = serde_json::json!({
+            "method": "scan_string",
+            "params": ["some content"],
+            "id": 9
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("Missing source"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_scan_file_invalid_params() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+
+        let request = serde_json::json!({
+            "method": "scan_file",
+            "params": null,
+            "id": 10
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success);
+    }
+
+    #[tokio::test]
+    async fn test_handle_request_scan_dir_invalid_params() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner();
+        }
+
+        let request = serde_json::json!({
+            "method": "scan_dir",
+            "params": 123, // Should be string
+            "id": 11
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success);
+    }
 }

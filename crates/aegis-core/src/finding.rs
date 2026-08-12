@@ -455,6 +455,9 @@ mod tests {
         assert!(display.contains("Files scanned: 10"));
         assert!(display.contains("Files skipped: 2"));
         assert!(display.contains("Findings: 5"));
+        assert!(display.contains("Throughput:"));
+        assert!(display.contains("files/s"));
+        assert!(display.contains("MB/s"));
     }
 
     #[test]

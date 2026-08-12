@@ -30,7 +30,12 @@ fn test_bundle_create_and_load() {
     // Run bundler to create bundle - takes input_dir and output_file
     let output = Command::new("cargo")
         .args([
-            "run", "--package", "aegis-bundler", "--bin", "aegis-bundler", "--quiet",
+            "run",
+            "--package",
+            "aegis-bundler",
+            "--bin",
+            "aegis-bundler",
+            "--quiet",
         ])
         .arg(&temp_dir)
         .arg(output_file.to_str().unwrap())

@@ -84,7 +84,10 @@ impl SuppressionManager {
         if let Some(pattern_part) = rest.strip_prefix(':') {
             let pattern = pattern_part.trim();
             if !pattern.is_empty() {
-                self.suppressions.write().unwrap().insert(Suppression::new(pattern, line));
+                self.suppressions
+                    .write()
+                    .unwrap()
+                    .insert(Suppression::new(pattern, line));
             }
         } else if let Some(reason_part) = rest.strip_prefix("reason:") {
             // aegis:ignore reason:...
@@ -184,5 +187,95 @@ mod tests {
 
         set.insert(Suppression::new("pattern1", 6)); // Different line
         assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_hash_style() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("# aegis:ignore:python-secret\n");
+        assert!(manager.is_suppressed("python-secret", 1));
+        assert!(!manager.is_suppressed("other-pattern", 1));
+    }
+
+    #[test]
+    fn test_parse_multiline_comment_style() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("/* aegis:ignore:multiline-secret */\n");
+        assert!(manager.is_suppressed("multiline-secret", 1));
+    }
+
+    #[test]
+    fn test_suppression_with_reason() {
+        let suppression = Suppression::new("pattern", 5).with_reason("False positive");
+        assert_eq!(suppression.pattern, "pattern");
+        assert_eq!(suppression.line, 5);
+        assert_eq!(suppression.reason, Some("False positive".to_string()));
+    }
+
+    #[test]
+    fn test_suppression_manager_is_empty() {
+        let manager = SuppressionManager::new();
+        assert!(manager.is_empty());
+
+        let mut manager = SuppressionManager::new();
+        manager.add(Suppression::new("pattern", 1));
+        assert!(!manager.is_empty());
+    }
+
+    #[test]
+    fn test_suppression_manager_all() {
+        let mut manager = SuppressionManager::new();
+        manager.add(Suppression::new("pattern1", 1));
+        manager.add(Suppression::new("pattern2", 2));
+
+        let all = manager.all();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_suppression_manager_clear() {
+        let mut manager = SuppressionManager::new();
+        manager.add(Suppression::new("pattern", 1));
+        assert_eq!(manager.len(), 1);
+
+        manager.clear();
+        assert_eq!(manager.len(), 0);
+        assert!(manager.is_empty());
+    }
+
+    #[test]
+    fn test_parse_multiple_lines() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("// aegis:ignore:secret1\n// aegis:ignore:secret2\n");
+        assert!(manager.is_suppressed("secret1", 1));
+        assert!(manager.is_suppressed("secret2", 2));
+    }
+
+    #[test]
+    fn test_parse_reason_not_stored() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("// aegis:ignore reason:This is a test reason\n");
+        // Reason is parsed but not stored in current implementation
+        assert_eq!(manager.len(), 0);
+    }
+
+    #[test]
+    fn test_load_file_missing() {
+        let mut manager = SuppressionManager::new();
+        let result = manager.load_file(std::path::Path::new("/nonexistent/file.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_file_success() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("suppressions.txt");
+        std::fs::write(&file_path, "// aegis:ignore:secret1\n").unwrap();
+
+        let mut manager = SuppressionManager::new();
+        let result = manager.load_file(&file_path);
+        assert!(result.is_ok());
+        assert!(manager.is_suppressed("secret1", 1));
     }
 }

@@ -167,3 +167,164 @@ impl AegisTools {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init_test_scanner() -> Scanner {
+        let patterns = aegis_patterns::all_patterns();
+        let definitions: Vec<PatternDefinition> = patterns
+            .into_iter()
+            .map(|p| PatternDefinition {
+                name: p.name,
+                category: p.category,
+                match_pattern: p.match_pattern,
+                enabled: p.enabled,
+                severity: aegis_core::Severity::parse(&p.severity)
+                    .unwrap_or(aegis_core::Severity::Medium),
+                confidence: aegis_core::Confidence::parse(&p.confidence)
+                    .unwrap_or(aegis_core::Confidence::Medium),
+                min_entropy: p.min_entropy,
+                description: p.description,
+                reference: p.reference,
+                tags: p.tags,
+                env_var: p.env_var,
+                binary: p.binary,
+            })
+            .collect();
+        Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
+    }
+
+    fn create_test_state() -> Arc<ServerState> {
+        Arc::new(ServerState::new())
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_string() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result =
+            AegisTools::scan_string(&state, "test content".to_string(), "test.txt".to_string())
+                .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_string_with_secret() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::scan_string(
+            &state,
+            "AWS_SECRET_KEY=abcdefghijk".to_string(),
+            "test.txt".to_string(),
+        )
+        .await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.finding_count > 0);
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_file_unsafe_path() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        // /etc/passwd should be blocked by sandbox
+        let result = AegisTools::scan_file(&state, "/etc/passwd".to_string()).await;
+        assert!(result.is_err()); // Should return error for unsafe path
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_dir_unsafe_path() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::scan_dir(&state, "/etc".to_string(), false).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_env() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::scan_env(&state).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tools_list_patterns() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::list_patterns(&state, None).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.total > 0);
+    }
+
+    #[tokio::test]
+    async fn test_tools_list_patterns_by_category() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::list_patterns(&state, Some("secrets".to_string())).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.total > 0);
+    }
+
+    #[tokio::test]
+    async fn test_tools_list_categories() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::list_categories(&state).await;
+        assert!(result.is_ok());
+        let categories = result.unwrap();
+        assert!(!categories.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_tools_update_bundle() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::update_bundle(&state, None, false).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_tools_scan_string_empty() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+        let result = AegisTools::scan_string(&state, "".to_string(), "empty.txt".to_string()).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert_eq!(response.finding_count, 0);
+    }
+}

@@ -14,6 +14,16 @@ pub fn disable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Get the message to display when enabling a pattern
+pub fn enable_pattern_message(pattern: &str) -> String {
+    format!("Enabled pattern: {}", pattern)
+}
+
+/// Get the message to display when disabling a pattern
+pub fn disable_pattern_message(pattern: &str) -> String {
+    format!("Disabled pattern: {}", pattern)
+}
+
 #[allow(dead_code)]
 pub fn load_config(path: &PathBuf) -> Result<aegis_core::Config, anyhow::Error> {
     let content = std::fs::read_to_string(path)?;
@@ -42,6 +52,20 @@ mod tests {
     fn test_disable_pattern() {
         let result = disable_pattern("test-pattern");
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_enable_pattern_message() {
+        let msg = enable_pattern_message("my-pattern");
+        assert!(msg.contains("Enabled"));
+        assert!(msg.contains("my-pattern"));
+    }
+
+    #[test]
+    fn test_disable_pattern_message() {
+        let msg = disable_pattern_message("my-pattern");
+        assert!(msg.contains("Disabled"));
+        assert!(msg.contains("my-pattern"));
     }
 
     #[test]
