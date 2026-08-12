@@ -152,4 +152,168 @@ mod tests {
             RiskClassification::new(super::super::RiskLevel::Medium, RiskCategory::Compliance);
         assert_eq!(classification.action, RecommendedAction::ComplianceReview);
     }
+
+    #[test]
+    fn test_none_level_any_category() {
+        for cat in &[
+            RiskCategory::Secrets,
+            RiskCategory::Security,
+            RiskCategory::CodeQuality,
+            RiskCategory::Performance,
+            RiskCategory::Compliance,
+            RiskCategory::Configuration,
+            RiskCategory::Informational,
+        ] {
+            let classification = RiskClassification::new(super::super::RiskLevel::None, *cat);
+            assert_eq!(classification.action, RecommendedAction::None);
+            assert_eq!(classification.priority, 5);
+        }
+    }
+
+    #[test]
+    fn test_low_non_secrets() {
+        for cat in &[
+            RiskCategory::Security,
+            RiskCategory::CodeQuality,
+            RiskCategory::Performance,
+            RiskCategory::Compliance,
+            RiskCategory::Configuration,
+            RiskCategory::Informational,
+        ] {
+            let classification = RiskClassification::new(super::super::RiskLevel::Low, *cat);
+            assert_eq!(classification.action, RecommendedAction::None);
+            assert_eq!(classification.priority, 4);
+        }
+    }
+
+    #[test]
+    fn test_medium_secrets_and_security() {
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::Medium, RiskCategory::Secrets);
+        assert_eq!(classification.action, RecommendedAction::Fix);
+        assert_eq!(classification.priority, 3);
+
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::Medium, RiskCategory::Security);
+        assert_eq!(classification.action, RecommendedAction::Fix);
+    }
+
+    #[test]
+    fn test_medium_default_review() {
+        for cat in &[
+            RiskCategory::CodeQuality,
+            RiskCategory::Performance,
+            RiskCategory::Configuration,
+            RiskCategory::Informational,
+        ] {
+            let classification = RiskClassification::new(super::super::RiskLevel::Medium, *cat);
+            assert_eq!(classification.action, RecommendedAction::Review);
+            assert_eq!(classification.priority, 3);
+        }
+    }
+
+    #[test]
+    fn test_high_secrets_and_security_block() {
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::High, RiskCategory::Secrets);
+        assert_eq!(classification.action, RecommendedAction::Block);
+        assert_eq!(classification.priority, 2);
+
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::High, RiskCategory::Security);
+        assert_eq!(classification.action, RecommendedAction::Block);
+    }
+
+    #[test]
+    fn test_high_compliance_review() {
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::High, RiskCategory::Compliance);
+        assert_eq!(classification.action, RecommendedAction::ComplianceReview);
+    }
+
+    #[test]
+    fn test_high_default_fix() {
+        for cat in &[
+            RiskCategory::CodeQuality,
+            RiskCategory::Performance,
+            RiskCategory::Configuration,
+            RiskCategory::Informational,
+        ] {
+            let classification = RiskClassification::new(super::super::RiskLevel::High, *cat);
+            assert_eq!(classification.action, RecommendedAction::Fix);
+            assert_eq!(classification.priority, 2);
+        }
+    }
+
+    #[test]
+    fn test_risk_category_display_name() {
+        assert_eq!(
+            RiskCategory::Secrets.display_name(),
+            "Secrets & Credentials"
+        );
+        assert_eq!(
+            RiskCategory::Security.display_name(),
+            "Security Vulnerabilities"
+        );
+        assert_eq!(RiskCategory::CodeQuality.display_name(), "Code Quality");
+        assert_eq!(RiskCategory::Performance.display_name(), "Performance");
+        assert_eq!(RiskCategory::Compliance.display_name(), "Compliance");
+        assert_eq!(RiskCategory::Configuration.display_name(), "Configuration");
+        assert_eq!(RiskCategory::Informational.display_name(), "Informational");
+    }
+
+    #[test]
+    fn test_recommended_action_description() {
+        assert_eq!(RecommendedAction::None.description(), "No action required");
+        assert_eq!(
+            RecommendedAction::Review.description(),
+            "Review and address before merging"
+        );
+        assert_eq!(RecommendedAction::Fix.description(), "Fix immediately");
+        assert_eq!(
+            RecommendedAction::Block.description(),
+            "Block deployment and escalate"
+        );
+        assert_eq!(
+            RecommendedAction::SecurityReview.description(),
+            "Requires security team review"
+        );
+        assert_eq!(
+            RecommendedAction::ComplianceReview.description(),
+            "Requires compliance team review"
+        );
+    }
+
+    #[test]
+    fn test_classification_serialization() {
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::High, RiskCategory::Secrets);
+        let json = serde_json::to_string(&classification).unwrap();
+        assert!(json.contains("high"));
+        assert!(json.contains("secrets"));
+    }
+
+    #[test]
+    fn test_classification_action_description() {
+        let classification =
+            RiskClassification::new(super::super::RiskLevel::Critical, RiskCategory::Security);
+        assert_eq!(
+            classification.action_description(),
+            "Block deployment and escalate"
+        );
+    }
+
+    #[test]
+    fn test_risk_category_serialization() {
+        let cat = RiskCategory::Secrets;
+        let json = serde_json::to_string(&cat).unwrap();
+        assert_eq!(json, "\"secrets\"");
+    }
+
+    #[test]
+    fn test_recommended_action_serialization() {
+        let action = RecommendedAction::Block;
+        let json = serde_json::to_string(&action).unwrap();
+        assert_eq!(json, "\"block\"");
+    }
 }

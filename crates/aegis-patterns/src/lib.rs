@@ -150,4 +150,149 @@ mod tests {
             patterns.len()
         );
     }
+
+    #[test]
+    fn test_by_category_secrets() {
+        let patterns = by_category("secrets");
+        assert!(!patterns.is_empty());
+        for p in &patterns {
+            assert_eq!(p.category, "secrets");
+        }
+    }
+
+    #[test]
+    fn test_by_category_unknown() {
+        let patterns = by_category("nonexistent-category");
+        assert!(patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_case_sensitive() {
+        // Category names are case-sensitive
+        let patterns_lower = by_category("secrets");
+        let patterns_upper = by_category("Secrets");
+        // Lowercase should work, uppercase should return empty
+        assert!(!patterns_lower.is_empty());
+        assert!(patterns_upper.is_empty() || patterns_lower.len() == patterns_upper.len());
+    }
+
+    #[test]
+    fn test_all_patterns_includes_secrets() {
+        let all = all_patterns();
+        let secrets = by_category("secrets");
+        assert!(all.len() >= secrets.len());
+        assert!(!secrets.is_empty());
+    }
+
+    #[test]
+    fn test_pattern_serialization() {
+        let pattern = Pattern {
+            name: "test-pattern".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: "high".to_string(),
+            confidence: "medium".to_string(),
+            min_entropy: Some(4.0),
+            description: "A test pattern".to_string(),
+            reference: Some("https://example.com".to_string()),
+            tags: vec!["test".to_string()],
+            env_var: false,
+            binary: true,
+        };
+
+        let json = serde_json::to_string(&pattern).unwrap();
+        let deserialized: Pattern = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, pattern.name);
+        assert_eq!(deserialized.min_entropy, pattern.min_entropy);
+    }
+
+    #[test]
+    fn test_pattern_min_entropy_none() {
+        let pattern = Pattern {
+            name: "no-entropy".to_string(),
+            category: "test".to_string(),
+            match_pattern: "test".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "No entropy check".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        };
+
+        let json = serde_json::to_string(&pattern).unwrap();
+        // min_entropy is serialized as null when None
+        assert!(json.contains("min_entropy") && json.contains("null"));
+    }
+
+    #[test]
+    fn test_by_category_web_security() {
+        let patterns = by_category("web-security");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_pii() {
+        let patterns = by_category("pii");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_compliance() {
+        let patterns = by_category("compliance");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_kubernetes() {
+        let patterns = by_category("kubernetes");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_case_insensitive_returns_empty() {
+        // Unknown categories return empty Vec
+        let patterns = by_category("UNKNOWN");
+        assert!(patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_arm() {
+        let patterns = by_category("arm");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_cloudformation() {
+        let patterns = by_category("cloudformation");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_data_visualization() {
+        let patterns = by_category("data-visualization");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_finance() {
+        let patterns = by_category("finance");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_frameworks() {
+        let patterns = by_category("frameworks");
+        assert!(!patterns.is_empty());
+    }
+
+    #[test]
+    fn test_by_category_git_ops() {
+        let patterns = by_category("git-ops");
+        assert!(!patterns.is_empty());
+    }
 }

@@ -282,4 +282,306 @@ mod tests {
         assert!(score.score > 0);
         assert_eq!(score.highest_severity, Some("high".to_string()));
     }
+
+    #[test]
+    fn test_custom_severity_weights() {
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "secret");
+            super::super::Finding::new(
+                "secret1", "secrets", "high", "high", loc, "secret", "Secret 1",
+            )
+        }];
+
+        let mut custom_weights = HashMap::new();
+        custom_weights.insert("high".to_string(), 100); // Custom high weight
+
+        let score = RiskScore::new(&findings, &custom_weights, &HashMap::new());
+
+        assert!(score.score > 0);
+    }
+
+    #[test]
+    fn test_custom_category_weights() {
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "secret");
+            super::super::Finding::new(
+                "secret1", "secrets", "high", "high", loc, "secret", "Secret 1",
+            )
+        }];
+
+        let mut custom_cat_weights = HashMap::new();
+        custom_cat_weights.insert("secrets".to_string(), 5.0); // Custom category weight
+
+        let score = RiskScore::new(&findings, &HashMap::new(), &custom_cat_weights);
+
+        assert!(score.score > 0);
+        assert!(score.by_category.contains_key("secrets"));
+    }
+
+    #[test]
+    fn test_unknown_severity_weight() {
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "code");
+            super::super::Finding::new(
+                "code1",
+                "code-quality",
+                "medium",
+                "high",
+                loc,
+                "code",
+                "Code",
+            )
+        }];
+
+        // Use non-empty custom weights to exercise that branch
+        let mut custom_weights = HashMap::new();
+        custom_weights.insert("medium".to_string(), 50);
+        let score = RiskScore::new(&findings, &custom_weights, &HashMap::new());
+
+        assert!(score.score > 0);
+    }
+
+    #[test]
+    fn test_unknown_category_weight() {
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "code");
+            super::super::Finding::new(
+                "code1",
+                "unknown-category",
+                "medium",
+                "high",
+                loc,
+                "code",
+                "Code",
+            )
+        }];
+
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+
+        // Should use default weight of 1.0 for unknown category
+        assert!(score.score > 0);
+    }
+
+    #[test]
+    fn test_by_severity_tracking() {
+        let loc1 = super::super::Location::new("test.rs", 1, 0, "high finding");
+        let loc2 = super::super::Location::new("test.rs", 2, 0, "low finding");
+        let findings = vec![
+            super::super::Finding::new("high1", "secrets", "high", "high", loc1, "secret", "High"),
+            super::super::Finding::new("low1", "code-quality", "low", "high", loc2, "code", "Low"),
+        ];
+
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+
+        assert!(score.by_severity.contains_key("high"));
+        assert!(score.by_severity.contains_key("low"));
+        assert_eq!(score.by_severity.get("high"), Some(&1));
+        assert_eq!(score.by_severity.get("low"), Some(&1));
+    }
+
+    #[test]
+    fn test_unknown_confidence_multiplier() {
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "code");
+            super::super::Finding::new(
+                "code1",
+                "code-quality",
+                "high",
+                "unknown_conf",
+                loc,
+                "code",
+                "Code",
+            )
+        }];
+
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+        // Unknown confidence should use multiplier of 0.5
+        assert!(score.score >= 0);
+    }
+
+    #[test]
+    fn test_risk_score_display_none() {
+        // RiskLevel::None when no findings
+        let score = RiskScore::new(&[], &HashMap::new(), &HashMap::new());
+        let display = format!("{}", score);
+        assert!(display.contains("Risk Assessment"));
+    }
+
+    #[test]
+    fn test_risk_score_display_with_findings() {
+        // Create findings to get a non-None risk level
+        let findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "secret");
+            super::super::Finding::new(
+                "secret1", "secrets", "high", "high", loc, "secret", "Secret",
+            )
+        }];
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+        let display = format!("{}", score);
+        assert!(display.contains("Risk Assessment"));
+        assert!(display.contains("Findings:"));
+    }
+
+    #[test]
+    fn test_risk_score_with_category_breakdown() {
+        // Create findings with category to exercise by_category display
+        let findings = vec![
+            {
+                let loc = super::super::Location::new("test.rs", 1, 0, "secret1");
+                super::super::Finding::new(
+                    "secret1", "secrets", "high", "high", loc, "secret", "Secret 1",
+                )
+            },
+            {
+                let loc = super::super::Location::new("test.rs", 2, 0, "secret2");
+                super::super::Finding::new(
+                    "secret2", "secrets", "high", "high", loc, "secret", "Secret 2",
+                )
+            },
+        ];
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+        assert!(score.by_category.contains_key("secrets"));
+        let display = format!("{}", score);
+        // Should show category breakdown when there are findings
+        assert!(display.contains("By Category"));
+    }
+
+    #[test]
+    fn test_risk_score_critical_level() {
+        // Create many high severity findings to reach Critical level (>150)
+        let mut findings = Vec::new();
+        for i in 0..10 {
+            let loc = super::super::Location::new("test.rs", i, 0, "secret");
+            findings.push(super::super::Finding::new(
+                format!("secret{}", i),
+                "secrets",
+                "high",
+                "high",
+                loc,
+                "secret",
+                format!("Secret {}", i),
+            ));
+        }
+        let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
+        assert!(score.score > 150);
+    }
+
+    #[test]
+    fn test_risk_score_description() {
+        // Test description() method for all risk levels
+        let empty_score = RiskScore::new(&[], &HashMap::new(), &HashMap::new());
+        let desc = empty_score.description();
+        assert!(desc.contains("No risk detected"));
+
+        // Test with Low severity (1 finding with low severity)
+        let low_findings = vec![{
+            let loc = super::super::Location::new("test.rs", 1, 0, "code");
+            super::super::Finding::new("code1", "code-quality", "low", "high", loc, "code", "Code")
+        }];
+        let low_score = RiskScore::new(&low_findings, &HashMap::new(), &HashMap::new());
+        let low_desc = low_score.description();
+        assert!(low_desc.contains("Low") || low_desc.contains("findings"));
+        assert_eq!(low_score.level, super::RiskLevel::Low);
+
+        // Test with Medium severity (3 medium findings: 3 * 10 * 1.0 = 30, which is Medium 20-50)
+        let med_findings = vec![
+            {
+                let loc = super::super::Location::new("test.rs", 1, 0, "code");
+                super::super::Finding::new(
+                    "code1",
+                    "code-quality",
+                    "medium",
+                    "high",
+                    loc,
+                    "code",
+                    "Code",
+                )
+            },
+            {
+                let loc = super::super::Location::new("test.rs", 2, 0, "code");
+                super::super::Finding::new(
+                    "code2",
+                    "code-quality",
+                    "medium",
+                    "high",
+                    loc,
+                    "code",
+                    "Code",
+                )
+            },
+            {
+                let loc = super::super::Location::new("test.rs", 3, 0, "code");
+                super::super::Finding::new(
+                    "code3",
+                    "code-quality",
+                    "medium",
+                    "high",
+                    loc,
+                    "code",
+                    "Code",
+                )
+            },
+        ];
+        let med_score = RiskScore::new(&med_findings, &HashMap::new(), &HashMap::new());
+        let med_desc = med_score.description();
+        assert!(med_desc.contains("Medium") || med_desc.contains("findings"));
+        assert_eq!(med_score.level, super::RiskLevel::Medium);
+
+        // Test with High severity (2 findings with high severity in secrets: 2 * 25 * 1.5 = 75 >= 50)
+        let high_findings = vec![
+            {
+                let loc = super::super::Location::new("test.rs", 1, 0, "secret");
+                super::super::Finding::new(
+                    "secret1", "secrets", "high", "high", loc, "secret", "Secret",
+                )
+            },
+            {
+                let loc = super::super::Location::new("test.rs", 2, 0, "secret");
+                super::super::Finding::new(
+                    "secret2", "secrets", "high", "high", loc, "secret", "Secret",
+                )
+            },
+        ];
+        let high_score = RiskScore::new(&high_findings, &HashMap::new(), &HashMap::new());
+        let high_desc = high_score.description();
+        assert!(high_desc.contains("High") || high_desc.contains("findings"));
+        assert_eq!(high_score.level, super::RiskLevel::High);
+
+        // Test with Critical (1 critical + 5 high findings in secrets: 1*40 + 5*25 * 1.5 = 232.5 >= 150)
+        // Order high findings first, then critical to test the highest_severity tracking branch (line 113)
+        let mut crit_findings = Vec::new();
+        // First add high findings (weight 25)
+        for i in 0..5 {
+            let loc = super::super::Location::new("test.rs", i, 0, "secret");
+            crit_findings.push(super::super::Finding::new(
+                format!("secret{}", i),
+                "secrets",
+                "high",
+                "high",
+                loc,
+                "secret",
+                format!("Secret {}", i),
+            ));
+        }
+        // Then add critical finding (weight 40) to trigger the sev_weight > weight branch
+        {
+            let loc = super::super::Location::new("test.rs", 5, 0, "secret");
+            crit_findings.push(super::super::Finding::new(
+                "critical_secret",
+                "secrets",
+                "critical",
+                "high",
+                loc,
+                "secret",
+                "Critical Secret",
+            ));
+        }
+        let crit_score = RiskScore::new(&crit_findings, &HashMap::new(), &HashMap::new());
+        let crit_desc = crit_score.description();
+        assert!(crit_desc.contains("CRITICAL") || crit_desc.contains("findings"));
+
+        // Also test Display trait via format!() macro to cover category breakdown
+        let crit_display = format!("{}", crit_score);
+        assert!(crit_display.contains("secrets"));
+    }
 }

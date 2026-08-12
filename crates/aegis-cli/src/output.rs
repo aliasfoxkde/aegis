@@ -1,6 +1,6 @@
 //! Output formatting
 
-use super::OutputFormat;
+use crate::OutputFormat;
 use aegis_core::{Finding, RiskScore, ScanStats};
 
 pub struct Output {
@@ -250,7 +250,7 @@ impl std::fmt::Display for Output {
     }
 }
 
-fn severity_to_sarif_level(severity: &str) -> String {
+pub(crate) fn severity_to_sarif_level(severity: &str) -> String {
     match severity {
         "critical" | "high" => "error".to_string(),
         "medium" => "warning".to_string(),
@@ -259,7 +259,7 @@ fn severity_to_sarif_level(severity: &str) -> String {
     }
 }
 
-fn truncate_string(s: &str, max_len: usize) -> String {
+pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
@@ -267,11 +267,8 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     }
 }
 
-pub fn list_patterns(
-    enabled: bool,
-    disabled: bool,
-    category: Option<String>,
-) -> Result<(), anyhow::Error> {
+/// Format patterns for listing (testable)
+pub fn format_patterns(enabled: bool, disabled: bool, category: Option<String>) -> String {
     use aegis_core::Severity;
 
     let patterns = aegis_patterns::all_patterns();
@@ -294,13 +291,14 @@ pub fn list_patterns(
         patterns
     };
 
-    println!("Aegis Patterns");
-    println!("==============");
-    println!("Total: {} patterns", patterns.len());
+    let mut output = String::new();
+    output.push_str("Aegis Patterns\n");
+    output.push_str("==============\n");
+    output.push_str(&format!("Total: {} patterns\n", patterns.len()));
     if let Some(ref cat) = category {
-        println!("Category: {}", cat);
+        output.push_str(&format!("Category: {}\n", cat));
     }
-    println!();
+    output.push('\n');
 
     for p in &patterns {
         let status = if p.enabled { "[+]" } else { "[ ]" };
@@ -311,11 +309,424 @@ pub fn list_patterns(
             Some(Severity::Low) => "\x1b[36mLOW\x1b[0m",
             None => &p.severity,
         };
-        println!(
-            "{} {:15} {:8} {}",
+        output.push_str(&format!(
+            "{} {:15} {:8} {}\n",
             status, p.name, severity_str, p.description
-        );
+        ));
     }
 
-    Ok(())
+    output
+}
+
+pub fn list_patterns(
+    enabled: bool,
+    disabled: bool,
+    category: Option<String>,
+) -> Result<String, anyhow::Error> {
+    Ok(format_patterns(enabled, disabled, category))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aegis_core::{Finding, Location, RiskScore, ScanStats};
+
+    fn make_test_finding() -> Finding {
+        Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            "abc",
+            "Hardcoded secret detected",
+        )
+    }
+
+    fn make_test_stats() -> ScanStats {
+        let mut stats = ScanStats::new();
+        stats.files_scanned = 10;
+        stats.bytes_scanned = 1024;
+        stats.finding_count = 1;
+        stats
+    }
+
+    fn make_test_risk() -> RiskScore {
+        RiskScore::new(&[], &Default::default(), &Default::default())
+    }
+
+    #[test]
+    fn test_output_new() {
+        let output = Output::new(OutputFormat::Human, false);
+        assert!(output.buffer.is_empty());
+    }
+
+    #[test]
+    fn test_output_write_findings_human() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(!output.buffer.is_empty());
+    }
+
+    #[test]
+    fn test_output_write_findings_json() {
+        let mut output = Output::new(OutputFormat::Json, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("findings"));
+    }
+
+    #[test]
+    fn test_output_write_findings_sarif() {
+        let mut output = Output::new(OutputFormat::Sarif, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("\"version\""));
+    }
+
+    #[test]
+    fn test_output_quiet_mode() {
+        let mut output = Output::new(OutputFormat::Human, true);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Quiet mode should not print header
+        assert!(!output.buffer.contains("Aegis Security Scan"));
+    }
+
+    #[test]
+    fn test_output_empty_findings() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("No findings detected"));
+    }
+
+    #[test]
+    fn test_output_display() {
+        let output = Output::new(OutputFormat::Human, false);
+        let display = format!("{}", output);
+        assert_eq!(display, "");
+    }
+
+    #[test]
+    fn test_severity_to_sarif_level() {
+        assert_eq!(severity_to_sarif_level("critical"), "error");
+        assert_eq!(severity_to_sarif_level("high"), "error");
+        assert_eq!(severity_to_sarif_level("medium"), "warning");
+        assert_eq!(severity_to_sarif_level("low"), "note");
+        assert_eq!(severity_to_sarif_level("unknown"), "none");
+    }
+
+    #[test]
+    fn test_truncate_string() {
+        assert_eq!(truncate_string("short", 10), "short");
+        assert_eq!(
+            truncate_string("this is a long string", 10),
+            "this is a ..."
+        );
+        assert_eq!(truncate_string("exactly10!", 10), "exactly10!");
+    }
+
+    #[test]
+    fn test_output_with_multiple_findings() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding1 = make_test_finding();
+        let finding2 = Finding::new(
+            "another-pattern",
+            "secrets",
+            "medium",
+            "medium",
+            Location::new("other.rs", 20, 10, "secret2 = 'xyz'"),
+            "xyz",
+            "Another finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding1, finding2], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("hardcoded-secret"));
+        assert!(output.buffer.contains("another-pattern"));
+    }
+
+    #[test]
+    fn test_output_json_with_multiple_findings() {
+        let mut output = Output::new(OutputFormat::Json, false);
+        let finding1 = make_test_finding();
+        let finding2 = Finding::new(
+            "another-pattern",
+            "secrets",
+            "medium",
+            "medium",
+            Location::new("other.rs", 20, 10, "secret2 = 'xyz'"),
+            "xyz",
+            "Another finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding1, finding2], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("findings"));
+    }
+
+    #[test]
+    fn test_output_sarif_with_multiple_findings() {
+        let mut output = Output::new(OutputFormat::Sarif, false);
+        let finding1 = make_test_finding();
+        let finding2 = Finding::new(
+            "another-pattern",
+            "secrets",
+            "medium",
+            "medium",
+            Location::new("other.rs", 20, 10, "secret2 = 'xyz'"),
+            "xyz",
+            "Another finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding1, finding2], &stats, &risk);
+        assert!(result.is_ok());
+        assert!(output.buffer.contains("\"version\""));
+    }
+
+    #[test]
+    fn test_severity_colors_in_human_output() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let critical_finding = Finding::new(
+            "critical-pattern",
+            "secrets",
+            "critical",
+            "high",
+            Location::new("test.rs", 1, 0, "critical secret"),
+            "secret",
+            "Critical finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[critical_finding], &stats, &risk);
+        assert!(result.is_ok());
+        // ANSI color codes should be present for critical (red)
+        assert!(output.buffer.contains("\x1b[31m")); // Red for critical
+    }
+
+    #[test]
+    fn test_output_buffer_display() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+        output.write_findings(&[finding], &stats, &risk).ok();
+
+        // Display impl should return the buffer
+        let display_str = format!("{}", output);
+        assert!(!display_str.is_empty());
+    }
+
+    #[test]
+    fn test_output_with_high_severity() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = Finding::new(
+            "high-pattern",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            "abc",
+            "High severity finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Yellow color for high
+        assert!(output.buffer.contains("\x1b[33m"));
+    }
+
+    #[test]
+    fn test_output_with_medium_severity() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = Finding::new(
+            "medium-pattern",
+            "secrets",
+            "medium",
+            "medium",
+            Location::new("test.rs", 10, 5, "code = 'abc'"),
+            "abc",
+            "Medium severity finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Magenta color for medium
+        assert!(output.buffer.contains("\x1b[35m"));
+    }
+
+    #[test]
+    fn test_output_with_low_severity() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = Finding::new(
+            "low-pattern",
+            "code-quality",
+            "low",
+            "low",
+            Location::new("test.rs", 10, 5, "code = 'abc'"),
+            "abc",
+            "Low severity finding",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Cyan color for low
+        assert!(output.buffer.contains("\x1b[36m"));
+    }
+
+    #[test]
+    fn test_output_with_unknown_severity() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        // Use an invalid severity value to trigger the default branch
+        let finding = Finding::new(
+            "unknown-pattern",
+            "secrets",
+            "invalid_severity",
+            "high",
+            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            "abc",
+            "Finding with unknown severity",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Should contain the pattern name even with unknown severity
+        assert!(output.buffer.contains("unknown-pattern"));
+    }
+
+    #[test]
+    fn test_output_with_empty_matched_content() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = Finding::new(
+            "pattern-no-content",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 10, 5, ""),
+            "",
+            "Finding with no matched content",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Should not have "Matched:" line when content is empty
+        assert!(!output.buffer.contains("Matched:"));
+    }
+
+    #[test]
+    fn test_output_with_long_matched_content() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let long_content = "a".repeat(100);
+        let finding = Finding::new(
+            "pattern-long-content",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 10, 5, &long_content),
+            &long_content,
+            "Finding with long matched content",
+        );
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        let result = output.write_findings(&[finding], &stats, &risk);
+        assert!(result.is_ok());
+        // Truncated content should appear
+        assert!(output.buffer.contains("..."));
+    }
+
+    #[test]
+    fn test_format_patterns_basic() {
+        let output = format_patterns(false, false, None);
+        assert!(output.contains("Aegis Patterns"));
+        assert!(output.contains("Total:"));
+    }
+
+    #[test]
+    fn test_format_patterns_with_category() {
+        let output = format_patterns(false, false, Some("secrets".to_string()));
+        assert!(output.contains("Category: secrets"));
+    }
+
+    #[test]
+    fn test_format_patterns_enabled_only() {
+        let output = format_patterns(true, false, None);
+        assert!(output.contains("[+]"));
+    }
+
+    #[test]
+    fn test_format_patterns_disabled_only() {
+        let output = format_patterns(false, true, None);
+        // When filtering disabled only, format is still correct
+        assert!(output.contains("Total:"));
+        assert!(output.contains("patterns"));
+    }
+
+    #[test]
+    fn test_format_patterns_all_statuses() {
+        // Both enabled and disabled - should show all
+        let output = format_patterns(true, true, None);
+        assert!(output.contains("[+]") || output.contains("[ ]"));
+    }
+
+    #[test]
+    fn test_format_patterns_severity_colors() {
+        let output = format_patterns(false, false, None);
+        // Should contain ANSI color codes for severity
+        assert!(output.contains("\x1b[31m") || output.contains("\x1b[33m"));
+    }
+
+    #[test]
+    fn test_list_patterns_returns_ok() {
+        let result = list_patterns(false, false, None);
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("Aegis Patterns"));
+    }
+
+    #[test]
+    fn test_list_patterns_with_category() {
+        let result = list_patterns(false, false, Some("secrets".to_string()));
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("Category: secrets"));
+    }
 }

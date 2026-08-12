@@ -122,4 +122,46 @@ mod tests {
         assert!(RiskLevel::Medium < RiskLevel::High);
         assert!(RiskLevel::High < RiskLevel::Critical);
     }
+
+    #[test]
+    fn test_parsing_alternatives() {
+        // Test alternative spellings
+        assert_eq!("med".parse::<RiskLevel>().unwrap(), RiskLevel::Medium);
+        assert_eq!("crit".parse::<RiskLevel>().unwrap(), RiskLevel::Critical);
+        // Case insensitive
+        assert_eq!("NONE".parse::<RiskLevel>().unwrap(), RiskLevel::None);
+    }
+
+    #[test]
+    fn test_description_all_levels() {
+        assert_eq!(RiskLevel::None.description(), "No risk detected");
+        assert_eq!(RiskLevel::Low.description(), "Low risk - minor issues");
+        assert_eq!(
+            RiskLevel::Medium.description(),
+            "Medium risk - moderate issues"
+        );
+        assert_eq!(
+            RiskLevel::High.description(),
+            "High risk - significant issues"
+        );
+        assert_eq!(
+            RiskLevel::Critical.description(),
+            "CRITICAL risk - immediate action required"
+        );
+    }
+
+    #[test]
+    fn test_display_all_levels() {
+        assert_eq!(RiskLevel::None.to_string(), "none");
+        assert_eq!(RiskLevel::Low.to_string(), "low");
+        assert_eq!(RiskLevel::Medium.to_string(), "medium");
+        assert_eq!(RiskLevel::High.to_string(), "high");
+        assert_eq!(RiskLevel::Critical.to_string(), "critical");
+    }
+
+    #[test]
+    fn test_default_risk_level() {
+        let level = RiskLevel::default();
+        assert_eq!(level, RiskLevel::None);
+    }
 }

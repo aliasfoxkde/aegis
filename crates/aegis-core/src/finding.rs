@@ -303,6 +303,13 @@ mod tests {
     }
 
     #[test]
+    fn test_location_display() {
+        let loc = Location::new("test.rs", 10, 5, "let x = 1;");
+        let display = format!("{}", loc);
+        assert_eq!(display, "test.rs:10:5");
+    }
+
+    #[test]
     fn test_finding_creation() {
         let loc = Location::new("test.rs", 1, 0, "secret = 'abc'");
         let finding = Finding::new(
@@ -318,6 +325,25 @@ mod tests {
         assert_eq!(finding.pattern, "hardcoded-secret");
         assert_eq!(finding.severity, "high");
         assert_eq!(finding.category, "secrets");
+    }
+
+    #[test]
+    fn test_finding_display() {
+        let loc = Location::new("test.rs", 10, 5, "secret = 'abc'");
+        let finding = Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            loc,
+            "abc",
+            "Hardcoded secret detected",
+        );
+
+        let display = format!("{}", finding);
+        assert!(display.contains("high"));
+        assert!(display.contains("hardcoded-secret"));
+        assert!(display.contains("test.rs:10:5"));
     }
 
     #[test]
@@ -339,6 +365,22 @@ mod tests {
         assert_eq!(finding.reference, Some("https://example.com".to_string()));
         assert_eq!(finding.tags, vec!["security", "secret"]);
         assert_eq!(finding.kind, FindingKind::Entropy);
+    }
+
+    #[test]
+    fn test_finding_kind_display() {
+        assert_eq!(format!("{}", FindingKind::Pattern), "pattern");
+        assert_eq!(format!("{}", FindingKind::Ast), "ast");
+        assert_eq!(format!("{}", FindingKind::Clone), "clone");
+        assert_eq!(format!("{}", FindingKind::Cfg), "cfg");
+        assert_eq!(format!("{}", FindingKind::Entropy), "entropy");
+        assert_eq!(format!("{}", FindingKind::Taint), "taint");
+    }
+
+    #[test]
+    fn test_finding_kind_default() {
+        let kind = FindingKind::default();
+        assert_eq!(kind, FindingKind::Pattern);
     }
 
     #[test]
@@ -366,5 +408,116 @@ mod tests {
 
         assert_eq!(stats1.files_scanned, 15);
         assert_eq!(stats1.finding_count, 8);
+    }
+
+    #[test]
+    fn test_stats_merge_with_extensions() {
+        let mut stats1 = ScanStats::new();
+        stats1.files_by_extension.insert("rs".to_string(), 5);
+        stats1.findings_by_severity.insert("high".to_string(), 2);
+        stats1.findings_by_category.insert("secrets".to_string(), 3);
+
+        let mut stats2 = ScanStats::new();
+        stats2.files_by_extension.insert("rs".to_string(), 3);
+        stats2.files_by_extension.insert("py".to_string(), 2);
+        stats2.findings_by_severity.insert("high".to_string(), 1);
+        stats2.findings_by_severity.insert("medium".to_string(), 4);
+        stats2.findings_by_category.insert("secrets".to_string(), 2);
+        stats2.findings_by_category.insert("pii".to_string(), 1);
+
+        stats1.merge(&stats2);
+
+        assert_eq!(stats1.files_by_extension.get("rs"), Some(&8));
+        assert_eq!(stats1.files_by_extension.get("py"), Some(&2));
+        assert_eq!(stats1.findings_by_severity.get("high"), Some(&3));
+        assert_eq!(stats1.findings_by_severity.get("medium"), Some(&4));
+        assert_eq!(stats1.findings_by_category.get("secrets"), Some(&5));
+        assert_eq!(stats1.findings_by_category.get("pii"), Some(&1));
+    }
+
+    #[test]
+    fn test_stats_zero_scan_time() {
+        let stats = ScanStats::new();
+        assert_eq!(stats.files_per_second(), 0.0);
+        assert_eq!(stats.mb_per_second(), 0.0);
+    }
+
+    #[test]
+    fn test_stats_display() {
+        let mut stats = ScanStats::new();
+        stats.files_scanned = 10;
+        stats.files_skipped = 2;
+        stats.bytes_scanned = 1024 * 1024;
+        stats.finding_count = 5;
+        stats.scan_time_ms = 1000;
+
+        let display = format!("{}", stats);
+        assert!(display.contains("Files scanned: 10"));
+        assert!(display.contains("Files skipped: 2"));
+        assert!(display.contains("Findings: 5"));
+        assert!(display.contains("Throughput:"));
+        assert!(display.contains("files/s"));
+        assert!(display.contains("MB/s"));
+    }
+
+    #[test]
+    fn test_finding_fingerprint() {
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'");
+        let finding = Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            loc,
+            "abc",
+            "Hardcoded secret detected",
+        );
+
+        // Fingerprint should be based on pattern:file:line:content
+        assert!(!finding.fingerprint.is_empty());
+        assert!(finding.fingerprint.contains("hardcoded-secret"));
+    }
+
+    #[test]
+    fn test_location_serialize_deserialize() {
+        let loc = Location::new("test.rs", 10, 5, "let x = 1;");
+        let json = serde_json::to_string(&loc).unwrap();
+        let deserialized: Location = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.file, loc.file);
+        assert_eq!(deserialized.line, loc.line);
+        assert_eq!(deserialized.column, loc.column);
+    }
+
+    #[test]
+    fn test_finding_serialize_deserialize() {
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'");
+        let finding = Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            loc,
+            "abc",
+            "Hardcoded secret detected",
+        );
+
+        let json = serde_json::to_string(&finding).unwrap();
+        let deserialized: Finding = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.pattern, finding.pattern);
+        assert_eq!(deserialized.severity, finding.severity);
+    }
+
+    #[test]
+    fn test_stats_serialize_deserialize() {
+        let mut stats = ScanStats::new();
+        stats.files_scanned = 100;
+        stats.bytes_scanned = 1024 * 1024;
+        stats.scan_time_ms = 1000;
+        stats.findings_by_severity.insert("high".to_string(), 5);
+
+        let json = serde_json::to_string(&stats).unwrap();
+        let deserialized: ScanStats = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.files_scanned, 100);
+        assert_eq!(deserialized.findings_by_severity.get("high"), Some(&5));
     }
 }

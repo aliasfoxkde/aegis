@@ -436,4 +436,250 @@ fn complex(a: bool, b: bool, c: bool) {
         let result = analyzer.analyze_content(content, "test.rs").unwrap();
         assert!(result.complexity.cyclomatic >= 4);
     }
+
+    #[test]
+    fn test_rust_unsafe_detection() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        let content = r#"
+fn main() {
+    unsafe {
+        do_thing();
+    }
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert!(result.findings.iter().any(|f| f.pattern == "unsafe-code"));
+    }
+
+    #[test]
+    fn test_go_hardcoded_credentials() {
+        let analyzer = AstAnalyzer::new(Language::Go);
+        let content = r#"
+package main
+
+func main() {
+    password := "secret123"
+    api_key := "key-12345"
+}
+"#;
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        assert!(result
+            .findings
+            .iter()
+            .any(|f| f.pattern == "hardcoded-credentials"));
+    }
+
+    #[test]
+    fn test_go_todo_detection() {
+        let analyzer = AstAnalyzer::new(Language::Go);
+        let content = r#"
+package main
+// TODO: fix this
+func main() {}
+"#;
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        assert!(result.complexity.has_todo);
+    }
+
+    #[test]
+    fn test_go_fixme_detection() {
+        let analyzer = AstAnalyzer::new(Language::Go);
+        let content = r#"
+package main
+// FIXME: fix this
+func main() {}
+"#;
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        assert!(result.complexity.has_todo);
+    }
+
+    #[test]
+    fn test_rust_hack_detection() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        // HACK must be on a non-comment line to be detected
+        let content = "fn main() { let x = 1; /* HACK: temporary */ }\n";
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert!(result.complexity.has_todo);
+    }
+
+    #[test]
+    fn test_go_analysis_loc() {
+        let analyzer = AstAnalyzer::new(Language::Go);
+        let content = "line1\nline2\nline3\n";
+        let result = analyzer.analyze_content(content, "test.go").unwrap();
+        assert_eq!(result.complexity.loc, 3);
+    }
+
+    #[test]
+    fn test_rust_analysis_loc() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        let content = "line1\nline2\nline3\n";
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert_eq!(result.complexity.loc, 3);
+    }
+
+    #[test]
+    fn test_language_detection_java() {
+        assert_eq!(
+            AstAnalyzer::from_extension("java"),
+            Some(AstAnalyzer {
+                language: Language::Java
+            })
+        );
+    }
+
+    #[test]
+    fn test_language_detection_c() {
+        assert_eq!(
+            AstAnalyzer::from_extension("c"),
+            Some(AstAnalyzer {
+                language: Language::C
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("h"),
+            Some(AstAnalyzer {
+                language: Language::C
+            })
+        );
+    }
+
+    #[test]
+    fn test_language_detection_cpp() {
+        assert_eq!(
+            AstAnalyzer::from_extension("cpp"),
+            Some(AstAnalyzer {
+                language: Language::Cpp
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("hpp"),
+            Some(AstAnalyzer {
+                language: Language::Cpp
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("cxx"),
+            Some(AstAnalyzer {
+                language: Language::Cpp
+            })
+        );
+    }
+
+    #[test]
+    fn test_language_detection_js() {
+        assert_eq!(
+            AstAnalyzer::from_extension("js"),
+            Some(AstAnalyzer {
+                language: Language::JavaScript
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("mjs"),
+            Some(AstAnalyzer {
+                language: Language::JavaScript
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("cjs"),
+            Some(AstAnalyzer {
+                language: Language::JavaScript
+            })
+        );
+    }
+
+    #[test]
+    fn test_language_detection_ts() {
+        assert_eq!(
+            AstAnalyzer::from_extension("ts"),
+            Some(AstAnalyzer {
+                language: Language::TypeScript
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("mts"),
+            Some(AstAnalyzer {
+                language: Language::TypeScript
+            })
+        );
+        assert_eq!(
+            AstAnalyzer::from_extension("cts"),
+            Some(AstAnalyzer {
+                language: Language::TypeScript
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_common_patterns_localhost() {
+        let analyzer = AstAnalyzer::new(Language::Python);
+        let content = "server = '127.0.0.1'\n";
+        let findings = analyzer.check_common_patterns(content, "test.py");
+        assert!(findings.iter().any(|f| f.pattern == "hardcoded-host"));
+    }
+
+    #[test]
+    fn test_check_common_patterns_print() {
+        let analyzer = AstAnalyzer::new(Language::Python);
+        let content = "print('debug')\n";
+        let findings = analyzer.check_common_patterns(content, "test.py");
+        assert!(findings.iter().any(|f| f.pattern == "debug-artifact"));
+    }
+
+    #[test]
+    fn test_check_common_patterns_system_out() {
+        let analyzer = AstAnalyzer::new(Language::Java);
+        let content = "System.out.println('debug');\n";
+        let findings = analyzer.check_common_patterns(content, "test.java");
+        assert!(findings.iter().any(|f| f.pattern == "debug-artifact"));
+    }
+
+    #[test]
+    fn test_check_common_patterns_exec() {
+        let analyzer = AstAnalyzer::new(Language::JavaScript);
+        let content = "eval('code');\n";
+        let findings = analyzer.check_common_patterns(content, "test.js");
+        assert!(findings.iter().any(|f| f.pattern == "dangerous-execution"));
+    }
+
+    #[test]
+    fn test_check_common_patterns_runtime_exec() {
+        let analyzer = AstAnalyzer::new(Language::Java);
+        let content = "Runtime.getRuntime().exec('cmd');\n";
+        let findings = analyzer.check_common_patterns(content, "test.java");
+        assert!(findings.iter().any(|f| f.pattern == "dangerous-execution"));
+    }
+
+    #[test]
+    fn test_analyze_unsupported_language() {
+        let analyzer = AstAnalyzer::new(Language::Python);
+        let content = "x = 1\n";
+        let result = analyzer.analyze_content(content, "test.py").unwrap();
+        // Python is not supported, should return empty findings
+        assert!(result.findings.is_empty());
+        assert_eq!(result.complexity.loc, 0); // unsupported lang returns default
+    }
+
+    #[test]
+    fn test_complexity_with_while_loop() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        let content = "while condition {\n    do_something();\n}\n";
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert!(result.complexity.cyclomatic >= 1);
+    }
+
+    #[test]
+    fn test_complexity_function_params() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        let content = "fn foo(a: i32, b: i32, c: i32) {}\n";
+        let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        assert_eq!(result.complexity.param_count, 3);
+    }
+
+    #[test]
+    fn test_analyze_file_nonexistent() {
+        let analyzer = AstAnalyzer::new(Language::Rust);
+        let result = analyzer.analyze_file(std::path::Path::new("/nonexistent/file.rs"));
+        assert!(result.is_err());
+    }
 }

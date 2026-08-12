@@ -5,7 +5,12 @@ use std::io::Write;
 fn send_mcp_request(request: &str) -> String {
     let mut child = std::process::Command::new("cargo")
         .args([
-            "run", "--package", "aegis-mcp", "--bin", "aegis-mcp", "--quiet",
+            "run",
+            "--package",
+            "aegis-mcp",
+            "--bin",
+            "aegis-mcp",
+            "--quiet",
         ])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -57,4 +62,28 @@ fn test_mcp_update_bundle() {
     let response = send_mcp_request(request);
 
     assert!(response.contains("success"), "Response: {}", response);
+}
+
+#[test]
+fn test_mcp_scan_dir() {
+    let request = r#"{"jsonrpc":"2.0","method":"scan_dir","params":[".",false],"id":5}"#;
+    let response = send_mcp_request(request);
+
+    assert!(response.contains("jsonrpc"), "Response: {}", response);
+}
+
+#[test]
+fn test_mcp_scan_env() {
+    let request = r#"{"jsonrpc":"2.0","method":"scan_env","params":[],"id":6}"#;
+    let response = send_mcp_request(request);
+
+    assert!(response.contains("jsonrpc"), "Response: {}", response);
+}
+
+#[test]
+fn test_mcp_list_patterns_with_category() {
+    let request = r#"{"jsonrpc":"2.0","method":"list_patterns","params":["secrets"],"id":7}"#;
+    let response = send_mcp_request(request);
+
+    assert!(response.contains("patterns"), "Response: {}", response);
 }

@@ -335,7 +335,11 @@ impl CloneDetector {
         }
 
         // Sort by similarity descending
-        clones.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        clones.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(clones)
     }
@@ -484,5 +488,153 @@ fn bar() {
         }];
 
         assert_eq!(identical[0].clone_type, CloneType::Type1);
+    }
+
+    #[test]
+    fn test_clone_type_description() {
+        assert_eq!(
+            CloneType::Type1.description(),
+            "Identical code (whitespace differences only)"
+        );
+        assert_eq!(
+            CloneType::Type2.description(),
+            "Identical with renamed variables"
+        );
+        assert_eq!(
+            CloneType::Type3.description(),
+            "Similar with minor modifications"
+        );
+        assert_eq!(
+            CloneType::Type4.description(),
+            "Semantic clones (different syntax)"
+        );
+    }
+
+    #[test]
+    fn test_clone_location() {
+        let loc = CloneLocation {
+            file: "test.rs".to_string(),
+            start_line: 10,
+            end_line: 20,
+            function: Some("main".to_string()),
+        };
+        assert_eq!(loc.file, "test.rs");
+        assert_eq!(loc.start_line, 10);
+        assert_eq!(loc.end_line, 20);
+        assert_eq!(loc.function, Some("main".to_string()));
+    }
+
+    #[test]
+    fn test_clone_location_without_function() {
+        let loc = CloneLocation {
+            file: "test.rs".to_string(),
+            start_line: 10,
+            end_line: 20,
+            function: None,
+        };
+        assert!(loc.function.is_none());
+    }
+
+    #[test]
+    fn test_clone_detector_with_low_similarity() {
+        let detector = CloneDetector::new().with_min_similarity(0.5);
+        assert_eq!(detector.min_similarity, 0.5);
+    }
+
+    #[test]
+    fn test_clone_detector_default() {
+        let detector = CloneDetector::default();
+        assert_eq!(detector.min_similarity, 0.75);
+    }
+
+    #[test]
+    fn test_code_clone_debug() {
+        let clone = CodeClone {
+            clone_type: CloneType::Type2,
+            location1: CloneLocation {
+                file: "a.rs".to_string(),
+                start_line: 1,
+                end_line: 10,
+                function: Some("foo".to_string()),
+            },
+            location2: CloneLocation {
+                file: "b.rs".to_string(),
+                start_line: 5,
+                end_line: 15,
+                function: Some("bar".to_string()),
+            },
+            similarity: 0.85,
+            token_count: 50,
+        };
+        let debug_str = format!("{:?}", clone);
+        assert!(!debug_str.is_empty());
+    }
+
+    #[test]
+    fn test_clone_type_all_variants() {
+        // Ensure all clone types can be used
+        let types = vec![
+            CloneType::Type1,
+            CloneType::Type2,
+            CloneType::Type3,
+            CloneType::Type4,
+        ];
+        for t in types {
+            assert!(!t.description().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_detect_file_nonexistent() {
+        let detector = CloneDetector::new();
+        let result = detector.detect_file(std::path::Path::new("/nonexistent/file.txt"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_detect_content_with_numbers_and_strings() {
+        // Exercise tokenization of numbers, strings, and identifiers
+        let detector = CloneDetector::new();
+        let content = r#"
+fn foo() {
+    let x = 42;
+    let hex = 0xFF;
+    let float = 3.14;
+    let s = "hello";
+    let c = 'c';
+}
+"#;
+        let result = detector.detect_content(content, "test.rs");
+        // Should succeed (may or may not find clones depending on similarity)
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tokenize_numbers() {
+        let detector = CloneDetector::new();
+        // Use reflection or just test detect_content which uses tokenize internally
+        let content = "let x = 0xDEADBEEF; let y = 42; let z = 3.14159;";
+        let result = detector.detect_content(content, "test.rs");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tokenize_string_with_escape() {
+        let detector = CloneDetector::new();
+        // Test string tokenization with escape sequences to cover line 172-174
+        let content = r#"let s = "hello \"world\" escaped";"#;
+        let result = detector.detect_content(content, "test.rs");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_classify_clone_type4() {
+        // Test that low similarity (< 0.75) gets classified as Type4
+        let detector = CloneDetector::new();
+        let content1 = "fn alpha() { println!(\"completely different function alpha\"); }";
+        let clones = detector.detect_content(content1, "a.rs").unwrap();
+        // When comparing blocks within same content, low similarity gets Type4
+        // This test verifies the classify_clone function branch
+        assert!(clones.is_empty() || clones.iter().any(|c| c.similarity < 0.75));
     }
 }

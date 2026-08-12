@@ -234,6 +234,9 @@ mod tests {
         assert_eq!(config.name, "production");
         assert!(config.exit_on_findings);
         assert_eq!(config.max_file_size_mb, 5);
+        assert_eq!(config.strict_mode, StrictMode::Strict);
+        assert_eq!(config.performance_mode, PerformanceMode::Optimized);
+        assert_eq!(config.output_format, OutputFormat::Sarif);
     }
 
     #[test]
@@ -241,6 +244,24 @@ mod tests {
         let config = Config::preset("pipeline").unwrap();
         assert_eq!(config.name, "pipeline");
         assert!(config.enabled_categories.is_some());
+        assert!(config.exit_on_findings);
+    }
+
+    #[test]
+    fn test_preset_development() {
+        let config = Config::preset("development").unwrap();
+        assert_eq!(config.name, "development");
+        assert!(!config.exit_on_findings);
+        assert!(config.enabled_categories.is_none());
+        assert_eq!(config.output_format, OutputFormat::Human);
+    }
+
+    #[test]
+    fn test_preset_mcp() {
+        let config = Config::preset("mcp").unwrap();
+        assert_eq!(config.name, "mcp");
+        assert!(!config.exit_on_findings);
+        assert_eq!(config.timeout_seconds, 30);
     }
 
     #[test]
@@ -251,8 +272,11 @@ mod tests {
     #[test]
     fn test_list_presets() {
         let presets = Config::list_presets();
+        assert_eq!(presets.len(), 4);
         assert!(presets.contains(&"production"));
         assert!(presets.contains(&"pipeline"));
+        assert!(presets.contains(&"development"));
+        assert!(presets.contains(&"mcp"));
     }
 
     #[test]
@@ -260,5 +284,80 @@ mod tests {
         assert_eq!(OutputFormat::Human.to_string(), "human");
         assert_eq!(OutputFormat::Json.to_string(), "json");
         assert_eq!(OutputFormat::Sarif.to_string(), "sarif");
+    }
+
+    #[test]
+    fn test_strict_mode_default() {
+        assert_eq!(StrictMode::default(), StrictMode::Permissive);
+    }
+
+    #[test]
+    fn test_performance_mode_default() {
+        assert_eq!(PerformanceMode::default(), PerformanceMode::Debug);
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert_eq!(config.name, "default");
+        assert_eq!(config.strict_mode, StrictMode::Standard);
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = Config::default();
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, config.name);
+    }
+
+    #[test]
+    fn test_config_deserialize_with_defaults() {
+        // Minimal JSON without fields that have defaults - deserializing should use default functions
+        let json = r#"{"name": "test-config"}"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(config.name, "test-config");
+        // These should use the default functions
+        assert!(config.exit_on_findings);
+        assert_eq!(config.max_file_size_mb, 10);
+        assert_eq!(config.timeout_seconds, 300);
+    }
+
+    #[test]
+    fn test_config_save_and_load() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+
+        let config = Config::default();
+        config.save(&config_path).unwrap();
+
+        let loaded = Config::load(&config_path).unwrap();
+        assert_eq!(loaded.name, config.name);
+    }
+
+    #[test]
+    fn test_config_load_missing_file() {
+        let result = Config::load(&std::path::PathBuf::from("/nonexistent/config.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_config_error_display() {
+        let error = ConfigError::UnknownPreset("test".to_string());
+        assert!(error.to_string().contains("test"));
+
+        let error = ConfigError::IoError(std::io::Error::new(std::io::ErrorKind::NotFound, "test"));
+        assert!(error.to_string().contains("I/O error"));
+    }
+
+    #[test]
+    fn test_preset_presets_have_all_fields() {
+        for preset_name in &["production", "pipeline", "development", "mcp"] {
+            let config = Config::preset(preset_name).unwrap();
+            assert!(!config.name.is_empty());
+            assert!(config.max_file_size_mb > 0);
+        }
     }
 }

@@ -3,12 +3,12 @@
 //! Command-line interface for Aegis security scanning.
 
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-mod config;
-pub mod output;
-mod scanner;
+use aegis_cli::{
+    config, disable_pattern_message, enable_pattern_message, output, scanner, OutputFormat,
+};
 
 #[derive(Parser)]
 #[command(name = "aegis")]
@@ -33,13 +33,6 @@ struct Cli {
 
     #[command(subcommand)]
     command: Commands,
-}
-
-#[derive(Clone, ValueEnum)]
-pub enum OutputFormat {
-    Human,
-    Json,
-    Sarif,
 }
 
 #[derive(Subcommand)]
@@ -165,15 +158,15 @@ async fn main() -> Result<()> {
             disabled,
             category,
         } => {
-            output::list_patterns(enabled, disabled, category)?;
+            println!("{}", output::list_patterns(enabled, disabled, category)?);
         }
         Commands::Enable { pattern } => {
             config::enable_pattern(&pattern)?;
-            println!("Enabled pattern: {}", pattern);
+            println!("{}", enable_pattern_message(&pattern));
         }
         Commands::Disable { pattern } => {
             config::disable_pattern(&pattern)?;
-            println!("Disabled pattern: {}", pattern);
+            println!("{}", disable_pattern_message(&pattern));
         }
         Commands::Update { force } => {
             scanner::update_bundle(force).await?;
