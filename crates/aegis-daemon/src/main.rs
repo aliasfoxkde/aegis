@@ -3,6 +3,8 @@
 //! Long-running daemon mode for Aegis security scanning.
 //! Listens on a Unix socket for scan requests.
 
+#![cfg(unix)]
+
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
