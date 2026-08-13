@@ -5,6 +5,8 @@
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::RwLock;
 use std::time::Instant;
 use walkdir::WalkDir;
 
@@ -75,6 +77,10 @@ pub struct Scanner {
     #[allow(dead_code)]
     suppression_manager: SuppressionManager,
     options: ScanOptions,
+    /// Cached category scanners for performance
+    category_scanners: RwLock<Option<Vec<crate::pattern::CategoryScanner>>>,
+    /// Track last include_disabled setting to invalidate cache
+    last_include_disabled: AtomicBool,
 }
 
 impl Scanner {
@@ -85,6 +91,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         }
     }
 
@@ -96,6 +104,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         })
     }
 
@@ -109,6 +119,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         })
     }
 
@@ -140,10 +152,37 @@ impl Scanner {
         self.ignore_manager.set_root(root)
     }
 
-    /// Update options
+    /// Update options and rebuild category scanners if needed
     pub fn with_options(mut self, options: ScanOptions) -> Self {
+        // Invalidate cache if include_disabled changed
+        if self.last_include_disabled.load(Ordering::SeqCst) != options.include_disabled {
+            *self.category_scanners.write().unwrap() = None;
+            self.last_include_disabled.store(options.include_disabled, Ordering::SeqCst);
+        }
         self.options = options;
         self
+    }
+
+    /// Get or build cached category scanners
+    fn get_category_scanners(&self) -> Vec<crate::pattern::CategoryScanner> {
+        let include_disabled = self.options.include_disabled;
+
+        // Check cache
+        if let Ok(cache) = self.category_scanners.read() {
+            if let Some(ref scanners) = *cache {
+                return scanners.clone();
+            }
+        }
+
+        // Build new scanners
+        let scanners = self.registry.build_category_scanners(include_disabled);
+
+        // Cache them
+        if let Ok(mut cache) = self.category_scanners.write() {
+            *cache = Some(scanners.clone());
+        }
+
+        scanners
     }
 
     /// Parse a diff file and extract only the changed lines
@@ -215,10 +254,8 @@ impl Scanner {
         // Pre-compute line index for O(log n) line number lookup
         let line_index = LineIndex::new(content);
 
-        // Build category scanners with combined regex pre-filtering
-        let scanners = self
-            .registry
-            .build_category_scanners(self.options.include_disabled);
+        // Get cached category scanners
+        let scanners = self.get_category_scanners();
 
         if scanners.is_empty() {
             return Vec::new();

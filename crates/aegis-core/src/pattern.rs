@@ -337,6 +337,7 @@ impl Pattern {
 
 /// Category scanner with combined regex pre-filtering
 /// Groups patterns by category and uses combined regex as a gate
+#[derive(Clone)]
 pub struct CategoryScanner {
     /// Combined regex for quick pre-filter (one per category)
     combined: Regex,
