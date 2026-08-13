@@ -2,7 +2,7 @@
 //!
 //! Provides efficient benchmarking capabilities for comparing scan performance.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -51,7 +51,7 @@ fn build_benchmark_scanner() -> anyhow::Result<Scanner> {
 
 /// Run Aegis benchmark
 pub fn run_aegis_benchmark(
-    path: &PathBuf,
+    path: &Path,
     warmup: usize,
     runs: usize,
 ) -> anyhow::Result<BenchmarkResult> {
