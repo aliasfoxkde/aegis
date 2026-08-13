@@ -7,7 +7,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use aegis_cli::{
-    config, disable_pattern_message, enable_pattern_message, output, scanner, OutputFormat,
+    benchmark, config, disable_pattern_message, enable_pattern_message, output, scanner,
+    OutputFormat,
 };
 
 #[derive(Parser)]
@@ -117,6 +118,25 @@ enum Commands {
         #[arg(short, long)]
         force: bool,
     },
+
+    /// Run benchmark comparison
+    Benchmark {
+        /// Path to scan
+        #[arg(default_value = ".")]
+        path: PathBuf,
+
+        /// Number of warmup runs
+        #[arg(long, default_value = "1")]
+        warmup: usize,
+
+        /// Number of benchmark runs to average
+        #[arg(long, default_value = "3")]
+        runs: usize,
+
+        /// Compare with Atheon-Enhanced if available
+        #[arg(long)]
+        compare: bool,
+    },
 }
 
 #[tokio::main]
@@ -182,6 +202,19 @@ async fn main() -> Result<()> {
         }
         Commands::Update { force } => {
             scanner::update_bundle(force).await?;
+        }
+        Commands::Benchmark {
+            path,
+            warmup,
+            runs,
+            compare,
+        } => {
+            benchmark::run_benchmark(benchmark::BenchmarkOptions {
+                path,
+                warmup,
+                runs,
+                compare,
+            })?;
         }
     }
 
