@@ -78,7 +78,8 @@ pub fn format_benchmark_json(
     findings: &[Finding],
 ) -> serde_json::Value {
     // Count findings by severity
-    let mut by_severity: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut by_severity: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
     for f in findings {
         *by_severity.entry(f.severity.clone()).or_insert(0) += 1;
     }

@@ -4,8 +4,8 @@
 
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
 use walkdir::WalkDir;
@@ -157,7 +157,8 @@ impl Scanner {
         // Invalidate cache if include_disabled changed
         if self.last_include_disabled.load(Ordering::SeqCst) != options.include_disabled {
             *self.category_scanners.write().unwrap() = None;
-            self.last_include_disabled.store(options.include_disabled, Ordering::SeqCst);
+            self.last_include_disabled
+                .store(options.include_disabled, Ordering::SeqCst);
         }
         self.options = options;
         self
@@ -320,9 +321,7 @@ impl Scanner {
                 .filter_map(|v| v.get("fingerprint").and_then(|f| f.as_str()))
                 .map(String::from)
                 .collect()
-        } else if let Ok(fingerprints) =
-            serde_json::from_str::<Vec<String>>(&baseline_content)
-        {
+        } else if let Ok(fingerprints) = serde_json::from_str::<Vec<String>>(&baseline_content) {
             fingerprints.into_iter().collect()
         } else {
             return findings;
@@ -1078,17 +1077,26 @@ mod tests {
         let scanner = Scanner::from_definitions(vec![def.clone()]).unwrap();
 
         let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
-        assert!(!findings.is_empty(), "Should detect AWS access key, got: {:?}", findings);
+        assert!(
+            !findings.is_empty(),
+            "Should detect AWS access key, got: {:?}",
+            findings
+        );
 
         // Use fingerprints for stable baseline matching
-        let baseline_fingerprints: Vec<String> = findings.iter().map(|f| f.fingerprint.clone()).collect();
+        let baseline_fingerprints: Vec<String> =
+            findings.iter().map(|f| f.fingerprint.clone()).collect();
 
         // Write baseline with the finding fingerprints
         let baseline_json: Vec<serde_json::Value> = baseline_fingerprints
             .iter()
             .map(|fp| serde_json::json!({"fingerprint": fp}))
             .collect();
-        std::fs::write(&baseline_file, serde_json::to_string(&baseline_json).unwrap()).unwrap();
+        std::fs::write(
+            &baseline_file,
+            serde_json::to_string(&baseline_json).unwrap(),
+        )
+        .unwrap();
 
         // Create new scanner with baseline and same pattern
         let scanner_with_baseline = Scanner::from_definitions(vec![def]).unwrap();
@@ -1100,7 +1108,11 @@ mod tests {
         let scanner_with_baseline = scanner_with_baseline.with_options(options);
 
         // Scan the same content - should be filtered
-        let filtered_findings = scanner_with_baseline.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
-        assert!(filtered_findings.is_empty(), "Baseline should filter known findings");
+        let filtered_findings =
+            scanner_with_baseline.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
+        assert!(
+            filtered_findings.is_empty(),
+            "Baseline should filter known findings"
+        );
     }
 }
