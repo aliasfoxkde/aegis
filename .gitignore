@@ -14,3 +14,5 @@ cov/
 *.bin
 *.wasm
 temp/
+.claude/
+CLAUDE.md
