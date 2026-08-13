@@ -16,7 +16,7 @@ Comprehensive security scanning tool for DevOps, CI/CD pipelines, and AI systems
 
 ## Patterns
 
-- [Detection Patterns](patterns/README.md) - 500+ patterns across 18 categories
+- [Detection Patterns](patterns/README.md) - 620 patterns across 32 categories
 - [Pattern Specification](PATTERNS.md) - How patterns work
 - [Adding Patterns](guides/ADDING_PATTERNS.md) - Contribute new patterns
 
@@ -25,7 +25,6 @@ Comprehensive security scanning tool for DevOps, CI/CD pipelines, and AI systems
 - [Architecture Overview](architecture/OVERVIEW.md) - System design
 - [Coding Standards](CODING_STANDARDS.md) - Rust conventions
 - [Building from Source](guides/BUILDING.md) - Contributor setup
-- [Go Source Bug Review](GO_SOURCE_BUG_REVIEW.md) - Original project issues
 
 ## Resources
 

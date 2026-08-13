@@ -6,7 +6,7 @@
 
 ### Goals
 - Complete rewrite in Rust (from Go)
-- 500+ pattern coverage (expanding from 409)
+- 620 pattern coverage (expanding from 409)
 - 99%+ test coverage
 - DevOps/CI/CD integration focus
 - Early issue detection for AI systems
@@ -25,7 +25,7 @@ aegis/
 │   ├── aegis-mcp/         # MCP server
 │   ├── aegis-daemon/      # Daemon mode
 │   ├── aegis-bundler/     # Pattern bundler tool
-│   └── aegis-patterns/    # Pattern definitions (409 → 500+)
+│   └── aegis-patterns/    # Pattern definitions (409 → 620)
 ├── config/
 │   └── profiles/           # Configuration profiles
 ├── docs/                   # Documentation
@@ -69,7 +69,7 @@ Pattern bundling utility.
 #### aegis-patterns
 Generated pattern definitions.
 - 29 categories
-- 500+ patterns
+- 620 patterns
 
 ---
 
