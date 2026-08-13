@@ -22,6 +22,7 @@
 //! ```
 
 pub mod ast;
+pub mod benchmark;
 pub mod bundle;
 pub mod cfg;
 pub mod clone;
@@ -34,6 +35,7 @@ pub mod risk;
 pub mod scanner;
 pub mod suppression;
 
+pub use benchmark::{format_benchmark_json, BenchmarkConfig, ScanBenchmark};
 pub use bundle::{Bundle, BundleMetadata};
 pub use config::Config;
 pub use entropy::shannon_entropy;
