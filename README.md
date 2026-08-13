@@ -7,7 +7,7 @@
 
 ## Features
 
-- **[621 Detection Patterns](docs/patterns/README.md)** across 32 categories
+- **[620 Detection Patterns](docs/patterns/README.md)** across 32 categories
 - **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
@@ -77,7 +77,7 @@ More examples in the [Quick Start Guide](docs/guides/QUICK_START.md).
 
 ## Pattern Categories
 
-Aegis includes **621 patterns** across **32 categories**:
+Aegis includes **620 patterns** across **32 categories**:
 
 | Category | Patterns | Description |
 |----------|----------|-------------|
@@ -92,7 +92,7 @@ Aegis includes **621 patterns** across **32 categories**:
 | [supply-chain](docs/patterns/README.md#supply-chain-35-patterns) | 35 | Dependency vulnerabilities |
 | [frameworks](docs/patterns/README.md#frameworks-31-patterns) | 31 | React, Angular, Next.js |
 
-Browse all [621 detection patterns](docs/patterns/README.md).
+Browse all [620 detection patterns](docs/patterns/README.md).
 
 ## Documentation
 
@@ -173,7 +173,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/    # 621 pattern definitions
+│   └── aegis-patterns/    # 620 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation
 ```
