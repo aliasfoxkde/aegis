@@ -8,7 +8,7 @@
 ## Features
 
 - **[621 Detection Patterns](docs/patterns/README.md)** across 32 categories
-- **High Performance** - Built in Rust for maximum speed and reliability
+- **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
 - **Risk Scoring** - Intelligent risk assessment and prioritization
