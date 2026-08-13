@@ -3,7 +3,7 @@ name = "aegis"
 version = "0.1.3"
 edition = "2021"
 authors = ["Aegis Team"]
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 repository = "https://github.com/aegis/aegis"
 description = "Aegis - Security scanning for DevOps and CI/CD"
 
@@ -20,13 +20,14 @@ members = [
     "crates/aegis-daemon",
     "crates/aegis-bundler",
     "crates/aegis-patterns",
+    "crates/aegis-wasm",
 ]
 
 [workspace.package]
 version = "0.1.3"
 edition = "2021"
 authors = ["Aegis Team"]
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 repository = "https://github.com/aegis/aegis"
 rust-version = "1.75"
 

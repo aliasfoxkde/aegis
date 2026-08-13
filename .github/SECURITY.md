@@ -4,62 +4,42 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| latest  | :white_check_mark: |
-| older   | :x:                |
+| 0.1.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-**Please DO NOT file a public GitHub issue for security vulnerabilities.**
+If you discover a security vulnerability in Aegis, please report it responsibly.
 
-Instead, please report them by:
+### How to Report
 
-1. **Email**: Send to the maintainers directly (preferred for critical issues)
-2. **GitHub Private Vulnerability Reporting**: Use GitHub's [private vulnerability reporting](https://github.com/aliasfoxkde/aegis/security/advisories/new)
+1. **Do NOT** create a public GitHub issue for security vulnerabilities
+2. Email the maintainers at the repository's contact address
+3. Include the following information:
+   - Description of the vulnerability
+   - Steps to reproduce
+   - Potential impact
+   - Any suggested fixes (optional)
 
-### What to Include
+### What to Expect
 
-When reporting, please include:
+- Acknowledgment of your report within 48 hours
+- Regular updates on the progress
+- Credit for the discovery (unless you prefer to remain anonymous)
 
-- Type of vulnerability
-- Full paths of source file(s) related to the vulnerability
-- Location of the affected source code (tag/commit/branch)
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code (if possible)
-- Impact of the issue
+### Scope
 
-### Response Timeline
+Security issues in the following are in scope:
+- Core scanning engine vulnerabilities
+- Path traversal vulnerabilities
+- Pattern bypass vulnerabilities
+- Denial of service issues
+- Secret exfiltration concerns
 
-- **Initial response**: Within 48 hours
-- **Status update**: Within 7 days
-- **Resolution**: As quickly as possible (critical issues prioritized)
+## Security Best Practices
 
-## Security Best Practices for Users
+When using Aegis:
 
-### Scanning
-
-- Always use the latest version of Aegis patterns
-- Run scans before committing code
-- Use severity thresholds appropriate for your environment
-
-### CI/CD Integration
-
-- Use SARIF format for integration with security tools
-- Enable fail-on options for critical/high severity findings
-- Review suppressions carefully
-
-### Configuration
-
-- Use appropriate profiles for your environment (production vs development)
-- Regularly update pattern bundles with `aegis update`
-
-## Security-Related Pattern Categories
-
-Aegis includes security-focused pattern categories:
-
-- `secrets` - API keys, tokens, credentials
-- `security-hardening` - Security best practices
-- `web-security` - XSS, SQLi, CORS, etc.
-- `supply-chain` - Dependency vulnerabilities
-- `infrastructure` - Terraform, IaC security
-- `cloud-native` - Kubernetes, Docker security
+- Run scans in isolated environments
+- Review suppressions carefully - they disable security checks
+- Keep patterns updated via `aegis update`
+- Use baseline files to track known issues

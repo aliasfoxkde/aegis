@@ -3,7 +3,7 @@
 **Aegis** is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. It detects secrets, credentials, security vulnerabilities, AI-generated code patterns, and more.
 
 [![Build Status](https://github.com/aliasfoxkde/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/aliasfoxkde/aegis/actions)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
 ## Features
 
@@ -109,7 +109,6 @@ Browse all [620 detection patterns](docs/patterns/README.md).
 - [Adding Patterns](docs/guides/ADDING_PATTERNS.md) - Contribute new patterns
 - [Architecture Overview](docs/architecture/OVERVIEW.md) - System design
 - [Coding Standards](docs/CODING_STANDARDS.md) - Rust conventions
-- [Go Source Bug Review](docs/GO_SOURCE_BUG_REVIEW.md) - Original project issues
 
 ## CI/CD Integration
 
@@ -199,4 +198,4 @@ See [Adding Patterns](docs/guides/ADDING_PATTERNS.md) for contribution guideline
 
 ## License
 
-MIT OR Apache-2.0
+Apache-2.0
