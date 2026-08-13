@@ -109,7 +109,6 @@ Browse all [620 detection patterns](docs/patterns/README.md).
 - [Adding Patterns](docs/guides/ADDING_PATTERNS.md) - Contribute new patterns
 - [Architecture Overview](docs/architecture/OVERVIEW.md) - System design
 - [Coding Standards](docs/CODING_STANDARDS.md) - Rust conventions
-- [Go Source Bug Review](docs/GO_SOURCE_BUG_REVIEW.md) - Original project issues
 
 ## CI/CD Integration
 
