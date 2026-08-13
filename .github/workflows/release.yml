@@ -82,6 +82,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-gnu
+      - name: Install cross-compilation tools
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
       - name: Build
@@ -201,8 +203,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd target/wasm32-unknown-unknown/release
-          sha256sum libaegis_wasm.wasm > checksums.txt
-          cp libaegis_wasm.wasm aegis_wasm.wasm
+          sha256sum aegis_wasm.wasm > checksums.txt
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -233,6 +234,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          draft: false
           prerelease: false
           generate_release_notes: true
           files: release/*
