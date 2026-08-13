@@ -72,6 +72,7 @@ fn setup_socket(path: &PathBuf) -> std::io::Result<tokio::net::UnixListener> {
 }
 
 #[tokio::main]
+#[cfg(unix)]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter("aegis=info")
