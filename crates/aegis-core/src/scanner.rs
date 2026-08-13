@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use walkdir::WalkDir;
 
+use crate::entropy::shannon_entropy;
 use crate::suppression::SuppressionManager;
 
 use crate::bundle::Bundle;
@@ -150,85 +151,118 @@ impl Scanner {
         // Pre-compute line index for O(log n) line number lookup
         let line_index = LineIndex::new(content);
 
-        let patterns: Vec<_> = self
-            .registry
-            .enabled()
-            .into_iter()
-            .filter(|p| !p.is_env_var_only())
-            .collect();
+        // Build category scanners with combined regex pre-filtering
+        let scanners = self.registry.build_category_scanners();
 
-        // Parallelize when many patterns (threshold: 50 patterns)
-        let findings: Vec<Finding> = if patterns.len() > 50 {
-            patterns
+        if scanners.is_empty() {
+            return Vec::new();
+        }
+
+        // Use category scanners with combined regex pre-filtering
+        let findings: Vec<Finding> = if content.len() > 5000 && scanners.len() > 4 {
+            // Parallelize across categories for large content
+            scanners
                 .par_iter()
-                .flat_map(|pattern| {
-                    let mut pattern_findings = Vec::new();
-                    let matches = pattern.find_matches(content);
-                    for m in matches {
-                        let line_num = line_index.get_line_number(m.start) as u32;
-                        if suppression_mgr.is_suppressed(pattern.name(), line_num) {
-                            continue;
-                        }
-                        let location = Location::new(
-                            source,
-                            line_num as usize,
-                            m.start,
-                            m.matched_text.to_string(),
-                        );
-                        let mut finding = Finding::new(
-                            pattern.name(),
-                            pattern.category(),
-                            pattern.severity().to_string(),
-                            pattern.confidence().to_string(),
-                            location,
-                            m.matched_text,
-                            pattern.description(),
-                        )
-                        .with_kind(FindingKind::Pattern);
-                        if let Some(reference) = pattern.reference() {
-                            finding = finding.with_reference(reference);
-                        }
-                        pattern_findings.push(finding);
-                    }
-                    pattern_findings
+                .flat_map(|scanner| {
+                    self.process_category_scanner(
+                        scanner,
+                        content,
+                        source,
+                        &suppression_mgr,
+                        &line_index,
+                    )
                 })
                 .collect()
         } else {
-            // Sequential for small number of patterns
+            // Sequential for smaller content
             let mut findings = Vec::new();
-            for pattern in &patterns {
-                let matches = pattern.find_matches(content);
-                for m in matches {
-                    let line_num = line_index.get_line_number(m.start) as u32;
-                    if suppression_mgr.is_suppressed(pattern.name(), line_num) {
-                        continue;
-                    }
-                    let location = Location::new(
-                        source,
-                        line_num as usize,
-                        m.start,
-                        m.matched_text.to_string(),
-                    );
-                    let mut finding = Finding::new(
-                        pattern.name(),
-                        pattern.category(),
-                        pattern.severity().to_string(),
-                        pattern.confidence().to_string(),
-                        location,
-                        m.matched_text,
-                        pattern.description(),
-                    )
-                    .with_kind(FindingKind::Pattern);
-                    if let Some(reference) = pattern.reference() {
-                        finding = finding.with_reference(reference);
-                    }
-                    findings.push(finding);
-                }
+            for scanner in &scanners {
+                findings.extend(self.process_category_scanner(
+                    scanner,
+                    content,
+                    source,
+                    &suppression_mgr,
+                    &line_index,
+                ));
             }
             findings
         };
 
-        let _ = start.elapsed(); // Used for timing in non-test
+        let _ = start.elapsed();
+        findings
+    }
+
+    /// Process a category scanner and return findings
+    fn process_category_scanner(
+        &self,
+        scanner: &crate::pattern::CategoryScanner,
+        content: &str,
+        source: &str,
+        suppression_mgr: &SuppressionManager,
+        line_index: &LineIndex,
+    ) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        // Fast pre-filter: if combined regex doesn't match, skip entire category
+        if !scanner.might_match(content) {
+            return findings;
+        }
+
+        // Find matches using individual patterns
+        let matches = scanner.find_matches(content);
+
+        for m in matches {
+            let patterns = scanner.patterns();
+            // Find which pattern matched by checking the match position
+            let mut matched_pattern = None;
+            for p in patterns {
+                if p.regex_matches(m.matched_text) {
+                    matched_pattern = Some(p);
+                    break;
+                }
+            }
+
+            let pattern = match matched_pattern {
+                Some(p) => p,
+                None => continue,
+            };
+
+            // Check entropy if required
+            if let Some(min_entropy) = pattern.min_entropy() {
+                let entropy = shannon_entropy(m.matched_text);
+                if entropy < min_entropy {
+                    continue;
+                }
+            }
+
+            let line_num = line_index.get_line_number(m.start) as u32;
+            if suppression_mgr.is_suppressed(pattern.name(), line_num) {
+                continue;
+            }
+
+            let location = Location::new(
+                source,
+                line_num as usize,
+                m.start,
+                m.matched_text.to_string(),
+            );
+            let mut finding = Finding::new(
+                pattern.name(),
+                pattern.category(),
+                pattern.severity().to_string(),
+                pattern.confidence().to_string(),
+                location,
+                m.matched_text,
+                pattern.description(),
+            )
+            .with_kind(FindingKind::Pattern);
+
+            if let Some(reference) = pattern.reference() {
+                finding = finding.with_reference(reference);
+            }
+            findings.push(finding);
+        }
+
         findings
     }
 
