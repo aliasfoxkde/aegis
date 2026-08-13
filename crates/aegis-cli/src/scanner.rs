@@ -19,8 +19,11 @@ pub struct ScanOptions {
     pub categories: Option<String>,
     pub severity_threshold: Option<String>,
     pub output_file: Option<PathBuf>,
-    #[allow(dead_code)]
     pub baseline: Option<PathBuf>,
+    /// Include disabled patterns in scan
+    pub all: bool,
+    /// Diff file to scan (only changed lines)
+    pub diff: Option<PathBuf>,
     pub format: OutputFormat,
     pub quiet: bool,
 }
@@ -55,6 +58,8 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         follow_symlinks: opts.follow_symlinks,
         categories,
         severity_threshold: opts.severity_threshold.clone(),
+        include_disabled: opts.all,
+        diff_file: opts.diff.clone(),
         ..Default::default()
     };
 
@@ -69,7 +74,12 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
 
 /// Perform scan based on options (testable)
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
-    let (findings, stats): (Vec<Finding>, ScanStats) = if opts.scan_env {
+    let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
+        // Scan only changed lines from a diff file
+        let diff_content = std::fs::read_to_string(diff_path)?;
+        let findings = scanner.scan_diff(&diff_content, "diff");
+        (findings, ScanStats::default())
+    } else if opts.scan_env {
         let findings = scanner.scan_env();
         (findings, ScanStats::default())
     } else if opts.scan_stdin {
@@ -321,6 +331,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -344,6 +356,8 @@ mod tests {
             severity_threshold: Some("high".to_string()),
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Json,
             quiet: true,
         };
@@ -407,6 +421,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -427,6 +443,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -447,6 +465,8 @@ mod tests {
             severity_threshold: Some("high".to_string()),
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -467,6 +487,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -491,6 +513,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -513,6 +537,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -537,6 +563,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -560,6 +588,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -588,6 +618,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -611,6 +643,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Json,
             quiet: false,
         };
@@ -639,6 +673,8 @@ mod tests {
             severity_threshold: None,
             output_file: Some(output_path.clone()),
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -664,6 +700,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Sarif,
             quiet: false,
         };
@@ -687,6 +725,8 @@ mod tests {
             severity_threshold: None,
             output_file: None,
             baseline: None,
+            all: false,
+            diff: None,
             format: OutputFormat::Human,
             quiet: false,
         };

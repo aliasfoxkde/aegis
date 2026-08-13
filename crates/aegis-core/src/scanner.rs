@@ -4,7 +4,9 @@
 
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::Instant;
 use walkdir::WalkDir;
 
@@ -38,6 +40,10 @@ pub struct ScanOptions {
     pub workers: usize,
     /// Baseline file to suppress known findings
     pub baseline: Option<PathBuf>,
+    /// Include disabled patterns in scan
+    pub include_disabled: bool,
+    /// Diff file to scan (only changed lines)
+    pub diff_file: Option<PathBuf>,
 }
 
 impl Default for ScanOptions {
@@ -52,6 +58,8 @@ impl Default for ScanOptions {
             use_atheonignore: true,
             workers: num_cpus(),
             baseline: None,
+            include_disabled: false,
+            diff_file: None,
         }
     }
 }
@@ -69,6 +77,10 @@ pub struct Scanner {
     #[allow(dead_code)]
     suppression_manager: SuppressionManager,
     options: ScanOptions,
+    /// Cached category scanners for performance
+    category_scanners: RwLock<Option<Vec<crate::pattern::CategoryScanner>>>,
+    /// Track last include_disabled setting to invalidate cache
+    last_include_disabled: AtomicBool,
 }
 
 impl Scanner {
@@ -79,6 +91,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         }
     }
 
@@ -90,6 +104,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         })
     }
 
@@ -103,6 +119,8 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
+            category_scanners: RwLock::new(None),
+            last_include_disabled: AtomicBool::new(false),
         })
     }
 
@@ -134,10 +152,96 @@ impl Scanner {
         self.ignore_manager.set_root(root)
     }
 
-    /// Update options
+    /// Update options and rebuild category scanners if needed
     pub fn with_options(mut self, options: ScanOptions) -> Self {
+        // Invalidate cache if include_disabled changed
+        if self.last_include_disabled.load(Ordering::SeqCst) != options.include_disabled {
+            *self.category_scanners.write().unwrap() = None;
+            self.last_include_disabled
+                .store(options.include_disabled, Ordering::SeqCst);
+        }
         self.options = options;
         self
+    }
+
+    /// Get or build cached category scanners
+    fn get_category_scanners(&self) -> Vec<crate::pattern::CategoryScanner> {
+        let include_disabled = self.options.include_disabled;
+
+        // Check cache
+        if let Ok(cache) = self.category_scanners.read() {
+            if let Some(ref scanners) = *cache {
+                return scanners.clone();
+            }
+        }
+
+        // Build new scanners
+        let scanners = self.registry.build_category_scanners(include_disabled);
+
+        // Cache them
+        if let Ok(mut cache) = self.category_scanners.write() {
+            *cache = Some(scanners.clone());
+        }
+
+        scanners
+    }
+
+    /// Parse a diff file and extract only the changed lines
+    /// Returns a tuple of (file_path, line_content) for each added line
+    #[allow(clippy::collapsible_if)]
+    pub fn parse_diff(diff_content: &str) -> Vec<(String, String)> {
+        let mut results = Vec::new();
+        let mut current_file = String::new();
+
+        for line in diff_content.lines() {
+            // Track file changes
+            if let Some(stripped) = line.strip_prefix("+++ ") {
+                current_file = stripped.to_string();
+                if current_file.starts_with("a/") || current_file.starts_with("b/") {
+                    if let Some(s) = current_file.strip_prefix("a/") {
+                        current_file = s.to_string();
+                    } else if let Some(s) = current_file.strip_prefix("b/") {
+                        current_file = s.to_string();
+                    }
+                }
+                if current_file == "/dev/null" {
+                    current_file = String::new();
+                }
+            } else if let Some(added) = line.strip_prefix('+') {
+                // Added line
+                if !current_file.is_empty() {
+                    results.push((current_file.clone(), added.to_string()));
+                }
+            }
+            // Note: We skip removed lines (-) and context lines
+        }
+
+        results
+    }
+
+    /// Scan only the changed lines from a diff file
+    pub fn scan_diff(&self, diff_content: &str, _source: &str) -> Vec<Finding> {
+        let changed_lines = Self::parse_diff(diff_content);
+        let mut all_findings = Vec::new();
+
+        // Group by file and scan each file's changed lines
+        let mut by_file: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (file, line) in changed_lines {
+            by_file.entry(file).or_default().push(line);
+        }
+
+        for (file, lines) in by_file {
+            let content = lines.join("\n");
+            let mut findings = self.scan_string(&content, &file);
+            // Update source to reflect the actual file
+            for finding in &mut findings {
+                finding.location.file = file.clone();
+            }
+            all_findings.extend(findings);
+        }
+
+        all_findings
     }
 
     /// Scan a string
@@ -151,8 +255,8 @@ impl Scanner {
         // Pre-compute line index for O(log n) line number lookup
         let line_index = LineIndex::new(content);
 
-        // Build category scanners with combined regex pre-filtering
-        let scanners = self.registry.build_category_scanners();
+        // Get cached category scanners
+        let scanners = self.get_category_scanners();
 
         if scanners.is_empty() {
             return Vec::new();
@@ -188,8 +292,45 @@ impl Scanner {
             findings
         };
 
+        // Filter findings against baseline if configured
+        let findings = self.filter_baseline(findings);
+
         let _ = start.elapsed();
         findings
+    }
+
+    /// Load baseline findings and filter them from results
+    /// Uses fingerprint for stable matching (fingerprint = pattern:file:line:content)
+    fn filter_baseline(&self, findings: Vec<Finding>) -> Vec<Finding> {
+        if self.options.baseline.is_none() {
+            return findings;
+        }
+
+        let baseline_path = self.options.baseline.as_ref().unwrap();
+        let Ok(baseline_content) = std::fs::read_to_string(baseline_path) else {
+            return findings;
+        };
+
+        // Parse baseline JSON - expected format: [{"fingerprint": "..."}, ...]
+        // Also supports simple string array format: ["fingerprint1", "fingerprint2", ...]
+        let baseline_fingerprints: std::collections::HashSet<String> = if let Ok(items) =
+            serde_json::from_str::<Vec<serde_json::Value>>(&baseline_content)
+        {
+            items
+                .iter()
+                .filter_map(|v| v.get("fingerprint").and_then(|f| f.as_str()))
+                .map(String::from)
+                .collect()
+        } else if let Ok(fingerprints) = serde_json::from_str::<Vec<String>>(&baseline_content) {
+            fingerprints.into_iter().collect()
+        } else {
+            return findings;
+        };
+
+        findings
+            .into_iter()
+            .filter(|f| !baseline_fingerprints.contains(&f.fingerprint))
+            .collect()
     }
 
     /// Process a category scanner and return findings
@@ -214,13 +355,7 @@ impl Scanner {
         for m in matches {
             let patterns = scanner.patterns();
             // Find which pattern matched by checking the match position
-            let mut matched_pattern = None;
-            for p in patterns {
-                if p.regex_matches(m.matched_text) {
-                    matched_pattern = Some(p);
-                    break;
-                }
-            }
+            let matched_pattern = patterns.iter().find(|p| p.regex_matches(m.matched_text));
 
             let pattern = match matched_pattern {
                 Some(p) => p,
@@ -388,7 +523,11 @@ impl Scanner {
 
     /// Scan environment variables
     pub fn scan_env(&self) -> Vec<Finding> {
-        let patterns = self.registry.enabled();
+        let patterns = if self.options.include_disabled {
+            self.registry.all()
+        } else {
+            self.registry.enabled()
+        };
         let mut findings = Vec::new();
 
         for (key, value) in std::env::vars() {
@@ -713,6 +852,8 @@ mod tests {
             use_atheonignore: false,
             workers: 8,
             baseline: Some(PathBuf::from("/baseline.json")),
+            include_disabled: true,
+            diff_file: Some(PathBuf::from("/diff.txt")),
         };
 
         assert_eq!(options.max_file_size, 5 * 1024 * 1024);
@@ -907,5 +1048,71 @@ mod tests {
         };
         let scanner = scanner.with_options(options);
         assert!(scanner.options.baseline.is_some());
+    }
+
+    #[test]
+    fn test_baseline_filters_findings() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let baseline_file = temp_dir.path().join("baseline.json");
+
+        // Create a pattern definition
+        let def = PatternDefinition {
+            name: "secrets-aws-access-key".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
+            enabled: true,
+            severity: crate::Severity::Critical,
+            confidence: crate::Confidence::High,
+            min_entropy: None, // Disable entropy check for testing
+            description: "AWS Access Key ID detected".to_string(),
+            reference: None,
+            tags: vec!["aws".to_string()],
+            env_var: false,
+            binary: false,
+        };
+
+        // Create scanner using from_definitions (the normal path)
+        let scanner = Scanner::from_definitions(vec![def.clone()]).unwrap();
+
+        let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
+        assert!(
+            !findings.is_empty(),
+            "Should detect AWS access key, got: {:?}",
+            findings
+        );
+
+        // Use fingerprints for stable baseline matching
+        let baseline_fingerprints: Vec<String> =
+            findings.iter().map(|f| f.fingerprint.clone()).collect();
+
+        // Write baseline with the finding fingerprints
+        let baseline_json: Vec<serde_json::Value> = baseline_fingerprints
+            .iter()
+            .map(|fp| serde_json::json!({"fingerprint": fp}))
+            .collect();
+        std::fs::write(
+            &baseline_file,
+            serde_json::to_string(&baseline_json).unwrap(),
+        )
+        .unwrap();
+
+        // Create new scanner with baseline and same pattern
+        let scanner_with_baseline = Scanner::from_definitions(vec![def]).unwrap();
+
+        let options = ScanOptions {
+            baseline: Some(baseline_file),
+            ..Default::default()
+        };
+        let scanner_with_baseline = scanner_with_baseline.with_options(options);
+
+        // Scan the same content - should be filtered
+        let filtered_findings =
+            scanner_with_baseline.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
+        assert!(
+            filtered_findings.is_empty(),
+            "Baseline should filter known findings"
+        );
     }
 }

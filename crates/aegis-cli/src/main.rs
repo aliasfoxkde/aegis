@@ -74,6 +74,14 @@ enum Commands {
         /// Baseline file for diff
         #[arg(long)]
         baseline: Option<PathBuf>,
+
+        /// Include disabled patterns in scan
+        #[arg(long)]
+        all: bool,
+
+        /// Diff file to scan (only changed lines)
+        #[arg(long)]
+        diff: Option<PathBuf>,
     },
 
     /// List patterns
@@ -137,6 +145,8 @@ async fn main() -> Result<()> {
             severity_threshold,
             output_file,
             baseline,
+            all,
+            diff,
         } => {
             scanner::run_scan(scanner::ScanOptions {
                 path,
@@ -148,6 +158,8 @@ async fn main() -> Result<()> {
                 severity_threshold,
                 output_file,
                 baseline,
+                all,
+                diff,
                 format: cli.format,
                 quiet: cli.quiet,
             })
