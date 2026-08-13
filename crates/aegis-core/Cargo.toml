@@ -18,14 +18,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-tokio = { workspace = true, features = ["sync", "fs", "io-util"] }
+tokio = { workspace = true, features = ["sync", "fs", "io-util"], optional = true }
 tracing = { workspace = true }
 futures = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 miette = { workspace = true }
 flate2 = { workspace = true }
-jsonschema = { workspace = true }
+jsonschema = { workspace = true, optional = true }
 
 # Parallel processing
 rayon = "1.10"
@@ -61,4 +61,6 @@ tempfile = "3.10"
 pretty_assertions = "1.4"
 
 [features]
-default = []
+default = ["tokio", "jsonschema"]
+tokio = ["dep:tokio"]
+jsonschema = ["dep:jsonschema"]

@@ -10,4 +10,7 @@
 *.log
 cov/
 *.prof
+*.profraw
 *.bin
+*.wasm
+temp/
