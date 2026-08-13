@@ -8,7 +8,7 @@
 | GitHub Repository | [aliasfoxkde/aegis](https://github.com/aliasfoxkde/aegis) |
 | Issue Tracker | [Report Issues](https://github.com/aliasfoxkde/aegis/issues) |
 | Discussions | [GitHub Discussions](https://github.com/aliasfoxkde/aegis/discussions) |
-| Pattern Catalog | [621 Patterns](docs/patterns/README.md) |
+| Pattern Catalog | [620 Patterns](docs/patterns/README.md) |
 
 ## Project Info
 
@@ -26,7 +26,7 @@
 ## Version
 
 - **Current**: v0.1.0
-- **Patterns**: 621 across 32 categories
+- **Patterns**: 620 across 32 categories
 - **Last Updated**: August 2026
 
 ---

@@ -39,7 +39,7 @@ Pattern files for Aegis, organized by category. Each `.yaml` file defines one pa
 | git-ops | 3 | GitOps workflow patterns |
 | data-visualization | 5 | Chart/graph library patterns |
 
-**Total: 621 patterns across 32 categories**
+**Total: 620 patterns across 32 categories**
 
 ## Pattern File Format
 

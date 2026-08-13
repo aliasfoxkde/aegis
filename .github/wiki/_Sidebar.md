@@ -23,7 +23,7 @@
 - [Coding Standards](../docs/CODING_STANDARDS.md) - Rust conventions
 
 ### Pattern Categories
-- [Pattern Catalog](../docs/patterns/README.md) - All 621 patterns
+- [Pattern Catalog](../docs/patterns/README.md) - All 620 patterns
 - [Community Patterns](../community/README.md) - YAML pattern directory
 - [Secrets](../community/secrets/) - API keys, credentials
 - [Security Hardening](../community/security-hardening/) - Security best practices
@@ -32,7 +32,6 @@
 
 ### Resources
 - [Project Plan](../docs/PLAN.md) - Roadmap and milestones
-- [Go Source Bug Review](../docs/GO_SOURCE_BUG_REVIEW.md) - Original project issues
 - [Changelog](https://github.com/aliasfoxkde/aegis/releases)
 
 ### External Links

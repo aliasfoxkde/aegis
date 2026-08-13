@@ -7,7 +7,7 @@ Welcome to the Aegis wiki! This wiki contains project documentation that syncs w
 **Aegis** is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust for maximum speed and reliability.
 
 **Key Features:**
-- **621 patterns** across 32 categories
+- **620 patterns** across 32 categories
 - Multi-format output: JSON, SARIF, plain text
 - MCP server for AI assistant integration
 - CI/CD integration (GitHub Actions, GitLab, Jenkins, Azure)
@@ -42,7 +42,7 @@ See the **Sidebar** for navigation, or browse:
 
 ## Statistics
 
-- **621** detection patterns
+- **620* detection patterns
 - **32** pattern categories
 - **5** core crates
 - **4** configuration profiles

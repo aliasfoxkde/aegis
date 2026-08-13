@@ -149,7 +149,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/   # Pattern definitions (621 patterns)
+│   └── aegis-patterns/   # Pattern definitions (620 patterns)
 ├── config/profiles/       # Configuration profiles
 └── docs/                 # Documentation
 ```
