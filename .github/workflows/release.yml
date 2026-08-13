@@ -232,7 +232,8 @@ jobs:
         run: ls -la release/
       - name: Create checksums file
         run: |
-          cat release/checksums.txt release/*/checksums.txt release/*/*/checksums.txt 2>/dev/null > release/checksums.txt || true
+          (cat release/checksums.txt 2>/dev/null; cat release/*/checksums.txt 2>/dev/null; cat release/*/*/checksums.txt 2>/dev/null) > release/all_checksums.txt || cat release/checksums.txt > release/all_checksums.txt 2>/dev/null || true
+          mv release/all_checksums.txt release/checksums.txt
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
