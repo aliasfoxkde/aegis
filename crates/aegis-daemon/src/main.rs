@@ -3,8 +3,6 @@
 //! Long-running daemon mode for Aegis security scanning.
 //! Listens on a Unix socket for scan requests.
 
-#![cfg(unix)]
-
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -137,4 +135,11 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Stub main for non-Unix platforms
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("Aegis Daemon is only supported on Unix-like systems (Linux, macOS)");
+    std::process::exit(1);
 }

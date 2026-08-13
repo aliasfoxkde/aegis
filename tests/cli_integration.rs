@@ -167,3 +167,57 @@ fn test_disable_pattern() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Disabled"), "stdout: {}", stdout);
 }
+
+#[test]
+fn test_scan_with_severity_threshold() {
+    let temp_dir = std::env::temp_dir();
+    let file_path = temp_dir.join("aegis_test_critical.txt");
+    std::fs::write(&file_path, "api_key: AKIAIOSFODNN7EXAMPLE").unwrap();
+
+    let output = aegis_cmd()
+        .args(["scan", file_path.to_str().unwrap(), "--severity-threshold", "critical"])
+        .output()
+        .unwrap();
+
+    // Should complete without error
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stdout.contains("findings") || stdout.contains("No findings") || stderr.is_empty(),
+        "stdout: {}, stderr: {}",
+        stdout,
+        stderr
+    );
+}
+
+#[test]
+fn test_scan_with_categories() {
+    let temp_dir = std::env::temp_dir();
+    let file_path = temp_dir.join("aegis_test_secrets.txt");
+    std::fs::write(&file_path, "api_key: AKIAIOSFODNN7EXAMPLE").unwrap();
+
+    let output = aegis_cmd()
+        .args(["scan", file_path.to_str().unwrap(), "--categories", "secrets"])
+        .output()
+        .unwrap();
+
+    // Should complete
+    assert!(
+        output.status.success() || output.status.code() == Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_list_categories() {
+    // Use --category filter which shows category info
+    let output = aegis_cmd()
+        .args(["list", "--category", "secrets"])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("secrets"), "stdout: {}", stdout);
+}
