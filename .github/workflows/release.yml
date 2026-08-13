@@ -45,8 +45,8 @@ jobs:
             source.zip
             source.tar.gz
 
-  # Linux build
-  linux:
+  # Linux x86_64
+  linux-amd64:
     name: Linux x86_64
     runs-on: ubuntu-latest
     needs: [test]
@@ -62,14 +62,42 @@ jobs:
         run: |
           cd target/release
           sha256sum aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-linux-amd64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+          tar -czf aegis-linux-x86_64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux
+          name: linux-amd64
           path: |
-            target/release/aegis-linux-amd64.tar.gz
+            target/release/aegis-linux-x86_64.tar.gz
             target/release/checksums.txt
+
+  # Linux ARM64
+  linux-arm64:
+    name: Linux ARM64
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --workspace --release --target aarch64-unknown-linux-gnu
+      - name: Generate checksums
+        run: |
+          cd target/aarch64-unknown-linux-gnu/release
+          sha256sum aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
+          tar -czf aegis-linux-arm64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: |
+            target/aarch64-unknown-linux-gnu/release/aegis-linux-arm64.tar.gz
+            target/aarch64-unknown-linux-gnu/release/checksums.txt
 
   # macOS x86_64
   macos-x86:
@@ -88,13 +116,13 @@ jobs:
         run: |
           cd target/release
           shasum -a 256 aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-darwin-amd64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+          tar -czf aegis-darwin-x86_64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-x86
           path: |
-            target/release/aegis-darwin-amd64.tar.gz
+            target/release/aegis-darwin-x86_64.tar.gz
             target/release/checksums.txt
 
   # macOS ARM64 (Apple Silicon)
@@ -142,18 +170,18 @@ jobs:
         shell: bash
         run: |
           cd target/release
-          certutil -hashfile aegis.exe SHA256 | grep -v ":" | tr -d ' ' > aegis_windows.txt
-          certutil -hashfile aegis-mcp.exe SHA256 | grep -v ":" | tr -d ' ' >> aegis_windows.txt
-          certutil -hashfile aegis-daemon.exe SHA256 | grep -v ":" | tr -d ' ' >> aegis_windows.txt
-          certutil -hashfile aegis-bundler.exe SHA256 | grep -v ":" | tr -d ' ' >> aegis_windows.txt
-          tar -czf aegis-windows-amd64.tar.gz aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe
+          certutil -hashfile aegis.exe SHA256 | grep -v ":" | tr -d ' ' > checksums.txt
+          certutil -hashfile aegis-mcp.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
+          certutil -hashfile aegis-daemon.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
+          certutil -hashfile aegis-bundler.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
+          tar -czf aegis-windows-x86_64.tar.gz aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            target/release/aegis-windows-amd64.tar.gz
-            target/release/aegis_windows.txt
+            target/release/aegis-windows-x86_64.tar.gz
+            target/release/checksums.txt
 
   # WASM build
   wasm:
@@ -187,7 +215,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [linux, macos-x86, macos-arm, windows, wasm, source]
+    needs: [linux-amd64, linux-arm64, macos-x86, macos-arm, windows, wasm, source]
     permissions:
       contents: write
     steps:
