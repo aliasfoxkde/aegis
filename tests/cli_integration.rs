@@ -175,7 +175,12 @@ fn test_scan_with_severity_threshold() {
     std::fs::write(&file_path, "api_key: AKIAIOSFODNN7EXAMPLE").unwrap();
 
     let output = aegis_cmd()
-        .args(["scan", file_path.to_str().unwrap(), "--severity-threshold", "critical"])
+        .args([
+            "scan",
+            file_path.to_str().unwrap(),
+            "--severity-threshold",
+            "critical",
+        ])
         .output()
         .unwrap();
 
@@ -197,7 +202,12 @@ fn test_scan_with_categories() {
     std::fs::write(&file_path, "api_key: AKIAIOSFODNN7EXAMPLE").unwrap();
 
     let output = aegis_cmd()
-        .args(["scan", file_path.to_str().unwrap(), "--categories", "secrets"])
+        .args([
+            "scan",
+            file_path.to_str().unwrap(),
+            "--categories",
+            "secrets",
+        ])
         .output()
         .unwrap();
 
