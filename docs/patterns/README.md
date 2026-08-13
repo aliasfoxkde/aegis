@@ -4,199 +4,100 @@ Aegis includes **620 detection patterns** across **32 categories** for comprehen
 
 ## Pattern Categories
 
-### Secrets & Credentials (40 patterns)
-Detection of exposed secrets, API keys, tokens, and credentials.
+### Core Security Categories
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| aws-access-key | high | AWS access key ID |
-| github-token | critical | GitHub personal access token |
-| stripe-api-key | critical | Stripe API key |
-| slack-token | critical | Slack bot/user token |
-| azure-devops-token | critical | Azure DevOps PAT |
-| gcp-service-account | critical | GCP service account key |
-| *+35 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [Secrets & Credentials](./categories/secrets.md) | 40 | API keys, tokens, credentials |
+| [PII & Privacy](./categories/pii.md) | 39 | Personal data detection |
+| [Security Hardening](./categories/security-hardening.md) | 33 | Security best practices |
+| [Web Security](./categories/web-security.md) | 37 | XSS, SQLi, CORS, SSRF |
+| [Supply Chain](./categories/supply-chain.md) | 35 | Dependency vulnerabilities |
 
-### PII & Privacy (39 patterns)
-Personal data and privacy-related detections.
+### Infrastructure & Cloud
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| email-address | medium | Email address detection |
-| ssn | critical | Social Security Number |
-| credit-card | critical | Credit card number |
-| phone-number | medium | Phone number |
-| passport-number | high | Passport number |
-| ip-address | low | IPv4/IPv6 address |
-| *+33 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [Infrastructure as Code](./categories/infrastructure.md) | 55 | Terraform, IaC security |
+| [Cloud Native](./categories/cloud-native.md) | 38 | Kubernetes, Docker |
+| [Kubernetes](./categories/kubernetes.md) | 11 | Kubernetes-specific |
+| [Terraform](./categories/terraform.md) | 7 | Terraform patterns |
+| [CloudFormation](./categories/cloudformation.md) | 3 | AWS CloudFormation |
 
-### Security Hardening (33 patterns)
-Security best practices and vulnerability detection.
+### AI & Machine Learning
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| jwt-secret-hardcoded | high | Hardcoded JWT secret |
-| private-key-exposed | critical | Private key in code |
-| password-in-url | high | Password in URL |
-| aws-access-key | critical | AWS credentials |
-| command-injection | critical | OS command injection |
-| *+28 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [AI Safety & LLM](./categories/ai-safety-llm.md) | 50 | Prompt injection, AI safety |
+| [AI Detection](./categories/ai-detection.md) | 25 | AI-generated code detection |
 
-### Supply Chain (35 patterns)
-Dependency and supply chain security.
+### Compliance & Governance
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| vulnerable-dependency | high | Known vulnerable dependency |
-| malicious-package | critical | Malicious package detected |
-| typosquatting | high | Typosquatted package name |
-| unauthorized-dependency | medium | Unauthorized package |
-| *+31 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [Compliance](./categories/compliance.md) | 33 | GDPR, HIPAA, PCI-DSS |
+| [Healthcare](./categories/healthcare.md) | 7 | Healthcare compliance |
+| [Finance](./categories/finance.md) | 6 | Financial compliance |
 
-### Web Security (37 patterns)
-OWASP Top 10 and web vulnerabilities.
+### Code Quality & Development
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| sql-injection | high | SQL injection vulnerability |
-| reflected-xss | high | Reflected XSS |
-| cors-misconfiguration | medium | CORS wildcard origin |
-| csrf-missing | medium | CSRF protection missing |
-| ssrf | high | Server-side request forgery |
-| *+32 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [Code Quality](./categories/code-quality.md) | 15 | Code best practices |
+| [Performance](./categories/performance.md) | 22 | Performance issues |
+| [Accessibility](./categories/accessibility.md) | 22 | WCAG compliance |
+| [Frameworks](./categories/frameworks.md) | 31 | Framework-specific |
 
-### Infrastructure as Code (55 patterns)
-Terraform, CloudFormation, Kubernetes, and container security.
+### DevOps & Operations
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| terraform-s3-public | high | Public S3 bucket |
-| kubernetes-privileged | critical | Privileged container |
-| cloudformation-s3-public | high | Public S3 via CloudFormation |
-| container-privileged | critical | Privileged container mode |
-| *+51 more* | | |
+| Category | Patterns | Description |
+|----------|----------|-------------|
+| [DevOps & CI/CD](./categories/devops.md) | 15 | CI/CD pipelines |
+| [Container](./categories/container.md) | 4 | Container security |
+| [GitOps](./categories/git-ops.md) | 3 | GitOps patterns |
 
-### Cloud Native (38 patterns)
-Kubernetes, Docker, and cloud-native patterns.
+### Other Categories
 
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| kubernetes-secrets-env | high | Secrets in environment vars |
-| docker-socket-mount | critical | Docker socket mounted |
-| run-as-root | high | Running as root |
-| *+35 more* | | |
-
-### AI Safety & LLM (50 patterns)
-AI system security and responsible AI patterns.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| prompt-injection | high | Prompt injection attack |
-| system-prompt-leak | medium | System prompt exposure |
-| data-exfiltration | critical | Data exfiltration attempt |
-| jailbreak-attempt | high | LLM jailbreak attempt |
-| harmful-content-marker | high | Harmful content marker |
-| *+45 more* | | |
-
-### Code Quality (15 patterns)
-Code quality and best practices.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| commented-password | high | Password in comments |
-| debug-breakpoint | medium | Debug breakpoint left in |
-| commented-secret | high | Secret in comments |
-| bare-except | medium | Bare except clause |
-| *+11 more* | | |
-
-### Compliance (33 patterns)
-Regulatory compliance checks (GDPR, HIPAA, PCI-DSS, SOC2).
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| gdpr-personal-data | high | Personal data under GDPR |
-| hipaa-health-data | critical | Health information |
-| pci-cardholder-data | critical | Credit card data |
-| soc2-sensitive-data | high | Sensitive data |
-| *+29 more* | | |
-
-### Performance (22 patterns)
-Performance and efficiency issues.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| n-plus-one-query | medium | N+1 database query |
-| sync-in-async | medium | Sync call in async context |
-| regex-in-loop | medium | Regex compiled in loop |
-| *+19 more* | | |
-
-### Accessibility (22 patterns)
-WCAG accessibility compliance.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| missing-alt-text | medium | Image without alt text |
-| low-contrast | medium | Insufficient color contrast |
-| missing-label | medium | Form control without label |
-| *+19 more* | | |
-
-### DevOps & CI/CD (15 patterns)
-CI/CD pipeline and DevOps patterns.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| github-actions-workflow | low | GitHub Actions workflow |
-| gitlab-ci-pipeline | low | GitLab CI config |
-| jenkinsfile | low | Jenkinsfile detected |
-| *+12 more* | | |
-
-### Frameworks (31 patterns)
-Framework-specific security patterns.
-
-| Pattern | Severity | Description |
-|---------|----------|-------------|
-| react-xss | high | React XSS pattern |
-| angular-ssr | medium | Angular SSR consideration |
-| nextjs-image | low | Next.js image optimization |
-| *+28 more* | | |
-
-### Additional Categories
-
-| Category | Count | Description |
-|----------|-------|-------------|
+| Category | Patterns | Description |
+|----------|----------|-------------|
 | shift_left | 20 | Early detection patterns |
-| ai_detection | 25 | AI-generated code detection |
-| llm_guardrails | 25 | LLM safety rails |
 | git_hygiene | 28 | Git practices |
 | graphql | 4 | GraphQL security |
-| healthcare | 7 | Healthcare compliance |
-| finance | 6 | Financial compliance |
-| container | 4 | Container security |
-| cloudformation | 3 | AWS CloudFormation |
-| arm | 2 | ARM architecture |
 | metadata | 4 | Metadata patterns |
 | pwa | 5 | Progressive web apps |
 | web_development | 12 | Web development |
-| git_ops | 3 | GitOps patterns |
 | api_integration | 9 | API integrations |
 | data_visualization | 5 | Data viz patterns |
-| kubernetes | 11 | Kubernetes security |
-| terraform | 7 | Terraform patterns |
+| arm | 2 | ARM architecture |
+
+## Quick Reference: Top Critical Patterns
+
+| Pattern | Category | Severity | Description |
+|---------|----------|----------|-------------|
+| github-token | secrets | critical | GitHub personal access token |
+| stripe-api-key | secrets | critical | Stripe API key |
+| slack-token | secrets | critical | Slack bot/user token |
+| aws-access-key | secrets | critical | AWS access key |
+| gcp-service-account | secrets | critical | GCP service account |
+| private-key-exposed | security-hardening | critical | Private key in code |
+| sql-injection | web-security | high | SQL injection |
+| command-injection | security-hardening | critical | OS command injection |
+| prompt-injection | ai-safety | high | Prompt injection attack |
+| data-exfiltration-attempt | llm-guardrails | critical | Data exfiltration |
 
 ## Pattern Format
 
-Patterns are defined as YAML files for easy contribution:
+Patterns are defined as Rust code in the `aegis-patterns` crate:
 
-```yaml
-name: pattern-name
-match: regex-pattern
-severity: critical|high|medium|low
-confidence: high|medium|low
-minEntropy: 3.5  # optional entropy threshold
-description: 'Pattern description'
-tags:
-  - category
-  - security
+```rust
+Pattern {
+    name: "pattern-name".to_string(),
+    match: Regex::new(r"regex-pattern").unwrap(),
+    severity: Severity::High,
+    description: "Pattern description".to_string(),
+    tags: vec!["category".to_string()],
+    ..Default::default()
+}
 ```
 
 ## Contributing Patterns
