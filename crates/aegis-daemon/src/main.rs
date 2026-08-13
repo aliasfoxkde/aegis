@@ -3,17 +3,25 @@
 //! Long-running daemon mode for Aegis security scanning.
 //! Listens on a Unix socket for scan requests.
 
+#[cfg(unix)]
 use anyhow::Result;
+#[cfg(unix)]
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use tokio::net::UnixStream;
+#[cfg(unix)]
 use tokio::signal;
+#[cfg(unix)]
 use tokio::sync::mpsc;
 
 pub use aegis_daemon::{handle_request, init_scanner, DaemonResponse, DaemonState};
 
 /// Handle a single client connection
+#[cfg(unix)]
 async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> anyhow::Result<()> {
     let (rd, mut wr) = tokio::io::split(stream);
     let mut reader = BufReader::new(rd);
@@ -61,6 +69,7 @@ async fn handle_client(stream: UnixStream, state: Arc<DaemonState>) -> anyhow::R
 }
 
 /// Create and listen on Unix socket
+#[cfg(unix)]
 fn setup_socket(path: &PathBuf) -> std::io::Result<tokio::net::UnixListener> {
     // Remove existing socket file
     if path.exists() {
