@@ -118,4 +118,4 @@ security_scan:
 
 - [CLI Reference](CLI.md) - Full command documentation
 - [CI/CD Integration](CICD_INTEGRATION.md) - Detailed integration guides
-- [Detection Patterns](../patterns/README.md) - Browse all 621 patterns
+- [Detection Patterns](../patterns/README.md) - Browse all 620 patterns

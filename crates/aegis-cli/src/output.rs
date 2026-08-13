@@ -263,7 +263,13 @@ pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len])
+        // Truncate at character boundary to handle UTF-8 properly
+        for (char_count, (byte_idx, _)) in s.char_indices().enumerate() {
+            if char_count >= max_len {
+                return format!("{}...", &s[..byte_idx]);
+            }
+        }
+        s.to_string()
     }
 }
 

@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis includes **621 detection patterns** across **32 categories** for comprehensive security scanning.
+Aegis includes **620 detection patterns** across **32 categories** for comprehensive security scanning.
 
 ## Pattern Categories
 
@@ -205,7 +205,7 @@ See [Adding Patterns](../guides/ADDING_PATTERNS.md) for contribution guidelines.
 
 ## Pattern Statistics
 
-- **Total Patterns**: 621
+- **Total Patterns**: 620
 - **Categories**: 32
 - **Critical Severity**: ~45
 - **High Severity**: ~180

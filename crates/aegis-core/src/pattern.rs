@@ -328,6 +328,103 @@ impl Pattern {
     pub fn definition(&self) -> &PatternDefinition {
         &self.inner.definition
     }
+
+    /// Check if text matches this pattern's regex (without entropy check)
+    pub fn regex_matches(&self, text: &str) -> bool {
+        self.inner.regex.is_match(text)
+    }
+}
+
+/// Category scanner with combined regex pre-filtering
+/// Groups patterns by category and uses combined regex as a gate
+pub struct CategoryScanner {
+    /// Combined regex for quick pre-filter (one per category)
+    combined: Regex,
+    /// Category name
+    category: String,
+    /// Individual patterns within this category
+    patterns: Vec<Pattern>,
+}
+
+impl CategoryScanner {
+    /// Create a new category scanner from patterns
+    pub fn new(category: &str, patterns: Vec<Pattern>) -> Result<Self, PatternError> {
+        if patterns.is_empty() {
+            return Err(PatternError::InvalidRegex(
+                "Cannot create CategoryScanner with no patterns".to_string(),
+            ));
+        }
+
+        // Build alternation pattern: (?:p1)|(?:p2)|(?:p3)...
+        let parts: Vec<String> = patterns
+            .iter()
+            .map(|p| format!("(?:{})", p.pattern_str()))
+            .collect();
+        let combined_pattern = parts.join("|");
+
+        let combined =
+            Regex::new(&combined_pattern).map_err(|e| PatternError::InvalidRegex(e.to_string()))?;
+
+        Ok(Self {
+            combined,
+            category: category.to_string(),
+            patterns,
+        })
+    }
+
+    /// Check if this category might have any matches (fast pre-filter)
+    pub fn might_match(&self, content: &str) -> bool {
+        self.combined.is_match(content)
+    }
+
+    /// Get the category name
+    pub fn category(&self) -> &str {
+        &self.category
+    }
+
+    /// Get the number of patterns
+    pub fn len(&self) -> usize {
+        self.patterns.len()
+    }
+
+    /// Check if there are no patterns
+    pub fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+
+    /// Get patterns
+    pub fn patterns(&self) -> &[Pattern] {
+        &self.patterns
+    }
+
+    /// Find matches using the combined regex first, then individual patterns
+    /// This is the optimized path: skip individual pattern checks if combined doesn't match
+    pub fn find_matches<'a>(&'a self, content: &'a str) -> Vec<PatternMatch<'a>> {
+        // Fast path: if combined regex doesn't match, skip all patterns in this category
+        if !self.combined.is_match(content) {
+            return Vec::new();
+        }
+
+        // Slow path: check each pattern individually
+        let mut matches = Vec::new();
+        for pattern in &self.patterns {
+            // Skip if not enabled
+            if !pattern.is_enabled() {
+                continue;
+            }
+
+            for cap in pattern.inner.regex.captures_iter(content) {
+                let m = cap.get(0).unwrap();
+                matches.push(PatternMatch {
+                    start: m.start(),
+                    end: m.end(),
+                    matched_text: m.as_str(),
+                    groups: cap.iter().skip(1).map(|g| g.map(|m| m.as_str())).collect(),
+                });
+            }
+        }
+        matches
+    }
 }
 
 /// A single pattern match
@@ -506,6 +603,41 @@ impl PatternRegistry {
     /// Check if registry is empty
     pub fn is_empty(&self) -> bool {
         self.patterns.read().is_empty()
+    }
+
+    /// Build category scanners with combined regex pre-filtering
+    /// Groups patterns by category and creates a combined regex gate per category
+    /// This allows skipping all patterns in a category if the combined regex doesn't match
+    pub fn build_category_scanners(&self) -> Vec<CategoryScanner> {
+        let patterns = self.enabled();
+        let mut by_category: std::collections::HashMap<String, Vec<Pattern>> =
+            std::collections::HashMap::new();
+
+        for p in patterns {
+            if p.is_env_var_only() {
+                continue;
+            }
+            by_category
+                .entry(p.category().to_string())
+                .or_default()
+                .push(p);
+        }
+
+        let mut scanners = Vec::new();
+        for (category, cat_patterns) in by_category {
+            match CategoryScanner::new(&category, cat_patterns.clone()) {
+                Ok(scanner) => scanners.push(scanner),
+                Err(_) => {
+                    // If combined regex fails, fall back to individual pattern batches
+                    for p in cat_patterns.clone() {
+                        if let Ok(single) = CategoryScanner::new(&category, vec![p]) {
+                            scanners.push(single);
+                        }
+                    }
+                }
+            }
+        }
+        scanners
     }
 }
 
