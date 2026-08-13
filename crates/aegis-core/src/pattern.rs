@@ -608,8 +608,12 @@ impl PatternRegistry {
     /// Build category scanners with combined regex pre-filtering
     /// Groups patterns by category and creates a combined regex gate per category
     /// This allows skipping all patterns in a category if the combined regex doesn't match
-    pub fn build_category_scanners(&self) -> Vec<CategoryScanner> {
-        let patterns = self.enabled();
+    pub fn build_category_scanners(&self, include_disabled: bool) -> Vec<CategoryScanner> {
+        let patterns = if include_disabled {
+            self.all()
+        } else {
+            self.enabled()
+        };
         let mut by_category: std::collections::HashMap<String, Vec<Pattern>> =
             std::collections::HashMap::new();
 
