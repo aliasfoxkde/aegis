@@ -3,8 +3,8 @@
 //! Provides WASM bindings for Aegis security scanning.
 //! This allows running Aegis pattern matching in browser environments.
 
-use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 
 /// Location of a finding
 #[derive(Serialize, Deserialize)]
