@@ -27,6 +27,7 @@ pub mod bundle;
 pub mod cfg;
 pub mod clone;
 pub mod config;
+pub mod control_center_adapter;
 pub mod entropy;
 pub mod finding;
 pub mod ignore;
@@ -38,6 +39,9 @@ pub mod suppression;
 pub use benchmark::{format_benchmark_json, BenchmarkConfig, ScanBenchmark};
 pub use bundle::{Bundle, BundleMetadata};
 pub use config::Config;
+pub use control_center_adapter::{
+    AdapterError, ControlCenterAdapter, EvidenceRecord, ScanResult, WorkRequest,
+};
 pub use entropy::shannon_entropy;
 pub use finding::{Finding, FindingKind, Location, ScanStats};
 pub use pattern::{Category, Confidence, Pattern, PatternDefinition, PatternRegistry, Severity};
