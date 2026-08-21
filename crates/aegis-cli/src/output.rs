@@ -81,14 +81,6 @@ impl Output {
                 finding.location.column
             )?;
             writeln!(self, "  {}", finding.description)?;
-
-            if !finding.matched_content.is_empty() {
-                writeln!(
-                    self,
-                    "  Matched: {}",
-                    truncate_string(&finding.matched_content, 60)
-                )?;
-            }
         }
 
         if !self.quiet {
@@ -122,7 +114,7 @@ impl Output {
     fn write_sarif(
         &mut self,
         findings: &[Finding],
-        _stats: &ScanStats,
+        stats: &ScanStats,
         _risk: &RiskScore,
     ) -> Result<(), std::fmt::Error> {
         use std::fmt::Write;
@@ -137,6 +129,13 @@ impl Output {
         struct SarifRun {
             tool: SarifTool,
             results: Vec<SarifResult>,
+            properties: SarifRunProperties,
+        }
+
+        #[derive(serde::Serialize)]
+        struct SarifRunProperties {
+            #[serde(rename = "inspectionLedger")]
+            inspection_ledger: aegis_core::finding::InspectionLedger,
         }
 
         #[derive(serde::Serialize)]
@@ -192,13 +191,13 @@ impl Output {
         let mut rules_map: std::collections::HashMap<String, &Finding> =
             std::collections::HashMap::new();
         for f in findings {
-            rules_map.entry(f.pattern.clone()).or_insert(f);
+            rules_map.entry(f.stable_id.clone()).or_insert(f);
         }
 
         let rules: Vec<SarifRule> = rules_map
             .values()
             .map(|f| SarifRule {
-                id: f.pattern.clone(),
+                id: f.stable_id.clone(),
                 name: f.pattern.clone(),
                 severity: f.severity.clone(),
             })
@@ -207,7 +206,7 @@ impl Output {
         let results: Vec<SarifResult> = findings
             .iter()
             .map(|f| SarifResult {
-                rule_id: f.pattern.clone(),
+                rule_id: f.stable_id.clone(),
                 level: severity_to_sarif_level(&f.severity),
                 message: f.description.clone(),
                 locations: vec![SarifLocation {
@@ -235,6 +234,9 @@ impl Output {
                     },
                 },
                 results,
+                properties: SarifRunProperties {
+                    inspection_ledger: stats.inspection_ledger.clone(),
+                },
             }],
         };
 
@@ -259,6 +261,7 @@ pub(crate) fn severity_to_sarif_level(severity: &str) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
@@ -401,6 +404,9 @@ mod tests {
         let result = output.write_findings(&[finding], &stats, &risk);
         assert!(result.is_ok());
         assert!(output.buffer.contains("\"version\""));
+        assert!(output.buffer.contains("inspectionLedger"));
+        assert!(output.buffer.contains(&make_test_finding().stable_id));
+        assert!(!output.buffer.contains("\"ruleId\": \"hardcoded-secret\""));
     }
 
     #[test]
@@ -675,8 +681,39 @@ mod tests {
 
         let result = output.write_findings(&[finding], &stats, &risk);
         assert!(result.is_ok());
-        // Truncated content should appear
-        assert!(output.buffer.contains("..."));
+        // Public human output must never include matched source material.
+        assert!(!output.buffer.contains(&long_content));
+        assert!(!output.buffer.contains("Matched:"));
+    }
+
+    #[test]
+    fn test_public_outputs_redact_sensitive_material() {
+        let secret = "TOP-SECRET-CLI-FIXTURE";
+        let finding = Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            Location::new("config.toml", 4, 2, format!("token = '{secret}'")),
+            secret,
+            "Hardcoded secret detected",
+        );
+        let stats = ScanStats::for_content("config.toml", 32);
+        let risk = make_test_risk();
+
+        for format in [OutputFormat::Human, OutputFormat::Json, OutputFormat::Sarif] {
+            let expect_identity = !matches!(&format, OutputFormat::Human);
+            let mut output = Output::new(format, false);
+            output
+                .write_findings(std::slice::from_ref(&finding), &stats, &risk)
+                .unwrap();
+            let content = output.to_string();
+            assert!(!content.contains(secret));
+            assert!(!content.contains("matched_content"));
+            if expect_identity {
+                assert!(content.contains(&finding.stable_id));
+            }
+        }
     }
 
     #[test]

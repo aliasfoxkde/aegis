@@ -1,0 +1,90 @@
+# =============================================================================
+# Aegis Security Scanner - Docker Compose Configuration
+# =============================================================================
+#
+# Usage:
+#   Scan current directory:     docker compose run --rm aegis scan /workspace
+#   Scan with JSON output:     docker compose run --rm aegis scan /workspace --format json
+#   Interactive shell:          docker compose run --rm -it aegis /bin/bash
+#   Run pre-pipeline checks:    docker compose run --rm aegis scan /workspace --preset pipeline
+
+version: '3.8'
+
+services:
+  # Main Aegis scanner
+  aegis:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aegis:latest
+    container_name: aegis-scanner
+    profiles:
+      - default
+    volumes:
+      - ..:/workspace:ro
+      - aegis-cache:/home/aegis/.aegis
+    environment:
+      - AEGIS_HOME=/home/aegis/.aegis
+      - RUST_LOG=info
+      - AEGIS_SEVERITY_THRESHOLD=medium
+    working_dir: /workspace
+    command: scan /workspace
+
+  # Aegis with CI/CD mode (exits on findings)
+  aegis-ci:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aegis:latest
+    profiles:
+      - ci
+    volumes:
+      - ..:/workspace:ro
+      - aegis-cache:/home/aegis/.aegis
+    environment:
+      - AEGIS_HOME=/home/aegis/.aegis
+      - RUST_LOG=warn
+      - AEGIS_EXIT_ON_FINDINGS=true
+      - AEGIS_FORMAT=sarif
+    working_dir: /workspace
+    command: scan /workspace --preset pipeline --format sarif --output /workspace/aegis-results.sarif
+
+  # Aegis with pre-pipeline fixture tests
+  aegis-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aegis:latest
+    profiles:
+      - test
+    volumes:
+      - ..:/workspace:ro
+      - aegis-cache:/home/aegis/.aegis
+    environment:
+      - AEGIS_HOME=/home/aegis/.aegis
+      - RUST_LOG=debug
+    working_dir: /workspace
+    command: scan /workspace --preset pipeline
+
+  # Aegis daemon for long-running monitoring
+  aegis-daemon:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aegis:latest
+    profiles:
+      - daemon
+    volumes:
+      - ..:/workspace:ro
+      - aegis-cache:/home/aegis/.aegis
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - AEGIS_HOME=/home/aegis/.aegis
+      - RUST_LOG=info
+    ports:
+      - "8080:8080"
+    command: daemon --host 0.0.0.0 --port 8080
+
+volumes:
+  aegis-cache:
+    driver: local

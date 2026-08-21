@@ -3,6 +3,7 @@
 //! Core data structures for scan results.
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// Location in source code
@@ -15,6 +16,11 @@ pub struct Location {
     /// Column number (0-indexed)
     pub column: usize,
     /// Line content
+    ///
+    /// This is retained for in-process matching and diagnostics only. It is
+    /// deliberately omitted from serialized/public findings because a line
+    /// containing a secret is sensitive source material.
+    #[serde(skip)]
     pub content: String,
 }
 
@@ -88,7 +94,12 @@ pub struct Finding {
     pub confidence: String,
     /// Location in source
     pub location: Location,
-    /// Matched content
+    /// Matched content retained for in-process matching only.
+    ///
+    /// Never serialize this field: a finding can contain a credential or
+    /// other secret material. Public consumers should use the rule, location,
+    /// description, and stable identity instead.
+    #[serde(skip)]
     pub matched_content: String,
     /// Description
     pub description: String,
@@ -101,8 +112,14 @@ pub struct Finding {
     /// Finding kind
     #[serde(default)]
     pub kind: FindingKind,
-    /// Fingerprint for deduplication
+    /// Redacted fingerprint for deduplication.
+    ///
+    /// The matched text contributes through a one-way digest only; the raw
+    /// text is never included in this public value.
     pub fingerprint: String,
+    /// Stable identity for correlating the same rule/location across scans.
+    #[serde(default)]
+    pub stable_id: String,
 }
 
 impl Finding {
@@ -117,16 +134,26 @@ impl Finding {
         description: impl Into<String>,
     ) -> Self {
         let pattern_str = pattern.into();
+        let category_str = category.into();
         let matched_content_str = matched_content.into();
+        let matched_digest = hex::encode(Sha256::digest(matched_content_str.as_bytes()));
         let fingerprint = format!(
             "{}:{}:{}:{}",
-            pattern_str, location.file, location.line, matched_content_str
+            pattern_str, location.file, location.line, matched_digest
+        );
+        let stable_material = format!(
+            "{}|{}|{}|{}|{}",
+            pattern_str, category_str, location.file, location.line, location.column
+        );
+        let stable_id = format!(
+            "aegis-{}",
+            hex::encode(Sha256::digest(stable_material.as_bytes()))
         );
 
         Self {
             id: uuid_v4(),
             pattern: pattern_str,
-            category: category.into(),
+            category: category_str,
             severity: severity.into(),
             confidence: confidence.into(),
             location,
@@ -136,6 +163,7 @@ impl Finding {
             tags: Vec::new(),
             kind: FindingKind::Pattern,
             fingerprint,
+            stable_id,
         }
     }
 
@@ -172,6 +200,81 @@ impl fmt::Display for Finding {
     }
 }
 
+/// Version of the inspection ledger schema emitted by Aegis.
+pub const INSPECTION_LEDGER_SCHEMA_VERSION: u16 = 1;
+
+/// Status of one inspected unit or analyzer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InspectionStatus {
+    Discovered,
+    Analyzed,
+    Skipped,
+    Excluded,
+    Unsupported,
+    Failed,
+    Suppressed,
+}
+
+/// Bounded inspection record for one file, source, or analyzer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InspectionUnit {
+    pub unit_id: String,
+    pub status: InspectionStatus,
+    pub required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Explicit accounting of what a scan did and did not inspect.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InspectionLedger {
+    pub schema_version: u16,
+    pub units: Vec<InspectionUnit>,
+}
+
+impl Default for InspectionLedger {
+    fn default() -> Self {
+        Self {
+            schema_version: INSPECTION_LEDGER_SCHEMA_VERSION,
+            units: Vec::new(),
+        }
+    }
+}
+
+impl InspectionLedger {
+    pub fn record(
+        &mut self,
+        unit_id: impl Into<String>,
+        status: InspectionStatus,
+        required: bool,
+        reason: Option<String>,
+    ) {
+        self.units.push(InspectionUnit {
+            unit_id: unit_id.into(),
+            status,
+            required,
+            reason,
+        });
+    }
+
+    /// A scan cannot be considered safe without at least one inspected unit.
+    pub fn allows_safe(&self) -> bool {
+        !self.units.is_empty()
+            && self.units.iter().all(|unit| {
+                !unit.required
+                    || matches!(
+                        unit.status,
+                        InspectionStatus::Analyzed | InspectionStatus::Suppressed
+                    )
+            })
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        self.units.extend(other.units.iter().cloned());
+    }
+}
+
 /// Statistics about a scan
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ScanStats {
@@ -179,6 +282,9 @@ pub struct ScanStats {
     pub files_scanned: usize,
     /// Number of files skipped
     pub files_skipped: usize,
+    /// Number of files that could not be inspected
+    #[serde(default)]
+    pub files_failed: usize,
     /// Total bytes scanned
     pub bytes_scanned: u64,
     /// Number of findings
@@ -197,12 +303,34 @@ pub struct ScanStats {
     pub findings_by_severity: std::collections::HashMap<String, usize>,
     /// Findings by category
     pub findings_by_category: std::collections::HashMap<String, usize>,
+    /// Inspection completeness ledger
+    #[serde(default)]
+    pub inspection_ledger: InspectionLedger,
 }
 
 impl ScanStats {
     /// Create new empty stats
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Build coverage stats for an in-memory content scan.
+    pub fn for_content(unit_id: impl Into<String>, bytes: usize) -> Self {
+        let mut stats = Self {
+            files_scanned: 1,
+            bytes_scanned: bytes as u64,
+            workers_used: 1,
+            ..Default::default()
+        };
+        stats
+            .inspection_ledger
+            .record(unit_id, InspectionStatus::Analyzed, true, None);
+        stats
+    }
+
+    /// Build coverage stats for an environment scan.
+    pub fn for_environment() -> Self {
+        Self::for_content("environment", 0)
     }
 
     /// Add a finding to the stats
@@ -222,6 +350,7 @@ impl ScanStats {
     pub fn merge(&mut self, other: &ScanStats) {
         self.files_scanned += other.files_scanned;
         self.files_skipped += other.files_skipped;
+        self.files_failed += other.files_failed;
         self.bytes_scanned += other.bytes_scanned;
         self.finding_count += other.finding_count;
         self.patterns_matched += other.patterns_matched;
@@ -239,6 +368,8 @@ impl ScanStats {
         for (cat, count) in &other.findings_by_category {
             *self.findings_by_category.entry(cat.clone()).or_insert(0) += count;
         }
+
+        self.inspection_ledger.merge(&other.inspection_ledger);
     }
 
     /// Calculate files per second
@@ -263,6 +394,7 @@ impl fmt::Display for ScanStats {
         writeln!(f, "Scan Statistics:")?;
         writeln!(f, "  Files scanned: {}", self.files_scanned)?;
         writeln!(f, "  Files skipped: {}", self.files_skipped)?;
+        writeln!(f, "  Files failed: {}", self.files_failed)?;
         writeln!(
             f,
             "  Bytes scanned: {:.2} MB",
@@ -473,9 +605,75 @@ mod tests {
             "Hardcoded secret detected",
         );
 
-        // Fingerprint should be based on pattern:file:line:content
+        // Fingerprints retain matching behavior without exposing the content.
         assert!(!finding.fingerprint.is_empty());
         assert!(finding.fingerprint.contains("hardcoded-secret"));
+        assert!(!finding.fingerprint.contains("abc"));
+        assert!(finding.stable_id.starts_with("aegis-"));
+    }
+
+    #[test]
+    fn test_finding_public_serialization_redacts_source_and_match() {
+        let secret = "TOP-SECRET-FIXTURE-VALUE";
+        let finding = Finding::new(
+            "hardcoded-secret",
+            "secrets",
+            "high",
+            "high",
+            Location::new("config.toml", 4, 2, format!("token = '{secret}'")),
+            secret,
+            "Hardcoded secret detected",
+        );
+
+        let json = serde_json::to_string(&finding).unwrap();
+        assert!(!json.contains(secret));
+        assert!(!json.contains("matched_content"));
+        assert!(!json.contains("\"content\""));
+        assert!(json.contains(&finding.stable_id));
+    }
+
+    #[test]
+    fn test_finding_stable_id_correlates_across_scans() {
+        let make = || {
+            Finding::new(
+                "rule",
+                "secrets",
+                "high",
+                "high",
+                Location::new("src/lib.rs", 7, 3, "token = value"),
+                "value",
+                "description",
+            )
+        };
+        let first = make();
+        let second = make();
+
+        assert_eq!(first.stable_id, second.stable_id);
+        assert_ne!(first.id, second.id);
+    }
+
+    #[test]
+    fn test_finding_stable_id_changes_with_location() {
+        let first = Finding::new(
+            "rule",
+            "secrets",
+            "high",
+            "high",
+            Location::new("src/lib.rs", 7, 3, "token = value"),
+            "value",
+            "description",
+        );
+        let second = Finding::new(
+            "rule",
+            "secrets",
+            "high",
+            "high",
+            Location::new("src/lib.rs", 8, 3, "token = value"),
+            "value",
+            "description",
+        );
+
+        assert_ne!(first.stable_id, second.stable_id);
     }
 
     #[test]
@@ -519,5 +717,48 @@ mod tests {
         let deserialized: ScanStats = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.files_scanned, 100);
         assert_eq!(deserialized.findings_by_severity.get("high"), Some(&5));
+
+        let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+        legacy.as_object_mut().unwrap().remove("inspection_ledger");
+        let legacy_stats: ScanStats = serde_json::from_value(legacy).unwrap();
+        assert!(legacy_stats.inspection_ledger.units.is_empty());
+        assert_eq!(
+            legacy_stats.inspection_ledger.schema_version,
+            INSPECTION_LEDGER_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn test_inspection_ledger_requires_analyzed_work() {
+        let mut ledger = InspectionLedger::default();
+        assert!(!ledger.allows_safe());
+
+        ledger.record("src/main.rs", InspectionStatus::Analyzed, true, None);
+        assert!(ledger.allows_safe());
+    }
+
+    #[test]
+    fn test_inspection_ledger_rejects_required_skips() {
+        let mut ledger = InspectionLedger::default();
+        ledger.record(
+            "large.bin",
+            InspectionStatus::Skipped,
+            true,
+            Some("file_size_limit".to_string()),
+        );
+        assert!(!ledger.allows_safe());
+    }
+
+    #[test]
+    fn test_inspection_ledger_allows_optional_exclusions() {
+        let mut ledger = InspectionLedger::default();
+        ledger.record(
+            "vendor/generated.rs",
+            InspectionStatus::Excluded,
+            false,
+            Some("ignore_rule".to_string()),
+        );
+        ledger.record("src/lib.rs", InspectionStatus::Analyzed, true, None);
+        assert!(ledger.allows_safe());
     }
 }

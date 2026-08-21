@@ -5,7 +5,7 @@
 mod sandbox;
 mod tools;
 
-use aegis_core::{Bundle, Config, PatternDefinition, Scanner};
+use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,51 @@ pub struct ScanResponse {
     pub finding_count: usize,
     pub risk_level: String,
     pub risk_score: i32,
+    /// Coverage and completeness evidence for the scan.
+    pub stats: ScanStats,
+    /// Redacted provenance receipt for the scan.
+    pub receipt: ScanReceipt,
+}
+
+impl ScanResponse {
+    fn from_parts(
+        findings: Vec<aegis_core::Finding>,
+        stats: ScanStats,
+        source: impl Into<String>,
+    ) -> Self {
+        let risk_score =
+            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
+        let profile = "mcp-default";
+        let receipt = ScanReceipt::from_scan(
+            source,
+            "mcp_scan",
+            profile,
+            Some(ScanReceipt::digest_text(profile)),
+            &findings,
+            stats.clone(),
+        )
+        .with_source_revision(std::env::var("AEGIS_SOURCE_REVISION").ok());
+        Self {
+            finding_count: findings.len(),
+            risk_level: risk_score.level.to_string(),
+            risk_score: risk_score.score,
+            findings,
+            stats,
+            receipt,
+        }
+    }
+
+    fn for_string(findings: Vec<aegis_core::Finding>, source: &str, bytes: usize) -> Self {
+        Self::from_parts(
+            findings,
+            ScanStats::for_content(format!("string:{source}"), bytes),
+            format!("string:{source}"),
+        )
+    }
+
+    fn for_environment(findings: Vec<aegis_core::Finding>) -> Self {
+        Self::from_parts(findings, ScanStats::for_environment(), "environment")
+    }
 }
 
 /// List patterns response
@@ -130,15 +175,7 @@ impl AegisRpc for AegisRpcImpl {
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_string(&content, &source);
 
-            let risk_score =
-                aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-            Ok(ScanResponse {
-                finding_count: findings.len(),
-                risk_level: risk_score.level.to_string(),
-                risk_score: risk_score.score,
-                findings,
-            })
+            Ok(ScanResponse::for_string(findings, &source, content.len()))
         })
     }
 
@@ -157,21 +194,17 @@ impl AegisRpc for AegisRpcImpl {
             }
 
             let scanner = state.scanner.read().await;
-            let (findings, _) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
+            let (findings, stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
                 message: e.to_string(),
                 data: None,
             })?;
 
-            let risk_score =
-                aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-            Ok(ScanResponse {
-                finding_count: findings.len(),
-                risk_level: risk_score.level.to_string(),
-                risk_score: risk_score.score,
+            Ok(ScanResponse::from_parts(
                 findings,
-            })
+                stats,
+                path.to_string_lossy().to_string(),
+            ))
         })
     }
 
@@ -190,21 +223,17 @@ impl AegisRpc for AegisRpcImpl {
             }
 
             let scanner = state.scanner.read().await;
-            let (findings, _) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
+            let (findings, stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
                 message: e.to_string(),
                 data: None,
             })?;
 
-            let risk_score =
-                aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-            Ok(ScanResponse {
-                finding_count: findings.len(),
-                risk_level: risk_score.level.to_string(),
-                risk_score: risk_score.score,
+            Ok(ScanResponse::from_parts(
                 findings,
-            })
+                stats,
+                path.to_string_lossy().to_string(),
+            ))
         })
     }
 
@@ -214,15 +243,7 @@ impl AegisRpc for AegisRpcImpl {
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
 
-            let risk_score =
-                aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-            Ok(ScanResponse {
-                finding_count: findings.len(),
-                risk_level: risk_score.level.to_string(),
-                risk_score: risk_score.score,
-                findings,
-            })
+            Ok(ScanResponse::for_environment(findings))
         })
     }
 
@@ -489,10 +510,33 @@ mod tests {
             finding_count: 0,
             risk_level: "none".to_string(),
             risk_score: 0,
+            stats: ScanStats::default(),
+            receipt: ScanReceipt::from_scan(
+                "test",
+                "test",
+                "test",
+                None,
+                &[],
+                ScanStats::default(),
+            ),
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("finding_count"));
         assert!(json.contains("risk_level"));
+        assert!(json.contains("inspection_ledger"));
+        assert!(json.contains("receipt_id"));
+    }
+
+    #[test]
+    fn test_scan_response_records_string_coverage() {
+        let response = ScanResponse::for_string(vec![], "fixture.rs", 12);
+        assert_eq!(response.stats.files_scanned, 1);
+        assert_eq!(response.stats.bytes_scanned, 12);
+        assert!(response.stats.inspection_ledger.allows_safe());
+        assert_eq!(
+            response.stats.inspection_ledger.units[0].status,
+            aegis_core::InspectionStatus::Analyzed
+        );
     }
 
     #[test]

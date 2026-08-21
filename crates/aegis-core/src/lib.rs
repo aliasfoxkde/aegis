@@ -27,23 +27,56 @@ pub mod bundle;
 pub mod cfg;
 pub mod clone;
 pub mod config;
+pub mod control_center_adapter;
 pub mod entropy;
 pub mod finding;
 pub mod ignore;
 pub mod pattern;
+pub mod receipt;
+pub mod remediation;
 pub mod risk;
+pub mod sbom;
 pub mod scanner;
 pub mod suppression;
 
+#[cfg(feature = "output-pipeline")]
+pub mod output;
+
+// Internal helpers - not part of public API. Some are intentionally kept as
+// reusable seams for analyzers that are being integrated incrementally.
+#[allow(dead_code)]
+mod internal;
+
+pub use ast::{AstAnalysis, AstAnalyzer, AstFinding, AstInspection, AstInspectionStatus, Language};
 pub use benchmark::{format_benchmark_json, BenchmarkConfig, ScanBenchmark};
 pub use bundle::{Bundle, BundleMetadata};
 pub use config::Config;
+pub use control_center_adapter::{
+    AdapterError, ControlCenterAdapter, EvidenceRecord, ScanResult, WorkRequest,
+};
 pub use entropy::shannon_entropy;
-pub use finding::{Finding, FindingKind, Location, ScanStats};
+pub use finding::{
+    Finding, FindingKind, InspectionLedger, InspectionStatus, InspectionUnit, Location, ScanStats,
+    INSPECTION_LEDGER_SCHEMA_VERSION,
+};
 pub use pattern::{Category, Confidence, Pattern, PatternDefinition, PatternRegistry, Severity};
+pub use receipt::{ReceiptFinding, ReceiptLocation, ScanReceipt, SCAN_RECEIPT_SCHEMA_VERSION};
+pub use remediation::{
+    FixDifficulty, FixPattern, FixType, Remediation, RemediationAdvisor, RemediationReport,
+    RemediationRoi,
+};
 pub use risk::{RiskClassification, RiskLevel, RiskScore};
+pub use sbom::{Sbom, SbomComponent, SbomDependency, SbomFormat, SbomFormat::Spdx, SbomGenerator};
 pub use scanner::{ScanOptions, Scanner};
 pub use suppression::Suppression;
+
+#[cfg(feature = "output-pipeline")]
+pub use output::{
+    database::{DatabaseOutput, MySqlOutput, PostgreSqlOutput, SqliteOutput},
+    file::FileOutput,
+    webhook::WebhookOutput,
+    OutputError, OutputFormat, OutputPipeline, OutputResult, SyncOutputHandler,
+};
 
 use std::path::PathBuf;
 
