@@ -44,6 +44,175 @@ pub struct WorkRequest {
     pub source: String,
 }
 
+/// Lifecycle state for a work request contract.
+///
+/// Tracks the progression of a bounded work request through the
+/// control center scan pipeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecycleState {
+    /// Work request received but not yet accepted for processing
+    Pending,
+    /// Work request accepted and queued for scanning
+    Accepted,
+    /// Scan is actively running
+    Running,
+    /// Scan completed successfully (Pass or Fail)
+    Completed,
+    /// Scan failed with an error (Blocked or internal failure)
+    Failed,
+    /// Work request was cancelled before completion
+    Cancelled,
+}
+
+impl LifecycleState {
+    /// Returns true if this state is terminal (no further transitions allowed)
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            LifecycleState::Completed | LifecycleState::Failed | LifecycleState::Cancelled
+        )
+    }
+
+    /// Returns true if transition to the given state is valid
+    pub fn can_transition_to(&self, next: LifecycleState) -> bool {
+        use LifecycleState::*;
+        match (self, next) {
+            // Forward progress
+            (Pending, Accepted | Running | Failed | Cancelled) => true,
+            (Accepted, Running | Failed | Cancelled) => true,
+            (Running, Completed | Failed | Cancelled) => true,
+            // Idempotent self-transitions for terminal states
+            (Completed, Completed) => true,
+            (Failed, Failed) => true,
+            (Cancelled, Cancelled) => true,
+            // All other transitions are invalid
+            _ => false,
+        }
+    }
+}
+
+/// A versioned, in-memory lifecycle state transition record.
+///
+/// This is a bounded record that captures state transitions for a
+/// work request without external dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleTransition {
+    /// Schema version for forward/backward compatibility
+    pub schema_version: u16,
+    /// The previous state (None for initial)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from_state: Option<LifecycleState>,
+    /// The new state after this transition
+    pub to_state: LifecycleState,
+    /// Timestamp of this transition (Unix timestamp)
+    pub transitioned_at: u64,
+    /// Optional reason/metadata for this transition
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl LifecycleTransition {
+    /// Create a new initial transition (first state assignment)
+    pub fn initial(state: LifecycleState) -> Self {
+        Self {
+            schema_version: 1,
+            from_state: None,
+            to_state: state,
+            transitioned_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+            reason: None,
+        }
+    }
+
+    /// Create a state transition with optional reason
+    pub fn transition(
+        from: LifecycleState,
+        to: LifecycleState,
+        reason: Option<String>,
+    ) -> Option<Self> {
+        if from.can_transition_to(to) {
+            Some(Self {
+                schema_version: 1,
+                from_state: Some(from),
+                to_state: to,
+                transitioned_at: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0),
+                reason,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+/// In-memory lifecycle record tracking all state transitions for a work request.
+///
+/// This is a bounded, versioned record that provides an audit trail of
+/// the work request lifecycle without external storage dependencies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleRecord {
+    /// Schema version for forward/backward compatibility
+    pub schema_version: u16,
+    /// Work request this lifecycle belongs to
+    pub work_request_id: String,
+    /// All state transitions in chronological order
+    pub transitions: Vec<LifecycleTransition>,
+    /// Current state (cached for efficient access)
+    pub current_state: LifecycleState,
+}
+
+impl LifecycleRecord {
+    /// Create a new lifecycle record starting in Pending state
+    pub fn new(work_request_id: String) -> Self {
+        Self {
+            schema_version: 1,
+            work_request_id,
+            transitions: vec![LifecycleTransition::initial(LifecycleState::Pending)],
+            current_state: LifecycleState::Pending,
+        }
+    }
+
+    /// Attempt to transition to a new state
+    ///
+    /// Returns the transition record if successful, None if the transition is invalid.
+    /// This enforces fail-closed behavior for invalid transitions.
+    pub fn transition_to(
+        &mut self,
+        new_state: LifecycleState,
+        reason: Option<String>,
+    ) -> Option<&LifecycleTransition> {
+        let transition = LifecycleTransition::transition(self.current_state, new_state, reason)?;
+        self.current_state = new_state;
+        self.transitions.push(transition);
+        self.transitions.last()
+    }
+
+    /// Get the initial timestamp (when work request was received)
+    pub fn started_at(&self) -> Option<u64> {
+        self.transitions.first().map(|t| t.transitioned_at)
+    }
+
+    /// Get the last transition timestamp
+    pub fn last_updated_at(&self) -> Option<u64> {
+        self.transitions.last().map(|t| t.transitioned_at)
+    }
+
+    /// Get the number of transitions
+    pub fn transition_count(&self) -> usize {
+        self.transitions.len()
+    }
+
+    /// Returns true if the record is in a terminal state
+    pub fn is_terminal(&self) -> bool {
+        self.current_state.is_terminal()
+    }
+}
+
 /// Scan result enum
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -173,12 +342,15 @@ pub struct ControlCenterAdapter {
     scanner: Scanner,
     /// Evidence storage (in-memory for this implementation)
     evidence_store: Vec<EvidenceRecord>,
+    /// In-memory lifecycle records for accepted work requests.
+    lifecycle_store: Vec<LifecycleRecord>,
 }
 
 impl std::fmt::Debug for ControlCenterAdapter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ControlCenterAdapter")
             .field("evidence_store", &self.evidence_store)
+            .field("lifecycle_store", &self.lifecycle_store)
             .finish()
     }
 }
@@ -189,6 +361,7 @@ impl ControlCenterAdapter {
         Self {
             scanner: Scanner::new(),
             evidence_store: Vec::new(),
+            lifecycle_store: Vec::new(),
         }
     }
 
@@ -197,6 +370,7 @@ impl ControlCenterAdapter {
         Self {
             scanner,
             evidence_store: Vec::new(),
+            lifecycle_store: Vec::new(),
         }
     }
 
@@ -237,12 +411,33 @@ impl ControlCenterAdapter {
         if let Some(existing) = self.existing_result(&request)? {
             return Ok(existing);
         }
-        let (scan_result, evidence_record) =
-            tokio::task::spawn_blocking(move || Self::scan_request(request))
-                .await
-                .map_err(|error| AdapterError::Internal(format!("scan task failed: {error}")))??;
-        self.evidence_store.push(evidence_record);
-        Ok(scan_result)
+        let work_request_id = request.work_request_id.clone();
+        self.begin_lifecycle(&work_request_id);
+        let outcome = tokio::task::spawn_blocking(move || Self::scan_request(request)).await;
+        match outcome {
+            Ok(Ok((scan_result, evidence_record))) => {
+                self.transition_lifecycle(&work_request_id, LifecycleState::Completed, None);
+                self.evidence_store.push(evidence_record);
+                Ok(scan_result)
+            }
+            Ok(Err(error)) => {
+                self.transition_lifecycle(
+                    &work_request_id,
+                    LifecycleState::Failed,
+                    Some(error.to_string()),
+                );
+                Err(error)
+            }
+            Err(error) => {
+                let adapter_error = AdapterError::Internal(format!("scan task failed: {error}"));
+                self.transition_lifecycle(
+                    &work_request_id,
+                    LifecycleState::Failed,
+                    Some(adapter_error.to_string()),
+                );
+                Err(adapter_error)
+            }
+        }
     }
 
     /// Scan work request synchronously (blocking)
@@ -253,9 +448,45 @@ impl ControlCenterAdapter {
         if let Some(existing) = self.existing_result(&request)? {
             return Ok(existing);
         }
-        let (scan_result, evidence_record) = Self::scan_request(request)?;
-        self.evidence_store.push(evidence_record);
-        Ok(scan_result)
+        let work_request_id = request.work_request_id.clone();
+        self.begin_lifecycle(&work_request_id);
+        match Self::scan_request(request) {
+            Ok((scan_result, evidence_record)) => {
+                self.transition_lifecycle(&work_request_id, LifecycleState::Completed, None);
+                self.evidence_store.push(evidence_record);
+                Ok(scan_result)
+            }
+            Err(error) => {
+                self.transition_lifecycle(
+                    &work_request_id,
+                    LifecycleState::Failed,
+                    Some(error.to_string()),
+                );
+                Err(error)
+            }
+        }
+    }
+
+    fn begin_lifecycle(&mut self, work_request_id: &str) {
+        let mut record = LifecycleRecord::new(work_request_id.to_string());
+        let _ = record.transition_to(LifecycleState::Accepted, None);
+        let _ = record.transition_to(LifecycleState::Running, None);
+        self.lifecycle_store.push(record);
+    }
+
+    fn transition_lifecycle(
+        &mut self,
+        work_request_id: &str,
+        state: LifecycleState,
+        reason: Option<String>,
+    ) {
+        if let Some(record) = self
+            .lifecycle_store
+            .iter_mut()
+            .find(|record| record.work_request_id == work_request_id)
+        {
+            let _ = record.transition_to(state, reason);
+        }
     }
 
     fn validate_request(request: &WorkRequest) -> Result<(), AdapterError> {
@@ -350,6 +581,18 @@ impl ControlCenterAdapter {
         self.evidence_store
             .iter()
             .find(|e| e.work_request_id == work_request_id)
+    }
+
+    /// Get the lifecycle record for a specific work request.
+    pub fn get_lifecycle(&self, work_request_id: &str) -> Option<&LifecycleRecord> {
+        self.lifecycle_store
+            .iter()
+            .find(|record| record.work_request_id == work_request_id)
+    }
+
+    /// Get all lifecycle records.
+    pub fn get_lifecycles(&self) -> &[LifecycleRecord] {
+        &self.lifecycle_store
     }
 
     /// Persist all evidence records atomically as redacted JSON.
@@ -679,5 +922,58 @@ mod tests {
 
         let err = AdapterError::Internal("oops".to_string());
         assert!(err.to_string().contains("Internal error"));
+    }
+
+    #[test]
+    fn test_lifecycle_rejects_backward_transition() {
+        let mut record = LifecycleRecord::new("wr-lifecycle".to_string());
+        assert!(record
+            .transition_to(LifecycleState::Accepted, None)
+            .is_some());
+        assert!(record
+            .transition_to(LifecycleState::Running, None)
+            .is_some());
+        assert!(record
+            .transition_to(LifecycleState::Completed, None)
+            .is_some());
+        assert!(record
+            .transition_to(LifecycleState::Running, Some("must remain terminal".into()))
+            .is_none());
+        assert_eq!(record.current_state, LifecycleState::Completed);
+        assert_eq!(record.transition_count(), 4);
+    }
+
+    #[test]
+    fn test_sync_scan_records_lifecycle() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-lifecycle-sync".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .unwrap();
+
+        let record = adapter.get_lifecycle("wr-lifecycle-sync").unwrap();
+        assert_eq!(record.current_state, LifecycleState::Completed);
+        assert_eq!(record.transition_count(), 4);
+        assert!(record.is_terminal());
+    }
+
+    #[tokio::test]
+    async fn test_async_scan_records_lifecycle() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work(WorkRequest {
+                work_request_id: "wr-lifecycle-async".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .await
+            .unwrap();
+
+        let record = adapter.get_lifecycle("wr-lifecycle-async").unwrap();
+        assert_eq!(record.current_state, LifecycleState::Completed);
+        assert_eq!(record.transition_count(), 4);
     }
 }
