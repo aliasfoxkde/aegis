@@ -268,9 +268,7 @@ impl ControlCenterAdapter {
             if existing.evidence_ref == content_hash {
                 return Ok(existing.scan_result.clone());
             }
-            return Err(AdapterError::WorkRequestConflict(
-                request.work_request_id,
-            ));
+            return Err(AdapterError::WorkRequestConflict(request.work_request_id));
         }
 
         // Clone content for scan to avoid borrow issues with panic catch

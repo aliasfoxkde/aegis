@@ -1,7 +1,7 @@
 //! Scanner module
 
-use crate::OutputFormat;
 use crate::output::Output;
+use crate::OutputFormat;
 use aegis_core::{
     Confidence, Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt,
     ScanStats, Scanner, Severity,

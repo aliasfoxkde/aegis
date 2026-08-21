@@ -779,7 +779,10 @@ fn test_duplicate_work_request_is_idempotent() {
     let first = adapter.scan_work_sync(request.clone()).unwrap();
     let second = adapter.scan_work_sync(request).unwrap();
 
-    assert_eq!(std::mem::discriminant(&first), std::mem::discriminant(&second));
+    assert_eq!(
+        std::mem::discriminant(&first),
+        std::mem::discriminant(&second)
+    );
     assert_eq!(adapter.get_evidence().len(), 1);
 }
 
