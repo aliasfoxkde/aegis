@@ -1,8 +1,8 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-08-13
-**Evidence boundary (central audit):** branch `main`, HEAD `48f12d337301516228c91b5b8e7f536f8d8192eb`, 1 dirty status entry. Refresh this boundary before relying on any test or rating below; numeric ratings are historical context, not release gates.
-**Status:** 🔄 Active — local build, release, and stdio evidence pending
+**Last Updated:** 2026-08-21
+**Evidence boundary (central audit):** branch `platform-handoff/aegis-w2-03`, HEAD `a229ae5c1d5e2267acd5baad876357275160c175`, 0 dirty status entries. Refresh this boundary before relying on any test or rating below; numeric ratings are historical context, not release gates.
+**Status:** 🔄 Active — source security gates validated; deployment and external promotion evidence pending
 **Location:** `/nas/Temp/repos/aegis`
 **Rating:** 8.5/10
 
