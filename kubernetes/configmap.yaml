@@ -1,0 +1,69 @@
+# Aegis ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aegis-config
+  labels:
+    app: aegis
+data:
+  # Default configuration
+  aegis.yaml: |
+    # Aegis Daemon Configuration
+    version: "1.0"
+
+    # Scan settings
+    scan:
+      default_preset: production
+      max_file_size_mb: 50
+      timeout_seconds: 300
+      severity_threshold: medium
+
+    # Output settings
+    output:
+      default_format: sarif
+      webhook_enabled: false
+
+    # Performance settings
+    performance:
+      workers: 4
+      batch_size: 100
+
+    # Security settings
+    security:
+      strict_mode: standard
+      exit_on_findings: false
+
+  # Production preset
+  preset-production.yaml: |
+    name: production
+    enabled_categories:
+      - secrets
+      - pii
+      - security
+      - code-quality
+    strict_mode: strict
+    performance_mode: optimized
+    exit_on_findings: true
+    max_file_size_mb: 10
+    binary_file_detection: true
+    gitignore_respect: true
+    output_format: sarif
+    timeout_seconds: 60
+
+  # Pipeline preset for CI/CD
+  preset-pipeline.yaml: |
+    name: pipeline
+    enabled_categories:
+      - secrets
+      - pii
+      - security
+      - code-quality
+      - devops
+    strict_mode: standard
+    performance_mode: optimized
+    exit_on_findings: true
+    max_file_size_mb: 10
+    binary_file_detection: true
+    gitignore_respect: true
+    output_format: json
+    timeout_seconds: 300

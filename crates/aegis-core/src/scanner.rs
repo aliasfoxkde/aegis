@@ -13,11 +13,39 @@ use walkdir::WalkDir;
 use crate::entropy::shannon_entropy;
 use crate::suppression::SuppressionManager;
 
+use crate::ast::{AstAnalyzer, AstInspectionStatus};
 use crate::bundle::Bundle;
 use crate::config::Config;
-use crate::finding::{Finding, FindingKind, Location, ScanStats};
+use crate::finding::{Finding, FindingKind, InspectionStatus, Location, ScanStats};
 use crate::ignore::IgnoreManager;
 use crate::pattern::{PatternDefinition, PatternRegistry};
+
+fn ast_findings_to_findings(
+    inspection: &crate::ast::AstInspection,
+    content: &str,
+    source: &str,
+) -> Vec<Finding> {
+    inspection
+        .findings
+        .iter()
+        .map(|ast_finding| {
+            let line_content = content
+                .lines()
+                .nth(ast_finding.line.saturating_sub(1))
+                .unwrap_or_default();
+            Finding::new(
+                &ast_finding.pattern,
+                "ast",
+                &ast_finding.severity,
+                &ast_finding.confidence,
+                Location::new(source, ast_finding.line, 0, line_content),
+                line_content,
+                &ast_finding.description,
+            )
+            .with_kind(FindingKind::Ast)
+        })
+        .collect()
+}
 
 /// Scan options
 #[derive(Debug, Clone)]
@@ -245,7 +273,16 @@ impl Scanner {
     }
 
     /// Scan a string
+    /// Scan in-memory content and return findings from all enabled analyzers.
     pub fn scan_string(&self, content: &str, source: &str) -> Vec<Finding> {
+        self.scan_string_with_inspection(content, source).0
+    }
+
+    fn scan_string_with_inspection(
+        &self,
+        content: &str,
+        source: &str,
+    ) -> (Vec<Finding>, crate::ast::AstInspection) {
         let start = Instant::now();
 
         // Parse suppressions from content
@@ -257,10 +294,6 @@ impl Scanner {
 
         // Get cached category scanners
         let scanners = self.get_category_scanners();
-
-        if scanners.is_empty() {
-            return Vec::new();
-        }
 
         // Use category scanners with combined regex pre-filtering
         let findings: Vec<Finding> = if content.len() > 5000 && scanners.len() > 4 {
@@ -292,11 +325,15 @@ impl Scanner {
             findings
         };
 
+        let ast_inspection = AstAnalyzer::inspect_source(content, source);
+        let mut findings = findings;
+        findings.extend(ast_findings_to_findings(&ast_inspection, content, source));
+
         // Filter findings against baseline if configured
         let findings = self.filter_baseline(findings);
 
         let _ = start.elapsed();
-        findings
+        (findings, ast_inspection)
     }
 
     /// Load baseline findings and filter them from results
@@ -416,25 +453,33 @@ impl Scanner {
         };
 
         if metadata.len() > self.options.max_file_size {
-            return Ok((
-                Vec::new(),
-                ScanStats {
-                    files_skipped: 1,
-                    ..Default::default()
-                },
-            ));
+            let mut stats = ScanStats {
+                files_skipped: 1,
+                ..Default::default()
+            };
+            stats.inspection_ledger.record(
+                path.to_string_lossy(),
+                InspectionStatus::Skipped,
+                true,
+                Some("file_size_limit".to_string()),
+            );
+            return Ok((Vec::new(), stats));
         }
 
         // Check if binary
         let is_binary = is_binary_file(path)?;
         if is_binary && !self.options.scan_binary {
-            return Ok((
-                Vec::new(),
-                ScanStats {
-                    files_skipped: 1,
-                    ..Default::default()
-                },
-            ));
+            let mut stats = ScanStats {
+                files_skipped: 1,
+                ..Default::default()
+            };
+            stats.inspection_ledger.record(
+                path.to_string_lossy(),
+                InspectionStatus::Unsupported,
+                true,
+                Some("binary_file".to_string()),
+            );
+            return Ok((Vec::new(), stats));
         }
 
         // Read file content
@@ -447,17 +492,24 @@ impl Scanner {
 
         // Check ignore
         if self.ignore_manager.should_ignore(path) {
-            return Ok((
-                Vec::new(),
-                ScanStats {
-                    files_skipped: 1,
-                    ..Default::default()
-                },
-            ));
+            let mut stats = ScanStats {
+                files_skipped: 1,
+                ..Default::default()
+            };
+            stats.inspection_ledger.record(
+                path.to_string_lossy(),
+                InspectionStatus::Excluded,
+                false,
+                Some("ignore_rule".to_string()),
+            );
+            return Ok((Vec::new(), stats));
         }
 
-        // Scan content
-        let findings = self.scan_string(&content, &path.to_string_lossy());
+        // Scan content through the regular pattern pipeline and the AST
+        // pipeline. AST coverage is recorded separately so a fallback or
+        // parser failure cannot be mistaken for complete inspection.
+        let source = path.to_string_lossy().into_owned();
+        let (findings, ast_inspection) = self.scan_string_with_inspection(&content, &source);
 
         let scan_time = start.elapsed().as_millis() as u64;
 
@@ -469,6 +521,25 @@ impl Scanner {
             workers_used: 1,
             ..Default::default()
         };
+        stats
+            .inspection_ledger
+            .record(source.to_string(), InspectionStatus::Analyzed, true, None);
+
+        let ast_status = match ast_inspection.status {
+            AstInspectionStatus::Parsed | AstInspectionStatus::Fallback => {
+                InspectionStatus::Analyzed
+            }
+            AstInspectionStatus::ParseError => InspectionStatus::Failed,
+            AstInspectionStatus::Unsupported | AstInspectionStatus::NotApplicable => {
+                InspectionStatus::Unsupported
+            }
+        };
+        stats.inspection_ledger.record(
+            format!("{source}#ast"),
+            ast_status,
+            ast_inspection.required,
+            ast_inspection.reason,
+        );
 
         for finding in &findings {
             stats.add_finding(finding);
@@ -492,31 +563,92 @@ impl Scanner {
             WalkDir::new(root).follow_links(false)
         };
 
-        let entries: Vec<_> = walker
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-            .collect();
-
-        let total_files = entries.len();
-
-        let (findings, stats): (Vec<_>, Vec<_>) = entries
-            .par_iter()
-            .filter_map(|entry| self.scan_file(entry.path()).ok())
-            .unzip();
-
-        let all_findings: Vec<Finding> = findings.into_iter().flatten().collect();
-
-        let mut merged_stats = ScanStats {
-            files_scanned: total_files,
-            ..Default::default()
-        };
-
-        for stat in stats {
-            merged_stats.merge(&stat);
+        // Preserve walker failures as required failed units. Silently
+        // dropping a WalkDir error can make an incomplete directory look
+        // clean, especially when the inaccessible subtree contains secrets.
+        let mut entries = Vec::new();
+        let mut merged_stats = ScanStats::default();
+        for (index, result) in walker.into_iter().enumerate() {
+            match result {
+                Ok(entry) if entry.file_type().is_file() => entries.push(entry),
+                Ok(_) => {}
+                Err(error) => {
+                    let unit_id = error
+                        .path()
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| format!("{}#walk-error-{index}", root.display()));
+                    merged_stats.files_failed += 1;
+                    merged_stats.inspection_ledger.record(
+                        unit_id,
+                        InspectionStatus::Failed,
+                        true,
+                        Some(format!("directory_walk: {error}")),
+                    );
+                }
+            }
         }
 
+        // Keep parallel file scanning, but retain every result so an I/O
+        // failure becomes an explicit ledger record rather than disappearing.
+        let outcomes: Vec<_> = entries
+            .par_iter()
+            .map(|entry| {
+                let path = entry.path().to_path_buf();
+                let result = self.scan_file(&path);
+                (path, result)
+            })
+            .collect();
+
+        let mut all_findings = Vec::new();
+        for (path, result) in outcomes {
+            match result {
+                Ok((findings, stats)) => {
+                    all_findings.extend(findings);
+                    merged_stats.merge(&stats);
+                }
+                Err(error) => {
+                    merged_stats.files_failed += 1;
+                    merged_stats.inspection_ledger.record(
+                        path.to_string_lossy(),
+                        InspectionStatus::Failed,
+                        true,
+                        Some(error.to_string()),
+                    );
+                }
+            }
+        }
+
+        let required_units = merged_stats
+            .inspection_ledger
+            .units
+            .iter()
+            .filter(|unit| unit.required)
+            .count();
+        let successfully_inspected = merged_stats
+            .inspection_ledger
+            .units
+            .iter()
+            .filter(|unit| {
+                unit.required
+                    && matches!(
+                        unit.status,
+                        InspectionStatus::Analyzed | InspectionStatus::Suppressed
+                    )
+            })
+            .count();
+
         merged_stats.scan_time_ms = start.elapsed().as_millis() as u64;
+
+        // An empty directory has no required work and remains a valid empty
+        // scan. If required work existed but none completed, return a
+        // non-success result while carrying the redacted ledger for callers
+        // that need an auditable failure receipt.
+        if required_units > 0 && successfully_inspected == 0 {
+            return Err(ScanError::AllRequiredFilesFailed {
+                root: root.to_path_buf(),
+                stats: Box::new(merged_stats),
+            });
+        }
 
         Ok((all_findings, merged_stats))
     }
@@ -620,6 +752,12 @@ pub enum ScanError {
 
     #[error("Permission denied: {0}")]
     PermissionDenied(PathBuf),
+
+    #[error("No required files were successfully inspected under {root}")]
+    AllRequiredFilesFailed {
+        root: PathBuf,
+        stats: Box<ScanStats>,
+    },
 }
 
 #[cfg(test)]
@@ -635,6 +773,15 @@ mod tests {
 
         let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
         assert!(findings.is_empty()); // No patterns registered
+    }
+
+    #[test]
+    fn test_scan_string_includes_ast_findings() {
+        let scanner = Scanner::new();
+        let findings = scanner.scan_string("eval('untrusted')\n", "fixture.py");
+        assert!(findings.iter().any(|finding| {
+            finding.kind == FindingKind::Ast && finding.pattern == "dangerous-execution"
+        }));
     }
 
     #[test]
@@ -783,6 +930,32 @@ mod tests {
     }
 
     #[test]
+    fn test_scan_file_records_ast_unit_and_findings() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_file = temp_dir.path().join("fixture.py");
+        File::create(&temp_file)
+            .unwrap()
+            .write_all(b"eval('untrusted')\n")
+            .unwrap();
+
+        let scanner = Scanner::new();
+        let (findings, stats) = scanner.scan_file(&temp_file).unwrap();
+        assert!(findings.iter().any(|finding| {
+            finding.kind == FindingKind::Ast && finding.pattern == "dangerous-execution"
+        }));
+        let ast_unit = stats
+            .inspection_ledger
+            .units
+            .iter()
+            .find(|unit| unit.unit_id.ends_with("#ast"))
+            .expect("AST inspection unit should be recorded");
+        #[cfg(feature = "tree-sitter")]
+        assert!(ast_unit.required);
+        #[cfg(not(feature = "tree-sitter"))]
+        assert!(!ast_unit.required);
+    }
+
+    #[test]
     fn test_scan_dir() {
         let temp_dir = TempDir::new().unwrap();
         let file1 = temp_dir.path().join("test1.txt");
@@ -826,6 +999,89 @@ mod tests {
         let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
         // Without following symlinks, should scan the real file
         assert!(stats.files_scanned >= 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_scan_dir_records_unreadable_file_as_failed() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let readable = temp_dir.path().join("readable.txt");
+        let unreadable = temp_dir.path().join("unreadable.txt");
+        File::create(&readable)
+            .unwrap()
+            .write_all(b"readable content")
+            .unwrap();
+        File::create(&unreadable)
+            .unwrap()
+            .write_all(b"TOP-SECRET-UNREADABLE-FIXTURE")
+            .unwrap();
+
+        let original_mode = std::fs::metadata(&unreadable).unwrap().permissions().mode();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o0)).unwrap();
+
+        // Root can bypass mode bits; do not make the test claim coverage it
+        // cannot exercise in that environment.
+        if std::fs::read_to_string(&unreadable).is_ok() {
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+                .unwrap();
+            return;
+        }
+
+        let result = Scanner::new().scan_dir(temp_dir.path());
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+            .unwrap();
+
+        let (_, stats) = result.expect("one readable file should permit a partial result");
+        assert_eq!(stats.files_failed, 1);
+        assert!(!stats.inspection_ledger.allows_safe());
+        let failed = stats
+            .inspection_ledger
+            .units
+            .iter()
+            .find(|unit| unit.unit_id == unreadable.to_string_lossy())
+            .expect("unreadable file should have a ledger unit");
+        assert_eq!(failed.status, InspectionStatus::Failed);
+        assert!(failed.required);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_scan_dir_fails_when_all_required_files_are_unreadable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = TempDir::new().unwrap();
+        let unreadable = temp_dir.path().join("unreadable.txt");
+        File::create(&unreadable)
+            .unwrap()
+            .write_all(b"TOP-SECRET-ALL-FAILED-FIXTURE")
+            .unwrap();
+
+        let original_mode = std::fs::metadata(&unreadable).unwrap().permissions().mode();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o0)).unwrap();
+        if std::fs::read_to_string(&unreadable).is_ok() {
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+                .unwrap();
+            return;
+        }
+
+        let result = Scanner::new().scan_dir(temp_dir.path());
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+            .unwrap();
+
+        match result {
+            Err(ScanError::AllRequiredFilesFailed { stats, .. }) => {
+                assert_eq!(stats.files_failed, 1);
+                assert!(!stats.inspection_ledger.allows_safe());
+                assert!(stats.inspection_ledger.units.iter().any(|unit| {
+                    unit.unit_id == unreadable.to_string_lossy()
+                        && unit.status == InspectionStatus::Failed
+                        && unit.required
+                }));
+            }
+            other => panic!("expected fail-closed all-required error, got {other:?}"),
+        }
     }
 
     #[test]

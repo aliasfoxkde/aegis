@@ -1,0 +1,268 @@
+name: Aegis Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run daily at 2 AM for proactive security scanning
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Minimum severity to report'
+        required: false
+        default: 'medium'
+        type: choice
+        options:
+          - critical
+          - high
+          - medium
+          - low
+      preset:
+        description: 'Scan preset to use'
+        required: false
+        default: 'pipeline'
+        type: choice
+        options:
+          - production
+          - pipeline
+          - development
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Aegis Security Scan
+  # ---------------------------------------------------------------------------
+  aegis-scan:
+    name: Aegis Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SCAN_SEVERITY: ${{ inputs.severity || 'medium' }}
+      SCAN_PRESET: ${{ inputs.preset || 'pipeline' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build Aegis
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Build binary
+        run: cargo build --release -p aegis-cli
+
+      - name: Run Aegis scan
+        id: scan
+        run: |
+          set +e
+          ./target/release/aegis scan . \
+            --preset "$SCAN_PRESET" \
+            --format sarif \
+            --severity-threshold "$SCAN_SEVERITY" \
+            --output aegis-results.sarif \
+            --exit-on-findings
+          scan_exit=$?
+          set -e
+          if [ "$scan_exit" -eq 0 ] && [ -s aegis-results.sarif ]; then
+            status=SAFE
+          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-results.sarif ]; then
+            status=FINDINGS
+          else
+            status=BLOCKED
+          fi
+          echo "exit_code=$scan_exit" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Aegis scan status: $status (exit=$scan_exit)"
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
+        if: always() && hashFiles('aegis-results.sarif') != ''
+        with:
+          sarif_file: aegis-results.sarif
+          category: aegis-security-scan
+
+      - name: Post scan results
+        if: always()
+        run: |
+          if [ -f aegis-results.sarif ]; then
+            echo "## Aegis Security Scan Results"
+            echo ""
+            echo "View full results in the Security tab"
+            echo ""
+            echo "SARIF report: aegis-results.sarif"
+          fi
+
+      - name: Upload Aegis scan artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aegis-scan-results
+          path: aegis-results.sarif
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Enforce Aegis gate
+        if: always()
+        run: |
+          status='${{ steps.scan.outputs.status }}'
+          if [ "$status" = "SAFE" ]; then exit 0; fi
+          echo "Aegis promotion gate: $status" >&2
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Aegis Pre-commit Check (for PRs)
+  # ---------------------------------------------------------------------------
+  aegis-pr-check:
+    name: Aegis PR Security Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # Fetch full history for better diff analysis
+          fetch-depth: 0
+
+      - name: Build Aegis
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          profile: minimal
+
+      - name: Build binary
+        run: cargo build --release -p aegis-cli
+
+      - name: Run Aegis on changed files
+        run: |
+          set +e
+          overall=0
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD 2>/dev/null || \
+                         git diff --name-only HEAD~1...HEAD 2>/dev/null || echo "")
+
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "Scanning changed files..."
+            while IFS= read -r file; do
+              if [ -f "$file" ]; then
+                ./target/release/aegis scan "$file" --format human
+                code=$?
+                if [ "$code" -ne 0 ]; then overall=1; fi
+              fi
+            done <<< "$CHANGED_FILES"
+          fi
+          set -e
+          exit "$overall"
+
+  # ---------------------------------------------------------------------------
+  # Aegis Secrets Detection
+  # ---------------------------------------------------------------------------
+  aegis-secrets:
+    name: Aegis Secrets Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build Aegis
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          profile: minimal
+
+      - name: Build binary
+        run: cargo build --release -p aegis-cli
+
+      - name: Run Aegis secrets scan
+        id: secrets_scan
+        run: |
+          set +e
+          ./target/release/aegis scan . \
+            --preset production \
+            --format sarif \
+            --severity-threshold high \
+            --output aegis-secrets.sarif
+          scan_exit=$?
+          set -e
+          if [ "$scan_exit" -eq 0 ] && [ -s aegis-secrets.sarif ]; then status=SAFE;
+          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-secrets.sarif ]; then status=FINDINGS;
+          else status=BLOCKED; fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Aegis secrets status: $status (exit=$scan_exit)"
+
+      - name: Upload secrets SARIF
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57 # v3.36.0
+        if: always()
+        with:
+          sarif_file: aegis-secrets.sarif
+          category: aegis-secrets-detection
+
+      - name: Upload secrets scan artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aegis-secrets-scan
+          path: aegis-secrets.sarif
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Enforce secrets gate
+        if: always()
+        run: test '${{ steps.secrets_scan.outputs.status }}' = SAFE
+
+  # ---------------------------------------------------------------------------
+  # Aegis Supply Chain Scan
+  # ---------------------------------------------------------------------------
+  aegis-supply-chain:
+    name: Aegis Supply Chain Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build Aegis
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          profile: minimal
+
+      - name: Build binary
+        run: cargo build --release -p aegis-cli
+
+      - name: Scan dependencies
+        id: supply_scan
+        run: |
+          set +e
+          # Scan Cargo.toml and Cargo.lock for supply chain risks
+          ./target/release/aegis scan . \
+            --preset production \
+            --format json \
+            --output aegis-supply-chain.json
+          scan_exit=$?
+          set -e
+          if [ "$scan_exit" -eq 0 ] && [ -s aegis-supply-chain.json ]; then status=SAFE;
+          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-supply-chain.json ]; then status=FINDINGS;
+          else status=BLOCKED; fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Aegis supply-chain status: $status (exit=$scan_exit)"
+
+      - name: Upload supply chain report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aegis-supply-chain-report
+          path: aegis-supply-chain.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Enforce supply-chain gate
+        if: always()
+        run: test '${{ steps.supply_scan.outputs.status }}' = SAFE

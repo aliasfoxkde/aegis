@@ -25,10 +25,13 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::fs;
+use std::io;
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::scanner::Scanner;
-use crate::Finding;
+use crate::{Finding, ScanReceipt, ScanStats};
 
 /// Work request to be scanned
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +82,9 @@ pub struct EvidenceRecord {
     /// Highest severity among findings (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub highest_severity: Option<String>,
+    /// Redacted, versioned receipt for this scan.
+    #[serde(skip_serializing)]
+    pub receipt: Option<ScanReceipt>,
 }
 
 impl EvidenceRecord {
@@ -100,7 +106,36 @@ impl EvidenceRecord {
                 .unwrap_or(0),
             finding_count,
             highest_severity,
+            receipt: None,
         }
+    }
+
+    /// Create an evidence record with a redacted, complete scan receipt.
+    pub fn from_scan(
+        work_request_id: String,
+        source: &str,
+        scan_result: ScanResult,
+        content_hash: String,
+        findings: &[Finding],
+        stats: ScanStats,
+    ) -> Self {
+        let mut record = Self::new(
+            work_request_id,
+            scan_result,
+            content_hash,
+            findings.len(),
+            ControlCenterAdapter::extract_highest_severity(findings),
+        );
+        let profile = "control-center-default";
+        record.receipt = Some(ScanReceipt::from_scan(
+            source,
+            "control_center_work_request",
+            profile,
+            Some(ScanReceipt::digest_text(profile)),
+            findings,
+            stats,
+        ));
+        record
     }
 }
 
@@ -118,6 +153,10 @@ pub enum AdapterError {
     /// Malformed input - content could not be processed
     #[error("Malformed input: {0}")]
     MalformedInput(String),
+
+    /// A work request ID was reused for different content.
+    #[error("work request conflict: {0}")]
+    WorkRequestConflict(String),
 
     /// Internal error
     #[error("Internal error: {0}")]
@@ -222,6 +261,18 @@ impl ControlCenterAdapter {
         // Compute content hash for evidence reference
         let content_hash = Self::compute_content_hash(&request.content);
 
+        // Work delivery may be retried. Treat an identical request ID/content
+        // pair as an idempotent replay, but fail closed when an ID is reused
+        // for different content.
+        if let Some(existing) = self.get_evidence_for_work(&request.work_request_id) {
+            if existing.evidence_ref == content_hash {
+                return Ok(existing.scan_result.clone());
+            }
+            return Err(AdapterError::WorkRequestConflict(
+                request.work_request_id,
+            ));
+        }
+
         // Clone content for scan to avoid borrow issues with panic catch
         let content = request.content.clone();
         let source = request.source.clone();
@@ -229,18 +280,19 @@ impl ControlCenterAdapter {
         // Perform scan - any panic or error results in Blocked
         // We create a fresh scanner within the catch_unwind to avoid
         // UnwindSafe issues with the Arc<IgnoreManager> in Scanner
-        let findings: Vec<Finding> = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let scanner = Scanner::new();
-            scanner.scan_string(&content, &source)
-        })) {
-            Ok(findings) => findings,
-            Err(_) => {
-                // Scanner panicked - fail closed
-                return Err(AdapterError::ScannerError(
-                    "Scanner panicked during scan".to_string(),
-                ));
-            }
-        };
+        let findings: Vec<Finding> =
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let scanner = Scanner::new();
+                scanner.scan_string(&content, &source)
+            })) {
+                Ok(findings) => findings,
+                Err(_) => {
+                    // Scanner panicked - fail closed
+                    return Err(AdapterError::ScannerError(
+                        "Scanner panicked during scan".to_string(),
+                    ));
+                }
+            };
 
         // Determine scan result
         let scan_result = if findings.is_empty() {
@@ -249,16 +301,15 @@ impl ControlCenterAdapter {
             ScanResult::Fail
         };
 
-        // Extract highest severity
-        let highest_severity = Self::extract_highest_severity(&findings);
-
-        // Create evidence record
-        let evidence_record = EvidenceRecord::new(
+        // Create a redacted evidence record and durable receipt.
+        let stats = ScanStats::for_content(format!("string:{source}"), content.len());
+        let evidence_record = EvidenceRecord::from_scan(
             request.work_request_id.clone(),
+            &source,
             scan_result.clone(),
             content_hash,
-            findings.len(),
-            highest_severity,
+            &findings,
+            stats,
         );
 
         // Store evidence
@@ -277,6 +328,42 @@ impl ControlCenterAdapter {
         self.evidence_store
             .iter()
             .find(|e| e.work_request_id == work_request_id)
+    }
+
+    /// Persist all evidence records atomically as redacted JSON.
+    pub fn persist_evidence(&self, path: &Path) -> io::Result<()> {
+        let records: Vec<serde_json::Value> = self
+            .evidence_store
+            .iter()
+            .map(|record| {
+                let mut value = serde_json::to_value(record)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+                if let Some(receipt) = &record.receipt {
+                    value["receipt"] = serde_json::to_value(receipt)
+                        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+                }
+                Ok(value)
+            })
+            .collect::<io::Result<_>>()?;
+        let json = serde_json::to_string_pretty(&records)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent)?;
+        }
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("evidence");
+        let temp_path = path.with_file_name(format!(".{file_name}.tmp-{}", std::process::id()));
+        fs::write(&temp_path, json.as_bytes())?;
+        if let Err(error) = fs::rename(&temp_path, path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Clear stored evidence
@@ -320,9 +407,18 @@ mod tests {
 
     #[test]
     fn test_scan_result_serialization() {
-        assert_eq!(serde_json::to_string(&ScanResult::Pass).unwrap(), "\"pass\"");
-        assert_eq!(serde_json::to_string(&ScanResult::Fail).unwrap(), "\"fail\"");
-        assert_eq!(serde_json::to_string(&ScanResult::Blocked).unwrap(), "\"blocked\"");
+        assert_eq!(
+            serde_json::to_string(&ScanResult::Pass).unwrap(),
+            "\"pass\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ScanResult::Fail).unwrap(),
+            "\"fail\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ScanResult::Blocked).unwrap(),
+            "\"blocked\""
+        );
     }
 
     #[test]
@@ -416,7 +512,10 @@ mod tests {
 
         let result = adapter.scan_work_sync(request);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), AdapterError::MalformedInput(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            AdapterError::MalformedInput(_)
+        ));
     }
 
     #[test]
@@ -430,7 +529,10 @@ mod tests {
 
         let result = adapter.scan_work_sync(request);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), AdapterError::MalformedInput(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            AdapterError::MalformedInput(_)
+        ));
     }
 
     #[test]
@@ -467,6 +569,30 @@ mod tests {
 
         let evidence = adapter.get_evidence_for_work("wr-456").unwrap();
         assert_eq!(evidence.work_request_id, "wr-456");
+    }
+
+    #[test]
+    fn test_adapter_persists_redacted_receipt() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-persist".to_string(),
+                content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(),
+                source: "config.env".to_string(),
+            })
+            .unwrap();
+        let root = std::env::temp_dir().join(format!("aegis-evidence-{}", std::process::id()));
+        let path = root.join("evidence.json");
+
+        adapter.persist_evidence(&path).unwrap();
+        let json = std::fs::read_to_string(&path).unwrap();
+        let records: Vec<EvidenceRecord> = serde_json::from_str(&json).unwrap();
+        assert_eq!(records.len(), 1);
+        assert!(records[0].receipt.is_some());
+        assert!(json.contains("schema_version"));
+        assert!(!json.contains("AKIAIOSFODNN7EXAMPLE"));
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

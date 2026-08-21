@@ -20,7 +20,8 @@ fn test_adapter_scan_clean_content_passes() {
             fn main() {
                 println!("Hello, World!");
             }
-        "#.to_string(),
+        "#
+        .to_string(),
         source: "main.rs".to_string(),
     };
 
@@ -107,7 +108,9 @@ fn test_adapter_multiple_scans_accumulate_evidence() {
     assert_eq!(adapter.get_evidence().len(), 3);
 
     for i in 0..3 {
-        assert!(adapter.get_evidence_for_work(&format!("wr-multi-{}", i)).is_some());
+        assert!(adapter
+            .get_evidence_for_work(&format!("wr-multi-{}", i))
+            .is_some());
     }
 }
 
@@ -299,7 +302,10 @@ fn test_fixture_clean_pass() {
     };
 
     let result = adapter.scan_work_sync(request).unwrap();
-    assert!(matches!(result, aegis_core::control_center_adapter::ScanResult::Pass));
+    assert!(matches!(
+        result,
+        aegis_core::control_center_adapter::ScanResult::Pass
+    ));
 
     let evidence = adapter.get_evidence_for_work("fixture-clean-001").unwrap();
     assert!(evidence.finding_count == 0);
@@ -324,9 +330,14 @@ fn test_fixture_clean_with_findings() {
     // Result could be Pass or Fail depending on pattern registry state
     assert!(result.allows_work());
 
-    let evidence = adapter.get_evidence_for_work("fixture-clean-findings-001").unwrap();
-    // Finding count should be accurately tracked
-    assert!(evidence.finding_count >= 0, "finding_count should be non-negative");
+    let evidence = adapter
+        .get_evidence_for_work("fixture-clean-findings-001")
+        .unwrap();
+    // Finding count should be accurately tracked (valid usize)
+    assert!(
+        evidence.finding_count <= 1000,
+        "finding_count should be reasonable"
+    );
 }
 
 /// Fixture: high_load - High traffic scenario with large content
@@ -480,7 +491,10 @@ fn test_fixture_malformed_empty_content() {
 
     let result = adapter.scan_work_sync(request);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), AdapterError::MalformedInput(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        AdapterError::MalformedInput(_)
+    ));
 }
 
 /// Fixture: malformed_empty_work_request_id - Empty work request ID
@@ -496,7 +510,10 @@ fn test_fixture_malformed_empty_work_id() {
 
     let result = adapter.scan_work_sync(request);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), AdapterError::MalformedInput(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        AdapterError::MalformedInput(_)
+    ));
 }
 
 /// Fixture: malformed_null_bytes - Content with null bytes
@@ -632,12 +649,18 @@ fn test_fixture_evidence_size_bounded() {
 
     adapter.scan_work_sync(request).unwrap();
 
-    let evidence = adapter.get_evidence_for_work("fixture-bounded-001").unwrap();
+    let evidence = adapter
+        .get_evidence_for_work("fixture-bounded-001")
+        .unwrap();
 
     // Evidence record should be small and fixed-size
     let evidence_json = serde_json::to_string(evidence).unwrap();
     // Evidence record should not grow with content size
-    assert!(evidence_json.len() < 500, "Evidence record too large: {}", evidence_json.len());
+    assert!(
+        evidence_json.len() < 500,
+        "Evidence record too large: {}",
+        evidence_json.len()
+    );
 
     // Evidence ref should always be a 64-char SHA-256 hash
     assert_eq!(evidence.evidence_ref.len(), 64);
@@ -661,7 +684,9 @@ fn test_fixture_redacted_evidence_large_content() {
 
     adapter.scan_work_sync(request).unwrap();
 
-    let evidence = adapter.get_evidence_for_work("fixture-redacted-large-001").unwrap();
+    let evidence = adapter
+        .get_evidence_for_work("fixture-redacted-large-001")
+        .unwrap();
 
     // Evidence ref should be hash, not actual content
     assert_eq!(evidence.evidence_ref.len(), 64);
@@ -691,7 +716,9 @@ fn test_gate_policy_fail_closed_on_malformed() {
     let result = adapter.scan_work_sync(request);
     assert!(result.is_err());
     // No evidence should be stored for blocked requests
-    assert!(adapter.get_evidence_for_work("gate-malformed-001").is_none());
+    assert!(adapter
+        .get_evidence_for_work("gate-malformed-001")
+        .is_none());
 }
 
 /// Test that evidence is stored for allowed work (Pass)
@@ -706,10 +733,16 @@ fn test_gate_policy_evidence_stored_on_pass() {
     };
 
     let result = adapter.scan_work_sync(request).unwrap();
-    assert!(matches!(result, aegis_core::control_center_adapter::ScanResult::Pass));
+    assert!(matches!(
+        result,
+        aegis_core::control_center_adapter::ScanResult::Pass
+    ));
 
     let evidence = adapter.get_evidence_for_work("gate-pass-001").unwrap();
-    assert!(matches!(evidence.scan_result, aegis_core::control_center_adapter::ScanResult::Pass));
+    assert!(matches!(
+        evidence.scan_result,
+        aegis_core::control_center_adapter::ScanResult::Pass
+    ));
 }
 
 /// Test that evidence is stored for allowed work (Fail) but work still proceeds
@@ -728,5 +761,48 @@ fn test_gate_policy_evidence_stored_on_fail() {
     assert!(result.allows_work());
 
     let evidence = adapter.get_evidence_for_work("gate-fail-001").unwrap();
-    assert!(evidence.finding_count >= 0, "finding_count should be non-negative");
+    assert!(
+        evidence.finding_count <= 1000,
+        "finding_count should be reasonable"
+    );
+}
+
+#[test]
+fn test_duplicate_work_request_is_idempotent() {
+    let mut adapter = ControlCenterAdapter::new();
+    let request = WorkRequest {
+        work_request_id: "retry-001".to_string(),
+        content: "fn retryable() {}".to_string(),
+        source: "retry.rs".to_string(),
+    };
+
+    let first = adapter.scan_work_sync(request.clone()).unwrap();
+    let second = adapter.scan_work_sync(request).unwrap();
+
+    assert_eq!(std::mem::discriminant(&first), std::mem::discriminant(&second));
+    assert_eq!(adapter.get_evidence().len(), 1);
+}
+
+#[test]
+fn test_reused_work_request_id_with_new_content_is_rejected() {
+    let mut adapter = ControlCenterAdapter::new();
+    adapter
+        .scan_work_sync(WorkRequest {
+            work_request_id: "retry-conflict-001".to_string(),
+            content: "fn original() {}".to_string(),
+            source: "retry.rs".to_string(),
+        })
+        .unwrap();
+
+    let result = adapter.scan_work_sync(WorkRequest {
+        work_request_id: "retry-conflict-001".to_string(),
+        content: "fn changed() {}".to_string(),
+        source: "retry.rs".to_string(),
+    });
+
+    assert!(matches!(
+        result,
+        Err(aegis_core::control_center_adapter::AdapterError::WorkRequestConflict(_))
+    ));
+    assert_eq!(adapter.get_evidence().len(), 1);
 }
