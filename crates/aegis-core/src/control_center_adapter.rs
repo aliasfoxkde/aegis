@@ -45,7 +45,7 @@ pub struct WorkRequest {
 }
 
 /// Scan result enum
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScanResult {
     /// Scan passed - no findings
@@ -233,19 +233,32 @@ impl ControlCenterAdapter {
     /// - Findings detected: Fail (allows work to proceed but logs failure)
     /// - No findings: Pass
     pub async fn scan_work(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
-        self.scan_work_impl(request)
+        Self::validate_request(&request)?;
+        if let Some(existing) = self.existing_result(&request)? {
+            return Ok(existing);
+        }
+        let (scan_result, evidence_record) =
+            tokio::task::spawn_blocking(move || Self::scan_request(request))
+                .await
+                .map_err(|error| AdapterError::Internal(format!("scan task failed: {error}")))??;
+        self.evidence_store.push(evidence_record);
+        Ok(scan_result)
     }
 
     /// Scan work request synchronously (blocking)
     ///
     /// This is a convenience method for contexts where async is not available.
     pub fn scan_work_sync(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
-        self.scan_work_impl(request)
+        Self::validate_request(&request)?;
+        if let Some(existing) = self.existing_result(&request)? {
+            return Ok(existing);
+        }
+        let (scan_result, evidence_record) = Self::scan_request(request)?;
+        self.evidence_store.push(evidence_record);
+        Ok(scan_result)
     }
 
-    /// Internal implementation of scan_work
-    fn scan_work_impl(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
-        // Validate input
+    fn validate_request(request: &WorkRequest) -> Result<(), AdapterError> {
         if request.content.is_empty() {
             return Err(AdapterError::MalformedInput(
                 "Work request content is empty".to_string(),
@@ -258,19 +271,33 @@ impl ControlCenterAdapter {
             ));
         }
 
+        Ok(())
+    }
+
+    fn existing_result(&self, request: &WorkRequest) -> Result<Option<ScanResult>, AdapterError> {
+        let content_hash = Self::compute_content_hash(&request.content);
+        match self.get_evidence_for_work(&request.work_request_id) {
+            Some(existing) if existing.evidence_ref == content_hash => {
+                Ok(Some(existing.scan_result.clone()))
+            }
+            Some(_) => Err(AdapterError::WorkRequestConflict(
+                request.work_request_id.clone(),
+            )),
+            None => Ok(None),
+        }
+    }
+
+    /// Execute one scan without mutating adapter state.
+    fn scan_request(request: WorkRequest) -> Result<(ScanResult, EvidenceRecord), AdapterError> {
+        // Validate input
+        Self::validate_request(&request)?;
+
         // Compute content hash for evidence reference
         let content_hash = Self::compute_content_hash(&request.content);
 
         // Work delivery may be retried. Treat an identical request ID/content
         // pair as an idempotent replay, but fail closed when an ID is reused
         // for different content.
-        if let Some(existing) = self.get_evidence_for_work(&request.work_request_id) {
-            if existing.evidence_ref == content_hash {
-                return Ok(existing.scan_result.clone());
-            }
-            return Err(AdapterError::WorkRequestConflict(request.work_request_id));
-        }
-
         // Clone content for scan to avoid borrow issues with panic catch
         let content = request.content.clone();
         let source = request.source.clone();
@@ -310,10 +337,7 @@ impl ControlCenterAdapter {
             stats,
         );
 
-        // Store evidence
-        self.evidence_store.push(evidence_record);
-
-        Ok(scan_result)
+        Ok((scan_result, evidence_record))
     }
 
     /// Get all stored evidence records
@@ -550,6 +574,23 @@ mod tests {
         assert_eq!(evidence.work_request_id, "wr-123");
         assert!(matches!(evidence.scan_result, ScanResult::Pass));
         assert_eq!(evidence.finding_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_async_scan_offloads_and_preserves_idempotency() {
+        let mut adapter = ControlCenterAdapter::new();
+        let request = WorkRequest {
+            work_request_id: "wr-async-001".to_string(),
+            content: "fn main() { println!(\"Hello, async world!\"); }".to_string(),
+            source: "main.rs".to_string(),
+        };
+
+        let first = adapter.scan_work(request.clone()).await.unwrap();
+        let second = adapter.scan_work(request).await.unwrap();
+
+        assert_eq!(first, second);
+        assert_eq!(adapter.get_evidence().len(), 1);
+        assert!(adapter.get_evidence_for_work("wr-async-001").is_some());
     }
 
     #[test]
