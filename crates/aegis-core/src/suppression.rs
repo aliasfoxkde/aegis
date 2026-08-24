@@ -60,9 +60,12 @@ impl SuppressionManager {
         for (line_num, line) in content.lines().enumerate() {
             let line_num = line_num as u32 + 1; // 1-indexed
 
-            // Check for // aegis:ignore or # aegis:ignore
+            // Check for // aegis:ignore or # aegis:ignore. Rust fixtures often
+            // need an inline directive after the expression being tested.
             if let Some(remaining) = line.trim_start().strip_prefix("// aegis:ignore") {
                 self.parse_suppression_line(line_num, remaining);
+            } else if let Some(marker) = line.find("// aegis:ignore") {
+                self.parse_suppression_line(line_num, &line[marker + 15..]);
             } else if let Some(remaining) = line.trim_start().strip_prefix("# aegis:ignore") {
                 self.parse_suppression_line(line_num, remaining);
             } else if let Some(remaining) = line.trim_start().strip_prefix("/* aegis:ignore") {
@@ -160,6 +163,14 @@ mod tests {
     fn test_parse_pattern_suppression() {
         let mut manager = SuppressionManager::new();
         manager.parse_content("// aegis:ignore:hardcoded-secret\n");
+        assert!(manager.is_suppressed("hardcoded-secret", 1));
+        assert!(!manager.is_suppressed("other-pattern", 1));
+    }
+
+    #[test]
+    fn test_parse_inline_pattern_suppression() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("let fixture = \"test\"; // aegis:ignore:hardcoded-secret\n");
         assert!(manager.is_suppressed("hardcoded-secret", 1));
         assert!(!manager.is_suppressed("other-pattern", 1));
     }

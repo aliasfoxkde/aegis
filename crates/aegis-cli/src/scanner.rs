@@ -624,7 +624,10 @@ mod tests {
             quiet: false,
         };
 
-        let result = execute_scan_with_stdin(&opts, "let password = 'secret123';");
+        let result = execute_scan_with_stdin(
+            &opts,
+            "let password = 'secret123';", // aegis:ignore:hardcoded-password
+        );
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         assert!(!scan_result.output.is_empty());

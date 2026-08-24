@@ -356,7 +356,7 @@ mod tests {
             "secrets",
             "high",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
             "abc",
             "Hardcoded secret detected",
         )
@@ -587,7 +587,7 @@ mod tests {
             "secrets",
             "high",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
             "abc",
             "High severity finding",
         );
@@ -651,7 +651,7 @@ mod tests {
             "secrets",
             "invalid_severity",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
             "abc",
             "Finding with unknown severity",
         );
@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn test_public_outputs_redact_sensitive_material() {
-        let secret = "TOP-SECRET-CLI-FIXTURE";
+        let secret = "TOP-SECRET-CLI-FIXTURE"; // aegis:ignore:hardcoded-password
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
