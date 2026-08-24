@@ -154,15 +154,20 @@ impl Output {
         struct SarifRule {
             id: String,
             name: String,
-            severity: String,
         }
 
         #[derive(serde::Serialize)]
         struct SarifResult {
+            #[serde(rename = "ruleId")]
             rule_id: String,
             level: String,
-            message: String,
+            message: SarifMessage,
             locations: Vec<SarifLocation>,
+        }
+
+        #[derive(serde::Serialize)]
+        struct SarifMessage {
+            text: String,
         }
 
         #[derive(serde::Serialize)]
@@ -183,7 +188,9 @@ impl Output {
 
         #[derive(serde::Serialize)]
         struct SarifRegion {
+            #[serde(rename = "startLine")]
             start_line: usize,
+            #[serde(rename = "startColumn")]
             start_column: usize,
         }
 
@@ -199,7 +206,6 @@ impl Output {
             .map(|f| SarifRule {
                 id: f.stable_id.clone(),
                 name: f.pattern.clone(),
-                severity: f.severity.clone(),
             })
             .collect();
 
@@ -208,15 +214,17 @@ impl Output {
             .map(|f| SarifResult {
                 rule_id: f.stable_id.clone(),
                 level: severity_to_sarif_level(&f.severity),
-                message: f.description.clone(),
+                message: SarifMessage {
+                    text: f.description.clone(),
+                },
                 locations: vec![SarifLocation {
                     physical_location: SarifPhysicalLocation {
                         artifact_location: SarifArtifactLocation {
                             uri: f.location.file.clone(),
                         },
                         region: SarifRegion {
-                            start_line: f.location.line,
-                            start_column: f.location.column,
+                            start_line: f.location.line.max(1),
+                            start_column: f.location.column.max(1),
                         },
                     },
                 }],
@@ -397,7 +405,15 @@ mod tests {
     #[test]
     fn test_output_write_findings_sarif() {
         let mut output = Output::new(OutputFormat::Sarif, false);
-        let finding = make_test_finding();
+        let finding = Finding::new(
+            "zero-based-location",
+            "secrets",
+            "high",
+            "high",
+            Location::new("test.rs", 0, 0, "secret"),
+            "secret",
+            "Secret fixture",
+        );
         let stats = make_test_stats();
         let risk = make_test_risk();
 
@@ -405,8 +421,12 @@ mod tests {
         assert!(result.is_ok());
         assert!(output.buffer.contains("\"version\""));
         assert!(output.buffer.contains("inspectionLedger"));
-        assert!(output.buffer.contains(&make_test_finding().stable_id));
-        assert!(!output.buffer.contains("\"ruleId\": \"hardcoded-secret\""));
+        assert!(output.buffer.contains("\"ruleId\""));
+        assert!(output.buffer.contains("\"startLine\": 1"));
+        assert!(output.buffer.contains("\"startColumn\": 1"));
+        assert!(output.buffer.contains("\"text\": \"Secret fixture\""));
+        assert!(!output.buffer.contains("start_line"));
+        assert!(!output.buffer.contains("\"rule_id\""));
     }
 
     #[test]

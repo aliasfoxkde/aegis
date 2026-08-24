@@ -204,7 +204,19 @@ impl Scanner {
         }
 
         // Build new scanners
-        let scanners = self.registry.build_category_scanners(include_disabled);
+        let scanners: Vec<crate::pattern::CategoryScanner> = self
+            .registry
+            .build_category_scanners(include_disabled)
+            .into_iter()
+            .filter(|scanner| {
+                self.options.categories.is_empty()
+                    || self
+                        .options
+                        .categories
+                        .iter()
+                        .any(|category| category == scanner.category())
+            })
+            .collect();
 
         // Cache them
         if let Ok(mut cache) = self.category_scanners.write() {
@@ -327,7 +339,18 @@ impl Scanner {
 
         let ast_inspection = AstAnalyzer::inspect_source(content, source);
         let mut findings = findings;
-        findings.extend(ast_findings_to_findings(&ast_inspection, content, source));
+        findings.extend(
+            ast_findings_to_findings(&ast_inspection, content, source)
+                .into_iter()
+                .filter(|finding| {
+                    self.options.categories.is_empty()
+                        || self
+                            .options
+                            .categories
+                            .iter()
+                            .any(|category| category == &finding.category)
+                }),
+        );
 
         // Filter findings against baseline if configured
         let findings = self.filter_baseline(findings);
@@ -1139,6 +1162,54 @@ mod tests {
         });
         // Should not panic
         assert_eq!(scanner.options.max_file_size, 1024 * 1024);
+    }
+
+    #[test]
+    fn test_category_filter_limits_findings_to_selected_categories() {
+        let definitions = vec![
+            crate::pattern::PatternDefinition {
+                name: "selected-pattern".to_string(),
+                category: "selected".to_string(),
+                match_pattern: "selected-value".to_string(),
+                severity: crate::pattern::Severity::High,
+                confidence: crate::pattern::Confidence::High,
+                description: "Selected category fixture".to_string(),
+                enabled: true,
+                min_entropy: None,
+                reference: None,
+                tags: vec![],
+                env_var: false,
+                binary: false,
+            },
+            crate::pattern::PatternDefinition {
+                name: "excluded-pattern".to_string(),
+                category: "excluded".to_string(),
+                match_pattern: "excluded-value".to_string(),
+                severity: crate::pattern::Severity::Critical,
+                confidence: crate::pattern::Confidence::High,
+                description: "Excluded category fixture".to_string(),
+                enabled: true,
+                min_entropy: None,
+                reference: None,
+                tags: vec![],
+                env_var: false,
+                binary: false,
+            },
+        ];
+        let scanner = Scanner::from_definitions(definitions)
+            .unwrap()
+            .with_options(ScanOptions {
+                categories: vec!["selected".to_string()],
+                ..Default::default()
+            });
+
+        let findings = scanner.scan_string(
+            "selected-value and excluded-value",
+            "category-filter-fixture.txt",
+        );
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].category, "selected");
     }
 
     #[test]
