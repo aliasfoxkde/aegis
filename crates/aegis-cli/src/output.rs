@@ -172,11 +172,13 @@ impl Output {
 
         #[derive(serde::Serialize)]
         struct SarifLocation {
+            #[serde(rename = "physicalLocation")]
             physical_location: SarifPhysicalLocation,
         }
 
         #[derive(serde::Serialize)]
         struct SarifPhysicalLocation {
+            #[serde(rename = "artifactLocation")]
             artifact_location: SarifArtifactLocation,
             region: SarifRegion,
         }
