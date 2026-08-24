@@ -256,10 +256,17 @@ pub async fn update_bundle(_force: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn scan_fixture_path() -> PathBuf {
-        let path =
-            std::env::temp_dir().join(format!("aegis_cli_scan_fixture_{}", std::process::id()));
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "aegis_cli_scan_fixture_{}_{}",
+            std::process::id(),
+            fixture_id
+        ));
         std::fs::create_dir_all(&path).expect("create scan fixture directory");
         std::fs::write(path.join("clean.rs"), "fn main() {}\n").expect("write scan fixture");
         path
