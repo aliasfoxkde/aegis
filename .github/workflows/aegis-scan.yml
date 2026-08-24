@@ -67,12 +67,9 @@ jobs:
         id: scan
         run: |
           set +e
-          ./target/release/aegis scan . \
-            --preset "$SCAN_PRESET" \
-            --format sarif \
+          ./target/release/aegis --format sarif scan . \
             --severity-threshold "$SCAN_SEVERITY" \
-            --output aegis-results.sarif \
-            --exit-on-findings
+            --output-file aegis-results.sarif
           scan_exit=$?
           set -e
           if [ "$scan_exit" -eq 0 ] && [ -s aegis-results.sarif ]; then
@@ -155,7 +152,7 @@ jobs:
             echo "Scanning changed files..."
             while IFS= read -r file; do
               if [ -f "$file" ]; then
-                ./target/release/aegis scan "$file" --format human
+                ./target/release/aegis scan "$file"
                 code=$?
                 if [ "$code" -ne 0 ]; then overall=1; fi
               fi
@@ -186,11 +183,9 @@ jobs:
         id: secrets_scan
         run: |
           set +e
-          ./target/release/aegis scan . \
-            --preset production \
-            --format sarif \
+          ./target/release/aegis --format sarif scan . \
             --severity-threshold high \
-            --output aegis-secrets.sarif
+            --output-file aegis-secrets.sarif
           scan_exit=$?
           set -e
           if [ "$scan_exit" -eq 0 ] && [ -s aegis-secrets.sarif ]; then status=SAFE;
@@ -242,10 +237,8 @@ jobs:
         run: |
           set +e
           # Scan Cargo.toml and Cargo.lock for supply chain risks
-          ./target/release/aegis scan . \
-            --preset production \
-            --format json \
-            --output aegis-supply-chain.json
+          ./target/release/aegis --format json scan . \
+            --output-file aegis-supply-chain.json
           scan_exit=$?
           set -e
           if [ "$scan_exit" -eq 0 ] && [ -s aegis-supply-chain.json ]; then status=SAFE;

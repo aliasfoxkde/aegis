@@ -327,10 +327,12 @@ mod tests {
         // Client connects from the test process (UID 1000) — unauthorized.
         let mut client = UnixStream::connect(&socket_path).await.expect("connect");
 
-        // Send a scan request that would find secrets if processed.
+        // Send a scan request that would be unsafe if processed. The payload is
+        // intentionally benign so the regression fixture cannot trip repository
+        // secret scanners while proving that no request reaches the scanner.
         let scan_request = serde_json::json!({
             "method": "scan_string",
-            "params": ["AKIAIOSFODNN7EXAMPLE", "test.txt"],
+            "params": ["unauthorized-peer-probe-payload", "test.txt"],
             "id": 42
         });
         client
