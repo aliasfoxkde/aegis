@@ -18,7 +18,7 @@ use crate::bundle::Bundle;
 use crate::config::Config;
 use crate::finding::{Finding, FindingKind, InspectionStatus, Location, ScanStats};
 use crate::ignore::IgnoreManager;
-use crate::pattern::{PatternDefinition, PatternRegistry};
+use crate::pattern::{PatternDefinition, PatternRegistry, Severity};
 
 fn ast_findings_to_findings(
     inspection: &crate::ast::AstInspection,
@@ -351,6 +351,23 @@ impl Scanner {
                             .any(|category| category == &finding.category)
                 }),
         );
+
+        // Apply the requested minimum severity before baseline filtering.
+        let findings: Vec<Finding> = findings
+            .into_iter()
+            .filter(|finding| {
+                let Some(threshold) = self.options.severity_threshold.as_deref() else {
+                    return true;
+                };
+                let (Some(threshold), Some(actual)) = (
+                    Severity::parse(threshold),
+                    Severity::parse(&finding.severity),
+                ) else {
+                    return true;
+                };
+                actual.weight() >= threshold.weight()
+            })
+            .collect();
 
         // Filter findings against baseline if configured
         let findings = self.filter_baseline(findings);
@@ -1210,6 +1227,51 @@ mod tests {
 
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].category, "selected");
+    }
+
+    #[test]
+    fn test_severity_threshold_filters_lower_severity_findings() {
+        let definitions = vec![
+            crate::pattern::PatternDefinition {
+                name: "high-pattern".to_string(),
+                category: "selected".to_string(),
+                match_pattern: "high-value".to_string(),
+                severity: crate::pattern::Severity::High,
+                confidence: crate::pattern::Confidence::High,
+                description: "High severity fixture".to_string(),
+                enabled: true,
+                min_entropy: None,
+                reference: None,
+                tags: vec![],
+                env_var: false,
+                binary: false,
+            },
+            crate::pattern::PatternDefinition {
+                name: "low-pattern".to_string(),
+                category: "selected".to_string(),
+                match_pattern: "low-value".to_string(),
+                severity: crate::pattern::Severity::Low,
+                confidence: crate::pattern::Confidence::High,
+                description: "Low severity fixture".to_string(),
+                enabled: true,
+                min_entropy: None,
+                reference: None,
+                tags: vec![],
+                env_var: false,
+                binary: false,
+            },
+        ];
+        let scanner = Scanner::from_definitions(definitions)
+            .unwrap()
+            .with_options(ScanOptions {
+                severity_threshold: Some("high".to_string()),
+                ..Default::default()
+            });
+
+        let findings = scanner.scan_string("high-value and low-value", "threshold-fixture.txt");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, "high");
     }
 
     #[test]
