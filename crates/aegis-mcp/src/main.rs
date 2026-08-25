@@ -418,8 +418,10 @@ async fn main() -> anyhow::Result<()> {
     let mut io = IoHandler::new();
     io.extend_with(rpc.to_delegate());
 
-    println!("Aegis MCP Server starting...");
-    println!("Listening on stdin/stdout");
+    // Keep stdout exclusively machine-readable JSON-RPC. Human diagnostics
+    // belong on stderr so MCP/JSON-RPC clients can parse every stdout line.
+    eprintln!("Aegis MCP Server starting...");
+    eprintln!("Listening on stdin/stdout");
 
     // JSON-RPC over stdio
     let stdin = tokio::io::stdin();
