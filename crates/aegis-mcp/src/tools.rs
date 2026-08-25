@@ -15,15 +15,7 @@ impl AegisTools {
         let scanner = state.scanner.read().await;
         let findings = scanner.scan_string(&content, &source);
 
-        let risk_score =
-            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-        Ok(ScanResponse {
-            finding_count: findings.len(),
-            risk_level: risk_score.level.to_string(),
-            risk_score: risk_score.score,
-            findings,
-        })
+        Ok(ScanResponse::for_string(findings, &source, content.len()))
     }
 
     /// Execute scan_file tool
@@ -43,21 +35,17 @@ impl AegisTools {
         }
 
         let scanner = state.scanner.read().await;
-        let (findings, _) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
+        let (findings, stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
             code: jsonrpc_core::ErrorCode::InternalError,
             message: e.to_string(),
             data: None,
         })?;
 
-        let risk_score =
-            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-        Ok(ScanResponse {
-            finding_count: findings.len(),
-            risk_level: risk_score.level.to_string(),
-            risk_score: risk_score.score,
+        Ok(ScanResponse::from_parts(
             findings,
-        })
+            stats,
+            path.to_string_lossy().to_string(),
+        ))
     }
 
     /// Execute scan_dir tool
@@ -78,21 +66,17 @@ impl AegisTools {
         }
 
         let scanner = state.scanner.read().await;
-        let (findings, _) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
+        let (findings, stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
             code: jsonrpc_core::ErrorCode::InternalError,
             message: e.to_string(),
             data: None,
         })?;
 
-        let risk_score =
-            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-        Ok(ScanResponse {
-            finding_count: findings.len(),
-            risk_level: risk_score.level.to_string(),
-            risk_score: risk_score.score,
+        Ok(ScanResponse::from_parts(
             findings,
-        })
+            stats,
+            path.to_string_lossy().to_string(),
+        ))
     }
 
     /// Execute scan_env tool
@@ -100,15 +84,7 @@ impl AegisTools {
         let scanner = state.scanner.read().await;
         let findings = scanner.scan_env();
 
-        let risk_score =
-            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
-
-        Ok(ScanResponse {
-            finding_count: findings.len(),
-            risk_level: risk_score.level.to_string(),
-            risk_score: risk_score.score,
-            findings,
-        })
+        Ok(ScanResponse::for_environment(findings))
     }
 
     /// List patterns

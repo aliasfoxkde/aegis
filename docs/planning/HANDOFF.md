@@ -1,15 +1,18 @@
-# Aegis Handoff — Production-Ready Security Scanner
+# Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-08-13
-**Status:** ✅ Production Ready
+**Last Updated:** 2026-08-21
+**Evidence boundary (central audit):** branch `platform-handoff/aegis-w2-03`, HEAD `a229ae5c1d5e2267acd5baad876357275160c175`, 0 dirty status entries. Refresh this boundary before relying on any test or rating below; numeric ratings are historical context, not release gates.
+**Status:** 🔄 Active — source security gates validated; deployment and external promotion evidence pending
 **Location:** `/nas/Temp/repos/aegis`
 **Rating:** 8.5/10
+
+> **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions. Aegis is the intended active security successor to Atheon-Enhanced; release, stdio, pattern-count, and benchmark claims remain unverified until reproduced from this checkout.
 
 ---
 
 ## Project Overview
 
-Aegis is a Rust security scanner — the production successor to Atheon-Enhanced (Go). It is 12x faster, 20% smaller binaries, and has 620 patterns across 32 categories (vs Atheon's 274 patterns / 19 categories).
+Aegis is a Rust security scanner and intended successor to Atheon-Enhanced (Go). Historical planning claims it is 12x faster, has 20% smaller binaries, and has 620 patterns across 32 categories; reproduce those claims from repository artifacts before treating them as guarantees.
 
 Key exclusive features: daemon mode, WASM support, AST-level analysis, clone detection.
 
@@ -143,10 +146,10 @@ Example trigger:
 
 ## Next Steps
 
-1. **P0:** Run `cargo publish` to publish to crates.io
-2. **P0:** Add Aegis to GitForge CI pipelines as pre-pipeline gate
-3. **P1:** Add Aegis MCP tools to Control Center service health summary
-4. **P2:** Implement AST analysis for real semantic clone detection
+1. **P0:** Reproduce local workspace test, clippy, release-build, representative scan, and stdio MCP evidence; record exact commit/output.
+2. **P0:** Add Aegis to GitForge CI as a pre-pipeline gate only after the runner lifecycle is live.
+3. **P1:** Add Aegis MCP tools to the Control Center service summary only after the stdio contract is tested.
+4. **P2:** Verify release/publication claims independently; do not use them as the Control Center baseline gate.
 
 ---
 
@@ -157,3 +160,23 @@ Example trigger:
 3. **MCP uses stdio** — JSON-RPC 2.0 requests on stdin, responses on stdout
 4. **Daemon mode** — long-running process that accepts scan requests over HTTP or Unix socket
 5. **No runtime dependencies** — all patterns compiled in; no external services needed
+
+## Current Control Center handoff evidence (2026-08-15)
+
+The current Aegis core and CLI test slices pass (276 core tests and 56 CLI
+tests). The scanner is the active successor to the former Atheon pre-gate.
+The Control Center/GitForge pre-pipeline adapter is not yet proven, so Aegis
+must not be reported as an enforced production gate. The next bounded packet
+must run Aegis before pipeline trigger, fail closed on scanner/contract errors,
+persist a redacted evidence reference, and cover clean, finding, malformed,
+and unavailable-scanner outcomes.
+
+## Control Center adapter update (2026-08-15)
+
+Control Center now invokes the operator-configured Aegis CLI before its
+GitForge trigger and persists a bounded `aegis_scan_receipts` record. The
+disposable adapter proof returned HTTP 202 only after a valid Aegis JSON scan
+(`decision=passed`, 0 high, 0 critical) was stored. The full failure matrix,
+owner-scoped receipt API/UI, and one clean completed pipeline remain open; the
+adapter is therefore an enforced candidate gate, not yet a final promotion
+claim.

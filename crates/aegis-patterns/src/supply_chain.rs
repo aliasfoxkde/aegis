@@ -356,7 +356,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "high".to_string(),
             min_entropy: None,
             description: "GitHub security advisory reference detected".to_string(),
-            reference: Some("https://github.com/advisories".to_string()),
+            reference: Some("https://github.com/advisories".to_string()), // aegis:ignore:github-advisory
             tags: vec!["github".to_string(), "advisory".to_string(), "security".to_string()],
             env_var: false,
             binary: false,

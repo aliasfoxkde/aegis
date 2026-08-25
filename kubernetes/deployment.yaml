@@ -1,0 +1,220 @@
+# Aegis Security Scanner - Kubernetes Deployment
+# =============================================================================
+#
+# Usage:
+#   kubectl apply -f kubernetes/deployment.yaml
+#   kubectl apply -f kubernetes/service.yaml
+#   kubectl get pods -l app=aegis
+
+---
+# Aegis Daemon Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-daemon
+  labels:
+    app: aegis
+    component: daemon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aegis
+      component: daemon
+  template:
+    metadata:
+      labels:
+        app: aegis
+        component: daemon
+      annotations:
+        # Prometheus metrics annotation
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: aegis
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: aegis
+          image: aegis:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: AEGIS_HOME
+              value: "/home/aegis/.aegis"
+            - name: RUST_LOG
+              value: "info"
+            - name: AEGIS_DAEMON_PORT
+              value: "8080"
+          args:
+            - daemon
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8080"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: aegis-cache
+              mountPath: /home/aegis/.aegis
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: aegis-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: aegis
+                topologyKey: kubernetes.io/hostname
+
+---
+# Aegis Scanner CronJob (for scheduled scans)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aegis-scan-cron
+  labels:
+    app: aegis
+    component: scanner
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: aegis
+            component: scanner
+        spec:
+          serviceAccountName: aegis
+          restartPolicy: OnFailure
+          containers:
+            - name: aegis-scan
+              image: aegis:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: AEGIS_HOME
+                  value: "/home/aegis/.aegis"
+                - name: RUST_LOG
+                  value: "warn"
+                - name: AEGIS_EXIT_ON_FINDINGS
+                  value: "true"
+              args:
+                - scan
+                - /workspace
+                - --preset
+                - production
+                - --format
+                - sarif
+                - --output
+                - /workspace/scan-results.sarif
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 512Mi
+                limits:
+                  cpu: 1000m
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: workspace
+                  mountPath: /workspace
+                - name: aegis-cache
+                  mountPath: /home/aegis/.aegis
+          volumes:
+            - name: workspace
+              persistentVolumeClaim:
+                claimName: aegis-workspace
+            - name: aegis-cache
+              emptyDir: {}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+
+---
+# Aegis Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aegis
+  labels:
+    app: aegis
+
+---
+# Aegis RBAC
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aegis
+  labels:
+    app: aegis
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]  # Read-only for secrets scanning
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aegis
+  labels:
+    app: aegis
+subjects:
+  - kind: ServiceAccount
+    name: aegis
+roleRef:
+  kind: Role
+  name: aegis
+  apiGroup: rbac.authorization.k8s.io

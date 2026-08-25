@@ -1,0 +1,73 @@
+# =============================================================================
+# Aegis Docker Ignore File
+# =============================================================================
+# Excludes files that are not needed inside the Docker image
+
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+**/target/
+*.o
+*.so
+*.rlib
+*.dylib
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test files
+tests/
+**/tests/
+*.test
+*.tests
+
+# Documentation source
+docs/
+**/*.md
+!README.md
+
+# CI/CD
+.github/
+.github/workflows/
+.gitlab-ci.yml
+Jenkinsfile
+azure-pipelines.yml
+
+# IDE configurations
+.claude/
+.vscode/
+.idea/
+
+# Local config overrides
+config/local/
+*.local
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker files (we copy from context, not needed inside)
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+.docker/
+
+# Misc
+*.bak
+*.backup
+*.orig
+*.rej

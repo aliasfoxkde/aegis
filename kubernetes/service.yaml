@@ -1,0 +1,123 @@
+# Aegis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-service
+  labels:
+    app: aegis
+    component: daemon
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: aegis
+    component: daemon
+
+---
+# Aegis Ingress (for external access)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aegis-ingress
+  labels:
+    app: aegis
+  annotations:
+    # Enable JSON logging for Loki/Prometheus
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - aegis.example.com
+      secretName: aegis-tls
+  rules:
+    - host: aegis.example.com
+      http:
+        paths:
+          - path: /api/v1/scan
+            pathType: Prefix
+            backend:
+              service:
+                name: aegis-service
+                port:
+                  name: http
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: aegis-service
+                port:
+                  name: http
+
+---
+# Aegis Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aegis-hpa
+  labels:
+    app: aegis
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aegis-daemon
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+      selectPolicy: Max
+
+---
+# Prometheus ServiceMonitor for monitoring stack integration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aegis-monitor
+  labels:
+    app: aegis
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: aegis
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s

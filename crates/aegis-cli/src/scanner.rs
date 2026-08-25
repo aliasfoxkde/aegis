@@ -3,8 +3,8 @@
 use crate::output::Output;
 use crate::OutputFormat;
 use aegis_core::{
-    Confidence, Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanStats,
-    Scanner, Severity,
+    Confidence, Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt,
+    ScanStats, Scanner, Severity,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -112,6 +112,38 @@ pub struct ScanResult {
     pub stats: ScanStats,
     pub output: String,
     pub has_findings: bool,
+    pub receipt: ScanReceipt,
+}
+
+fn build_receipt(opts: &ScanOptions, findings: &[Finding], stats: ScanStats) -> ScanReceipt {
+    let profile = format!(
+        "cli:file={} env={} stdin={} all={} categories={} severity={}",
+        opts.scan_file,
+        opts.scan_env,
+        opts.scan_stdin,
+        opts.all,
+        opts.categories.as_deref().unwrap_or("*"),
+        opts.severity_threshold.as_deref().unwrap_or("*")
+    );
+    ScanReceipt::from_scan(
+        opts.path.to_string_lossy(),
+        "cli_scan",
+        profile.clone(),
+        Some(ScanReceipt::digest_text(&profile)),
+        findings,
+        stats,
+    )
+    .with_source_revision(std::env::var("AEGIS_SOURCE_REVISION").ok())
+}
+
+fn persist_receipt_if_configured(receipt: &ScanReceipt) -> Result<()> {
+    if let Ok(path) = std::env::var("AEGIS_RECEIPT_FILE") {
+        if path.trim().is_empty() {
+            return Err(anyhow::anyhow!("AEGIS_RECEIPT_FILE must not be empty"));
+        }
+        receipt.write_atomic(std::path::Path::new(&path))?;
+    }
+    Ok(())
 }
 
 /// Execute scan and return result (testable)
@@ -120,6 +152,7 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
 
     let (findings, stats) = perform_scan(&scanner, opts)?;
     let has_findings = !findings.is_empty();
+    let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
     let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
@@ -133,6 +166,7 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
         stats,
         output: output_dev.to_string(),
         has_findings,
+        receipt,
     })
 }
 
@@ -142,7 +176,8 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
 
     let findings = scanner.scan_string(stdin_content, "stdin");
     let has_findings = !findings.is_empty();
-    let stats = ScanStats::default();
+    let stats = ScanStats::for_content("string:stdin", stdin_content.len());
+    let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
     let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
@@ -156,6 +191,7 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
         stats,
         output: output_dev.to_string(),
         has_findings,
+        receipt,
     })
 }
 
@@ -176,6 +212,8 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     } else {
         execute_scan(&opts)?
     };
+
+    persist_receipt_if_configured(&result.receipt)?;
 
     // Print to stdout
     println!("{}", result.output);
@@ -218,6 +256,21 @@ pub async fn update_bundle(_force: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn scan_fixture_path() -> PathBuf {
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "aegis_cli_scan_fixture_{}_{}",
+            std::process::id(),
+            fixture_id
+        ));
+        std::fs::create_dir_all(&path).expect("create scan fixture directory");
+        std::fs::write(path.join("clean.rs"), "fn main() {}\n").expect("write scan fixture");
+        path
+    }
 
     #[test]
     fn test_convert_pattern() {
@@ -527,8 +580,9 @@ mod tests {
 
     #[test]
     fn test_execute_scan_with_findings() {
+        let scan_path = scan_fixture_path();
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: scan_path.clone(),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -549,6 +603,7 @@ mod tests {
         // has_findings should match whether findings is empty
         assert_eq!(scan_result.has_findings, !scan_result.findings.is_empty());
         assert!(!scan_result.output.is_empty());
+        std::fs::remove_dir_all(scan_path).ok();
     }
 
     #[test]
@@ -569,7 +624,10 @@ mod tests {
             quiet: false,
         };
 
-        let result = execute_scan_with_stdin(&opts, "let password = 'secret123';");
+        let result = execute_scan_with_stdin(
+            &opts,
+            "let password = 'secret123';", // aegis:ignore:hardcoded-password
+        );
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         assert!(!scan_result.output.is_empty());
@@ -633,8 +691,9 @@ mod tests {
 
     #[test]
     fn test_execute_scan_json_format() {
+        let scan_path = scan_fixture_path();
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: scan_path.clone(),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -653,6 +712,7 @@ mod tests {
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         assert!(scan_result.output.contains("findings"));
+        std::fs::remove_dir_all(scan_path).ok();
     }
 
     #[test]
@@ -662,9 +722,10 @@ mod tests {
         let temp_dir = std::env::temp_dir().join("aegis_output_test");
         std::fs::create_dir_all(&temp_dir).ok();
         let output_path = temp_dir.join("output.txt");
+        let scan_path = scan_fixture_path();
 
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: scan_path.clone(),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -686,12 +747,14 @@ mod tests {
         assert!(!scan_result.output.is_empty());
 
         std::fs::remove_dir_all(temp_dir).ok();
+        std::fs::remove_dir_all(scan_path).ok();
     }
 
     #[test]
     fn test_execute_scan_sarif_format() {
+        let scan_path = scan_fixture_path();
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: scan_path.clone(),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -710,13 +773,15 @@ mod tests {
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         assert!(scan_result.output.contains("version"));
+        std::fs::remove_dir_all(scan_path).ok();
     }
 
     #[test]
     fn test_scan_result_exit_code_logic() {
         // Test that has_findings correctly determines exit code
+        let scan_path = scan_fixture_path();
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: scan_path.clone(),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -735,5 +800,6 @@ mod tests {
         // Exit code should be 1 if has_findings, 0 otherwise
         let expected_exit = if result.has_findings { 1 } else { 0 };
         assert!(expected_exit == 0 || expected_exit == 1);
+        std::fs::remove_dir_all(scan_path).ok();
     }
 }
