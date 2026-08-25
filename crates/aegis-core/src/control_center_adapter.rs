@@ -395,6 +395,26 @@ impl ControlCenterAdapter {
             })
     }
 
+    /// Execute the blocking scan without exposing the runtime implementation
+    /// to callers. Native builds move the work to Tokio's blocking pool;
+    /// WASM builds execute synchronously because the core crate intentionally
+    /// disables its Tokio dependency there.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn scan_request_async(
+        request: WorkRequest,
+    ) -> Result<(ScanResult, EvidenceRecord), AdapterError> {
+        tokio::task::spawn_blocking(move || Self::scan_request(request))
+            .await
+            .map_err(|error| AdapterError::Internal(format!("scan task failed: {error}")))?
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    async fn scan_request_async(
+        request: WorkRequest,
+    ) -> Result<(ScanResult, EvidenceRecord), AdapterError> {
+        Self::scan_request(request)
+    }
+
     /// Scan work request and return the result
     ///
     /// # Fail-Closed Policy
@@ -413,29 +433,19 @@ impl ControlCenterAdapter {
         }
         let work_request_id = request.work_request_id.clone();
         self.begin_lifecycle(&work_request_id);
-        let outcome = tokio::task::spawn_blocking(move || Self::scan_request(request)).await;
-        match outcome {
-            Ok(Ok((scan_result, evidence_record))) => {
+        match Self::scan_request_async(request).await {
+            Ok((scan_result, evidence_record)) => {
                 self.transition_lifecycle(&work_request_id, LifecycleState::Completed, None);
                 self.evidence_store.push(evidence_record);
                 Ok(scan_result)
             }
-            Ok(Err(error)) => {
+            Err(error) => {
                 self.transition_lifecycle(
                     &work_request_id,
                     LifecycleState::Failed,
                     Some(error.to_string()),
                 );
                 Err(error)
-            }
-            Err(error) => {
-                let adapter_error = AdapterError::Internal(format!("scan task failed: {error}"));
-                self.transition_lifecycle(
-                    &work_request_id,
-                    LifecycleState::Failed,
-                    Some(adapter_error.to_string()),
-                );
-                Err(adapter_error)
             }
         }
     }
