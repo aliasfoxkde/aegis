@@ -52,7 +52,9 @@ cargo run --release -p aegis-cli -- --help
 printf 'credential = "test-only"\n' | cargo run --release -p aegis-cli -- scan --format json
 ```
 
-For MCP transport health, start `aegis-mcp`, send an `initialize` request, and require a valid JSON-RPC response on stdout. Diagnostic logging must remain on stderr.
+For transport health, start `aegis-mcp` from the configured allowed root and send line-delimited JSON-RPC requests. Diagnostic logging is written to stderr; stdout must contain only JSON responses.
+
+**Protocol boundary:** the current server implements Aegis's documented custom JSON-RPC methods (`scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`). It does not yet implement the modern MCP lifecycle (`initialize`, `notifications/initialized`, `tools/list`, and `tools/call`). Do not claim standards-compliant MCP client compatibility until that packet is implemented and validated.
 
 ## API Surface
 
@@ -132,7 +134,8 @@ A platform promotion may claim Aegis integration only when all of the following 
 
 - the exact Aegis commit and pattern bundle are recorded;
 - the deterministic CLI smoke scan returns parseable output;
-- the MCP initialize/tool path returns valid JSON-RPC;
+- the supported custom JSON-RPC tool path returns valid responses, while any unsupported modern MCP lifecycle methods fail explicitly;
+- the current custom JSON-RPC path returns only machine-readable stdout and keeps diagnostics on stderr;
 - findings and blocked/error states are distinguishable from a clean result;
 - SARIF output is preserved as an artifact when CI scanning is enabled;
 - GitForge records the scan receipt and does not treat a transport failure as a clean scan;
@@ -151,4 +154,3 @@ A platform promotion may claim Aegis integration only when all of the following 
 ## VIVERE Boundary
 
 VIVERE is a separate experimental project. It is not an Aegis dependency, does not share Aegis runtime ownership, and must not be treated as part of the Aegis production security boundary. Cross-project references belong in Platform-Architecture planning documents only.
-
