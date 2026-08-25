@@ -945,7 +945,7 @@ mod tests {
         let temp_file = temp_dir.path().join("test.txt");
         File::create(&temp_file)
             .unwrap()
-            .write_all(b"let secret = 'abc123';")
+            .write_all(b"let secret = 'abc123'; // aegis:ignore:hardcoded-password")
             .unwrap();
 
         let patterns = vec![crate::pattern::PatternDefinition {
@@ -1329,7 +1329,7 @@ mod tests {
         let scanner = Scanner::from_definitions(patterns).unwrap();
 
         // Should find multiple occurrences
-        let content = "let secret = 'value'; let secret = 'other';";
+        let content = "let secret = 'value'; // aegis:ignore:hardcoded-password\nlet secret = 'other'; // aegis:ignore:hardcoded-password";
         let findings = scanner.scan_string(content, "test.rs");
         assert!(findings.len() >= 2);
     }
