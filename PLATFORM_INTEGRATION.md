@@ -54,7 +54,7 @@ printf 'credential = "test-only"\n' | cargo run --release -p aegis-cli -- scan -
 
 For transport health, start `aegis-mcp` from the configured allowed root and send line-delimited JSON-RPC requests. Diagnostic logging is written to stderr; stdout must contain only JSON responses.
 
-**Protocol boundary:** the current server implements Aegis's documented custom JSON-RPC methods (`scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`). It does not yet implement the modern MCP lifecycle (`initialize`, `notifications/initialized`, `tools/list`, and `tools/call`). Do not claim standards-compliant MCP client compatibility until that packet is implemented and validated.
+**Protocol boundary:** the server implements the documented custom JSON-RPC methods (`scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`) and a modern MCP-compatible lifecycle/tool adapter (`initialize`, `notifications/initialized`, `tools/list`, and `tools/call`). Both paths share the same sandboxed scanner functions.
 
 ## API Surface
 
@@ -134,7 +134,7 @@ A platform promotion may claim Aegis integration only when all of the following 
 
 - the exact Aegis commit and pattern bundle are recorded;
 - the deterministic CLI smoke scan returns parseable output;
-- the supported custom JSON-RPC tool path returns valid responses, while any unsupported modern MCP lifecycle methods fail explicitly;
+- the supported custom JSON-RPC and modern MCP tool paths return valid responses;
 - the current custom JSON-RPC path returns only machine-readable stdout and keeps diagnostics on stderr;
 - findings and blocked/error states are distinguishable from a clean result;
 - SARIF output is preserved as an artifact when CI scanning is enabled;
