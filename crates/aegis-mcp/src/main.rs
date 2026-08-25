@@ -136,7 +136,7 @@ fn register_modern_mcp_methods(io: &mut IoHandler, state: Arc<ServerState>) {
         }))
     });
 
-    io.add_notification("notifications/initialized", |_params| async move {});
+    io.add_notification("notifications/initialized", |_params| {});
 
     io.add_method("tools/list", |_params| async move {
         Ok(serde_json::json!({
