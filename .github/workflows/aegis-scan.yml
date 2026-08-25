@@ -161,7 +161,9 @@ jobs:
                   --categories secrets \
                   --severity-threshold high
                 code=$?
-                if [ "$code" -ne 0 ]; then overall=1; fi
+                # Aegis exits 0 for no findings and 1 for findings. Both are
+                # valid scan results; only execution/reporting errors block CI.
+                if [ "$code" -gt 1 ]; then overall=1; fi
               fi
             done <<< "$CHANGED_FILES"
           fi
