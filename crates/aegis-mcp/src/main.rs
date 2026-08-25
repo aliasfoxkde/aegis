@@ -6,7 +6,7 @@ mod sandbox;
 mod tools;
 
 use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
-use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
+use jsonrpc_core::{BoxFuture, IoHandler, Params, Result, Value};
 use jsonrpc_derive::rpc;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -76,6 +76,147 @@ pub trait AegisRpc {
         bundle_path: Option<String>,
         force: bool,
     ) -> BoxFuture<Result<UpdateResponse>>;
+}
+
+#[derive(Debug, Deserialize)]
+struct ToolCallRequest {
+    name: String,
+    #[serde(default)]
+    arguments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct ScanStringArguments {
+    content: String,
+    source: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ScanFileArguments {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ScanDirArguments {
+    path: String,
+    #[serde(default = "default_recursive")]
+    recursive: bool,
+}
+
+fn default_recursive() -> bool {
+    true
+}
+
+fn invalid_tool_params(message: impl Into<String>) -> jsonrpc_core::Error {
+    jsonrpc_core::Error::invalid_params(message.into())
+}
+
+fn tool_definition(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
+    serde_json::json!({
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object",
+            "properties": properties,
+            "required": required,
+            "additionalProperties": false
+        }
+    })
+}
+
+fn register_modern_mcp_methods(io: &mut IoHandler, state: Arc<ServerState>) {
+    io.add_method("initialize", |_params| async move {
+        Ok(serde_json::json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {"tools": {"listChanged": false}},
+            "serverInfo": {
+                "name": "aegis",
+                "version": env!("CARGO_PKG_VERSION")
+            }
+        }))
+    });
+
+    io.add_notification("notifications/initialized", |_params| async move {});
+
+    io.add_method("tools/list", |_params| async move {
+        Ok(serde_json::json!({
+            "tools": [
+                tool_definition(
+                    "scan_string",
+                    "Scan in-memory content for Aegis security findings.",
+                    serde_json::json!({
+                        "content": {"type": "string"},
+                        "source": {"type": "string"}
+                    }),
+                    &["content", "source"]
+                ),
+                tool_definition(
+                    "scan_file",
+                    "Scan a file within the configured Aegis sandbox.",
+                    serde_json::json!({"path": {"type": "string"}}),
+                    &["path"]
+                ),
+                tool_definition(
+                    "scan_dir",
+                    "Scan a directory within the configured Aegis sandbox.",
+                    serde_json::json!({
+                        "path": {"type": "string"},
+                        "recursive": {"type": "boolean", "default": true}
+                    }),
+                    &["path"]
+                ),
+                tool_definition(
+                    "scan_env",
+                    "Scan the server environment for configured findings.",
+                    serde_json::json!({}),
+                    &[]
+                )
+            ]
+        }))
+    });
+
+    io.add_method("tools/call", move |params: Params| {
+        let state = state.clone();
+        async move {
+            let request: ToolCallRequest = params.parse()?;
+            let result = match request.name.as_str() {
+                "scan_string" => {
+                    let args: ScanStringArguments = serde_json::from_value(request.arguments)
+                        .map_err(|error| invalid_tool_params(error.to_string()))?;
+                    AegisTools::scan_string(&state, args.content, args.source).await?
+                }
+                "scan_file" => {
+                    let args: ScanFileArguments = serde_json::from_value(request.arguments)
+                        .map_err(|error| invalid_tool_params(error.to_string()))?;
+                    AegisTools::scan_file(&state, args.path).await?
+                }
+                "scan_dir" => {
+                    let args: ScanDirArguments = serde_json::from_value(request.arguments)
+                        .map_err(|error| invalid_tool_params(error.to_string()))?;
+                    AegisTools::scan_dir(&state, args.path, args.recursive).await?
+                }
+                "scan_env" => {
+                    if request.arguments != Value::Null
+                        && request.arguments != serde_json::json!({})
+                    {
+                        return Err(invalid_tool_params("scan_env accepts no arguments"));
+                    }
+                    AegisTools::scan_env(&state).await?
+                }
+                name => return Err(invalid_tool_params(format!("Unknown tool: {name}"))),
+            };
+
+            let text = serde_json::to_string(&result).map_err(|error| jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::InternalError,
+                message: "Unable to serialize tool result".to_string(),
+                data: Some(serde_json::json!({"error": error.to_string()})),
+            })?;
+            Ok(serde_json::json!({
+                "content": [{"type": "text", "text": text}],
+                "isError": false
+            }))
+        }
+    });
 }
 
 /// Scan response
@@ -417,6 +558,7 @@ async fn main() -> anyhow::Result<()> {
     let rpc = AegisRpcImpl::new(state.clone());
     let mut io = IoHandler::new();
     io.extend_with(rpc.to_delegate());
+    register_modern_mcp_methods(&mut io, state);
 
     // Keep stdout exclusively machine-readable JSON-RPC. Human diagnostics
     // belong on stderr so MCP/JSON-RPC clients can parse every stdout line.
