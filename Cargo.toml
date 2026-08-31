@@ -87,7 +87,7 @@ ratelimit = "2.0"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # JSON Schema
-jsonschema = "0.49"
+jsonschema = "0.52"
 
 # Property-based testing
 proptest = "1.5"
