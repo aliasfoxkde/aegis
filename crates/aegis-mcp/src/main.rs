@@ -7,8 +7,7 @@ mod tools;
 
 use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
-use jsonrpc_derive::rpc;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -40,42 +39,6 @@ impl Default for ServerState {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// RPC trait definition
-#[rpc]
-pub trait AegisRpc {
-    /// Scan a string
-    #[rpc(name = "scan_string")]
-    fn scan_string(&self, content: String, source: String) -> BoxFuture<Result<ScanResponse>>;
-
-    /// Scan a file
-    #[rpc(name = "scan_file")]
-    fn scan_file(&self, path: String) -> BoxFuture<Result<ScanResponse>>;
-
-    /// Scan a directory
-    #[rpc(name = "scan_dir")]
-    fn scan_dir(&self, path: String, recursive: bool) -> BoxFuture<Result<ScanResponse>>;
-
-    /// Scan environment variables
-    #[rpc(name = "scan_env")]
-    fn scan_env(&self) -> BoxFuture<Result<ScanResponse>>;
-
-    /// List all patterns
-    #[rpc(name = "list_patterns")]
-    fn list_patterns(&self, category: Option<String>) -> BoxFuture<Result<ListPatternsResponse>>;
-
-    /// List all categories
-    #[rpc(name = "list_categories")]
-    fn list_categories(&self) -> BoxFuture<Result<Vec<String>>>;
-
-    /// Update bundle
-    #[rpc(name = "update_bundle")]
-    fn update_bundle(
-        &self,
-        bundle_path: Option<String>,
-        force: bool,
-    ) -> BoxFuture<Result<UpdateResponse>>;
 }
 
 /// Scan response
@@ -168,7 +131,7 @@ impl AegisRpcImpl {
     }
 }
 
-impl AegisRpc for AegisRpcImpl {
+impl AegisRpcImpl {
     fn scan_string(&self, content: String, source: String) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
@@ -400,6 +363,45 @@ fn init_scanner() -> Scanner {
     Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
 }
 
+fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {
+    jsonrpc_core::Error {
+        code: jsonrpc_core::ErrorCode::InvalidParams,
+        message: error.to_string(),
+        data: None,
+    }
+}
+
+fn serialize_result<T: Serialize>(value: T) -> Result<Value> {
+    serde_json::to_value(value).map_err(|error| jsonrpc_core::Error {
+        code: jsonrpc_core::ErrorCode::InternalError,
+        message: format!("Failed to serialize response: {error}"),
+        data: None,
+    })
+}
+
+fn parse_params<T: DeserializeOwned>(params: jsonrpc_core::Params) -> Result<T> {
+    params.parse().map_err(invalid_params)
+}
+
+fn parse_no_params(params: jsonrpc_core::Params) -> Result<()> {
+    match params {
+        jsonrpc_core::Params::None => Ok(()),
+        jsonrpc_core::Params::Array(values) if values.is_empty() => Ok(()),
+        _ => Err(invalid_params("expected no parameters")),
+    }
+}
+
+fn parse_optional_string_param(params: jsonrpc_core::Params) -> Result<Option<String>> {
+    match params {
+        jsonrpc_core::Params::None => Ok(None),
+        jsonrpc_core::Params::Array(mut values) if values.len() <= 1 => values
+            .pop()
+            .map(|value| serde_json::from_value(value).map_err(invalid_params))
+            .transpose(),
+        _ => Err(invalid_params("expected zero or one string parameter")),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -414,9 +416,65 @@ async fn main() -> anyhow::Result<()> {
         *scanner = init_scanner();
     }
 
-    let rpc = AegisRpcImpl::new(state.clone());
+    let rpc = Arc::new(AegisRpcImpl::new(state.clone()));
     let mut io = IoHandler::new();
-    io.extend_with(rpc.to_delegate());
+
+    let handler = rpc.clone();
+    io.add_method("scan_string", move |params| {
+        let handler = handler.clone();
+        async move {
+            let (content, source) = parse_params(params)?;
+            serialize_result(handler.scan_string(content, source).await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("scan_file", move |params| {
+        let handler = handler.clone();
+        async move {
+            let path = parse_params(params)?;
+            serialize_result(handler.scan_file(path).await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("scan_dir", move |params| {
+        let handler = handler.clone();
+        async move {
+            let (path, recursive) = parse_params(params)?;
+            serialize_result(handler.scan_dir(path, recursive).await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("scan_env", move |params| {
+        let handler = handler.clone();
+        async move {
+            parse_no_params(params)?;
+            serialize_result(handler.scan_env().await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("list_patterns", move |params| {
+        let handler = handler.clone();
+        async move {
+            let category = parse_optional_string_param(params)?;
+            serialize_result(handler.list_patterns(category).await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("list_categories", move |params| {
+        let handler = handler.clone();
+        async move {
+            parse_no_params(params)?;
+            serialize_result(handler.list_categories().await?)
+        }
+    });
+    let handler = rpc.clone();
+    io.add_method("update_bundle", move |params| {
+        let handler = handler.clone();
+        async move {
+            let (bundle_path, force) = parse_params(params)?;
+            serialize_result(handler.update_bundle(bundle_path, force).await?)
+        }
+    });
 
     println!("Aegis MCP Server starting...");
     println!("Listening on stdin/stdout");

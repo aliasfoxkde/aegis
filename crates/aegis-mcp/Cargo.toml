@@ -29,7 +29,6 @@ ratelimit = "2.0"
 # JSON-RPC
 jsonrpc-core = "18.0"
 jsonrpc-derive = "18.0"
-jsonrpc-core-client = "18.0"
 
 [[bin]]
 name = "aegis-mcp"
