@@ -1,31 +1,18 @@
-//! Integration tests for Aegis MCP server
+//! Integration tests for the Aegis MCP server.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
 
-fn mcp_binary() -> PathBuf {
-    static BUILD: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    BUILD
-        .get_or_init(|| {
-            let status = std::process::Command::new("cargo")
-                .args([
-                    "build",
-                    "--package",
-                    "aegis-mcp",
-                    "--bin",
-                    "aegis-mcp",
-                    "--quiet",
-                ])
-                .status()
-                .expect("Failed to build MCP server");
-            assert!(status.success(), "MCP server build failed: {status}");
+fn mcp_binary() -> std::path::PathBuf {
+    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_aegis_mcp") {
+        return path.into();
+    }
 
-            let target_dir = std::env::var_os("CARGO_TARGET_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target"));
-            target_dir.join("debug").join("aegis-mcp")
-        })
-        .clone()
+    let test_binary = std::env::current_exe().expect("test executable path is available");
+    test_binary
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("integration test runs under target/<profile>/deps")
+        .join("aegis-mcp")
 }
 
 fn send_mcp_request(request: &str) -> String {
@@ -42,8 +29,6 @@ fn send_mcp_request(request: &str) -> String {
         .expect("Failed to write to stdin");
     drop(stdin);
 
-    // Drain stdout concurrently so a large JSON-RPC response cannot fill the
-    // pipe and deadlock the child before it exits.
     let mut stdout = child.stdout.take().unwrap();
     let reader = std::thread::spawn(move || {
         let mut output = Vec::new();
@@ -69,7 +54,6 @@ fn send_mcp_request(request: &str) -> String {
 
     let _ = child.wait().expect("Failed to collect MCP server status");
     let output = reader.join().expect("MCP output reader panicked");
-
     String::from_utf8_lossy(&output).to_string()
 }
 
@@ -77,7 +61,6 @@ fn send_mcp_request(request: &str) -> String {
 fn test_mcp_scan_string() {
     let request = r#"{"jsonrpc":"2.0","method":"scan_string","params":["AKIAIOSFODNN7EXAMPLE","test.rs"],"id":1}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("jsonrpc"), "Response: {}", response);
     assert!(response.contains("findings"), "Response: {}", response);
 }
@@ -86,7 +69,6 @@ fn test_mcp_scan_string() {
 fn test_mcp_list_patterns() {
     let request = r#"{"jsonrpc":"2.0","method":"list_patterns","params":null,"id":2}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("patterns"), "Response: {}", response);
 }
 
@@ -94,7 +76,6 @@ fn test_mcp_list_patterns() {
 fn test_mcp_list_categories() {
     let request = r#"{"jsonrpc":"2.0","method":"list_categories","params":[],"id":3}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("secrets"), "Response: {}", response);
 }
 
@@ -102,7 +83,6 @@ fn test_mcp_list_categories() {
 fn test_mcp_update_bundle() {
     let request = r#"{"jsonrpc":"2.0","method":"update_bundle","params":[null,false],"id":4}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("success"), "Response: {}", response);
 }
 
@@ -118,7 +98,6 @@ fn test_mcp_scan_dir() {
     );
     let response = send_mcp_request(&request);
     let _ = std::fs::remove_dir_all(fixture_dir);
-
     assert!(response.contains("jsonrpc"), "Response: {}", response);
 }
 
@@ -126,7 +105,6 @@ fn test_mcp_scan_dir() {
 fn test_mcp_scan_env() {
     let request = r#"{"jsonrpc":"2.0","method":"scan_env","params":[],"id":6}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("jsonrpc"), "Response: {}", response);
 }
 
@@ -134,6 +112,5 @@ fn test_mcp_scan_env() {
 fn test_mcp_list_patterns_with_category() {
     let request = r#"{"jsonrpc":"2.0","method":"list_patterns","params":["secrets"],"id":7}"#;
     let response = send_mcp_request(request);
-
     assert!(response.contains("patterns"), "Response: {}", response);
 }
