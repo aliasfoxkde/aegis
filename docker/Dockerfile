@@ -30,9 +30,7 @@ COPY crates/aegis-mcp ./crates/aegis-mcp
 COPY crates/aegis-wasm ./crates/aegis-wasm
 
 # Build dependencies first (cached)
-RUN cargo build --release --bin aegis 2>/dev/null || \
-    cargo build --release -p aegis-cli 2>/dev/null || \
-    cargo build --release --package aegis-cli
+RUN cargo build --release -p aegis-cli --bin aegis
 
 # Build the binary
 RUN cargo build --release -p aegis-cli
