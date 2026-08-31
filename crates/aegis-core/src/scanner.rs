@@ -3,6 +3,7 @@
 //! Handles scanning files, directories, and strings for patterns.
 
 use rayon::prelude::*;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -45,6 +46,14 @@ fn ast_findings_to_findings(
             .with_kind(FindingKind::Ast)
         })
         .collect()
+}
+
+fn distinct_patterns(findings: &[Finding]) -> usize {
+    findings
+        .iter()
+        .map(|finding| finding.pattern.as_str())
+        .collect::<HashSet<_>>()
+        .len()
 }
 
 /// Scan options
@@ -556,6 +565,7 @@ impl Scanner {
         let mut stats = ScanStats {
             files_scanned: 1,
             bytes_scanned: metadata.len(),
+            patterns_matched: distinct_patterns(&findings),
             scan_time_ms: scan_time,
             io_time_ms: io_time,
             workers_used: 1,
@@ -933,8 +943,10 @@ mod tests {
                 ..Default::default()
             });
 
-        let (_findings, stats) = scanner.scan_file(&temp_file).unwrap();
+        let (findings, stats) = scanner.scan_file(&temp_file).unwrap();
         assert_eq!(stats.files_scanned, 1);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(stats.patterns_matched, 1);
         // Binary files should still be scanned if scan_binary is true
         // but content detection might not work as expected
     }
