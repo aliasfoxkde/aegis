@@ -7,6 +7,10 @@ license = "Apache-2.0"
 repository = "https://github.com/aegis/aegis"
 description = "Aegis - Security scanning for DevOps and CI/CD"
 
+[[bin]]
+name = "aegis-bootstrap"
+path = "src/main.rs"
+
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
