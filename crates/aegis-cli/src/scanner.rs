@@ -256,12 +256,12 @@ pub async fn update_bundle(_force: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicU64, Ordering};
 
-    static SCAN_FIXTURE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn scan_fixture_path() -> PathBuf {
-        let fixture_id = SCAN_FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
             "aegis_cli_scan_fixture_{}_{}",
             std::process::id(),
@@ -624,7 +624,10 @@ mod tests {
             quiet: false,
         };
 
-        let result = execute_scan_with_stdin(&opts, "let password = 'secret123';");
+        let result = execute_scan_with_stdin(
+            &opts,
+            "let password = 'secret123';", // aegis:ignore:hardcoded-password
+        );
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         assert!(!scan_result.output.is_empty());

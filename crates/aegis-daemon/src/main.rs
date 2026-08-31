@@ -240,7 +240,7 @@ mod tests {
     use super::*;
     use std::io::ErrorKind;
     use std::os::unix::fs::MetadataExt;
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
     fn test_socket_path(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -295,5 +295,71 @@ mod tests {
             .await
             .expect("server task join")
             .expect("client");
+    }
+
+    /// Verify that a peer whose UID/GID does not match the policy is rejected
+    /// at the protocol boundary before any scan is performed.  The server
+    /// accepts the TCP connection, checks credentials, and closes the socket
+    /// without writing any response — the client sees EOF immediately.
+    #[tokio::test]
+    async fn unauthorized_peer_rejected_no_scan() {
+        // Use a UID that does not match this process (1000) to simulate an
+        // untrusted peer.  The policy allows only that foreign UID, so the
+        // test-process client is unauthorized.
+        const FOREIGN_UID: u32 = 9999;
+        let socket_path = test_socket_path("unauthorized");
+        let listener = tokio::net::UnixListener::bind(&socket_path).expect("bind socket");
+        let state = Arc::new(DaemonState::new(socket_path.clone()));
+        let policy = Arc::new(DaemonPeerPolicy::owner_only(FOREIGN_UID));
+        let cleanup_path = socket_path.clone();
+
+        let server_task = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            handle_client(stream, state, policy)
+                .await
+                .expect("handle_client");
+            remove_socket_if_present(&cleanup_path);
+        });
+
+        // Give the server time to enter the accept loop.
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Client connects from the test process (UID 1000) — unauthorized.
+        let mut client = UnixStream::connect(&socket_path).await.expect("connect");
+
+        // Send a scan request that would be unsafe if processed. The payload is
+        // intentionally benign so the regression fixture cannot trip repository
+        // secret scanners while proving that no request reaches the scanner.
+        let scan_request = serde_json::json!({
+            "method": "scan_string",
+            "params": ["unauthorized-peer-probe-payload", "test.txt"],
+            "id": 42
+        });
+        client
+            .write_all(serde_json::to_string(&scan_request).unwrap().as_bytes())
+            .await
+            .expect("send request");
+        client.write_all(b"\n").await.expect("send newline");
+
+        // If the policy correctly rejects the peer, the server closes the socket
+        // without sending any data, so the read completes with 0 bytes (EOF).
+        client.readable().await.expect("mark readable");
+        let mut buf = [0u8; 1024];
+        let read_result =
+            tokio::time::timeout(std::time::Duration::from_secs(2), client.read(&mut buf))
+                .await
+                .expect("deadline not cancelled");
+
+        // Depending on whether the client has already written its request,
+        // Tokio reports either EOF or ECONNRESET when the rejected server closes
+        // the socket. Both prove that no response bytes were emitted.
+        match read_result {
+            Ok(0) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+            Ok(n) => panic!("unauthorized peer received {n} response bytes"),
+            Err(error) => panic!("unexpected read error: {error}"),
+        }
+
+        server_task.await.expect("server task join");
     }
 }
