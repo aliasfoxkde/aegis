@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-09-01
+
+### Fixes
+
+- **FIXED**: synchronized workspace package versions in `Cargo.lock`, restoring
+  reproducible `cargo build --locked` resolution;
+- **FIXED**: kept `aegis-mcp` startup diagnostics on stderr so stdout remains a
+  clean JSON-RPC transport;
+- **ADDED**: regression coverage proving MCP stdout contains only JSON-RPC
+  responses.
+
 ## [0.2.2] - 2026-08-28
 
 ### Features
