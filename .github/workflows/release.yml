@@ -255,6 +255,16 @@ jobs:
             is_draft="$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')"
             if [ "$is_draft" != "true" ]; then
               gh release delete "$tag" --repo "${{ github.repository }}" --yes
+              for attempt in $(seq 1 30); do
+                if ! gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 2
+              done
+              if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+                echo "release $tag is still visible after deletion; refusing to create a duplicate"
+                exit 1
+              fi
             fi
           fi
           if ! gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then

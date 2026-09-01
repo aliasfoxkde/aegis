@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-09-01
+
+### Fixes
+
+- **FIXED**: release automation waits for GitHub to confirm deletion of an
+  immutable placeholder before creating the mutable draft release.
+
 ## [0.2.5] - 2026-09-01
 
 ### Fixes
