@@ -476,8 +476,10 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    println!("Aegis MCP Server starting...");
-    println!("Listening on stdin/stdout");
+    // stdout is the JSON-RPC transport; startup diagnostics must not corrupt
+    // the protocol stream consumed by MCP clients.
+    eprintln!("Aegis MCP Server starting...");
+    eprintln!("Listening on stdin/stdout");
 
     // JSON-RPC over stdio
     let stdin = tokio::io::stdin();

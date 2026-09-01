@@ -80,6 +80,20 @@ fn test_mcp_list_categories() {
 }
 
 #[test]
+fn test_mcp_stdout_contains_only_json_rpc_responses() {
+    let request = r#"{"jsonrpc":"2.0","method":"list_categories","params":[],"id":8}"#;
+    let response = send_mcp_request(request);
+    let lines: Vec<_> = response.lines().filter(|line| !line.trim().is_empty()).collect();
+
+    assert_eq!(lines.len(), 1, "stdout must contain one response: {response}");
+    let value: serde_json::Value =
+        serde_json::from_str(lines[0]).expect("stdout line must be valid JSON");
+    assert_eq!(value["jsonrpc"], "2.0");
+    assert_eq!(value["id"], 8);
+    assert!(value.get("result").is_some());
+}
+
+#[test]
 fn test_mcp_update_bundle() {
     let request = r#"{"jsonrpc":"2.0","method":"update_bundle","params":[null,false],"id":4}"#;
     let response = send_mcp_request(request);
