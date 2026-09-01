@@ -406,6 +406,7 @@ impl ControlCenterAdapter {
     /// - Empty content: Blocked
     /// - Findings detected: Fail (allows work to proceed but logs failure)
     /// - No findings: Pass
+    #[cfg(feature = "tokio")]
     pub async fn scan_work(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
         Self::validate_request(&request)?;
         if let Some(existing) = self.existing_result(&request)? {
