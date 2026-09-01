@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-09-01
+
+### Fixes
+
+- **FIXED**: SQLite output now binds source coordinates using SQLite-compatible
+  signed integers with explicit overflow handling.
+- **FIXED**: WASM builds no longer compile the optional Tokio-backed async
+  Control Center adapter when `aegis-core` default features are disabled.
+
 ## [0.2.3] - 2026-09-01
 
 ### Fixes
