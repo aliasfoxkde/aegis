@@ -83,9 +83,16 @@ fn test_mcp_list_categories() {
 fn test_mcp_stdout_contains_only_json_rpc_responses() {
     let request = r#"{"jsonrpc":"2.0","method":"list_categories","params":[],"id":8}"#;
     let response = send_mcp_request(request);
-    let lines: Vec<_> = response.lines().filter(|line| !line.trim().is_empty()).collect();
+    let lines: Vec<_> = response
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
 
-    assert_eq!(lines.len(), 1, "stdout must contain one response: {response}");
+    assert_eq!(
+        lines.len(),
+        1,
+        "stdout must contain one response: {response}"
+    );
     let value: serde_json::Value =
         serde_json::from_str(lines[0]).expect("stdout line must be valid JSON");
     assert_eq!(value["jsonrpc"], "2.0");
