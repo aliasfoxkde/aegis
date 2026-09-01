@@ -249,9 +249,15 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          draft: false
+          # Upload assets while the release is mutable. GitHub rejects asset
+          # uploads after a published release becomes immutable.
+          draft: true
           prerelease: false
           generate_release_notes: true
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish release after assets upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false
