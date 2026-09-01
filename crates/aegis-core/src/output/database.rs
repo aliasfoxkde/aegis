@@ -97,6 +97,17 @@ impl SqliteOutput {
         let conn = Connection::open(&self.path)?;
 
         for finding in findings {
+            // SQLite INTEGER values are signed 64-bit integers. Convert the
+            // platform-sized source coordinates explicitly instead of relying
+            // on rusqlite to bind `usize` (which is not implemented and also
+            // would make the portability boundary implicit).
+            let line = i64::try_from(finding.location.line).map_err(|_| {
+                super::OutputError::Config("finding line exceeds SQLite INTEGER range".into())
+            })?;
+            let column = i64::try_from(finding.location.column).map_err(|_| {
+                super::OutputError::Config("finding column exceeds SQLite INTEGER range".into())
+            })?;
+
             conn.execute(
                 &format!(
                     "INSERT INTO {} (id, pattern, category, severity, confidence, file_path, line_number, column_number, matched_content, description, fingerprint, scan_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
@@ -109,8 +120,8 @@ impl SqliteOutput {
                     finding.severity,
                     finding.confidence,
                     finding.location.file,
-                    finding.location.line,
-                    finding.location.column,
+                    line,
+                    column,
                     // Keep the legacy nullable column for schema compatibility,
                     // but never persist detected secret material.
                     Option::<String>::None,
