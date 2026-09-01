@@ -246,6 +246,20 @@ jobs:
         run: |
           (cat release/checksums.txt 2>/dev/null; cat release/*/checksums.txt 2>/dev/null; cat release/*/*/checksums.txt 2>/dev/null) > release/all_checksums.txt || cat release/checksums.txt > release/all_checksums.txt 2>/dev/null || true
           mv release/all_checksums.txt release/checksums.txt
+      - name: Ensure mutable release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.ref_name }}"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')"
+            if [ "$is_draft" != "true" ]; then
+              gh release delete "$tag" --repo "${{ github.repository }}" --yes
+            fi
+          fi
+          if ! gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "${{ github.repository }}" --verify-tag --draft --title "Aegis $tag" --generate-notes
+          fi
       - name: Create Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
