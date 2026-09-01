@@ -102,6 +102,78 @@ aegis config [subcommand]
 - `aegis config set <key> <value>` - Set a config value
 - `aegis config profile <name>` - Switch profile
 
+### aegis adapter scan
+
+Run the Control Center pre-pipeline adapter over a single work request.
+This is the fail-closed surface for Control Center and GitForge; every
+input error, scanner failure, or reused work-request ID is reported as
+`blocked` so callers never accidentally promote a partial scan.
+
+```bash
+aegis adapter scan [options]
+```
+
+**Required flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--work-request-id` | Stable identifier for the work request (must be non-empty) |
+| `--source` | Source identifier (file path, PR number, etc.) |
+
+**Content (exactly one required):**
+
+| Flag | Description |
+|------|-------------|
+| `--content` | Inline content to scan |
+| `--content-file` | Path to a file whose contents will be scanned |
+
+**Optional flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--evidence-output` | Persist redacted evidence records to this JSON path |
+
+**JSON response fields (`stdout`):**
+
+| Field | Description |
+|-------|-------------|
+| `work_request_id` | Echoes the input ID |
+| `scan_result` | `pass`, `fail`, or `blocked` |
+| `allows_work` | True for `pass`/`fail`, false for `blocked` |
+| `evidence_ref` | SHA-256 hash of the scanned content |
+| `finding_count` | Number of findings detected |
+| `highest_severity` | Highest severity among findings (omitted when none) |
+| `lifecycle_state` | Final lifecycle state of the work request |
+| `transition_count` | Number of lifecycle transitions recorded |
+| `evidence_path` | Path to persisted evidence (only when `--evidence-output` is set) |
+| `error` | Human-readable failure detail (only present on `blocked`) |
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| 0 | `pass` — no findings, work may proceed |
+| 1 | `fail` — findings present, work may proceed |
+| 2 | `blocked` — adapter failed closed; do **not** proceed |
+| 3 | Invalid arguments |
+
+**Examples:**
+
+```bash
+# Inline content
+aegis adapter scan \
+  --work-request-id wr-123 \
+  --source src/lib.rs \
+  --content "fn main() { println!(\"hi\"); }"
+
+# Read content from a file and persist evidence
+aegis adapter scan \
+  --work-request-id wr-124 \
+  --source src/lib.rs \
+  --content-file src/lib.rs \
+  --evidence-output /tmp/aegis-evidence.json
+```
+
 ## Exit Codes
 
 | Code | Description |

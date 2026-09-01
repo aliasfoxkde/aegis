@@ -79,6 +79,14 @@ aegis_core
 └── suppression/       # Finding suppression
 ```
 
+The `aegis-cli` crate exposes the fail-closed `ControlCenterAdapter`
+through the `aegis adapter scan` subcommand. The `adapter/` module in
+`aegis-cli` is a thin renderer over the core contract: it forwards
+`WorkRequest`s to `ControlCenterAdapter::scan_work_sync`, then surfaces
+the documented `pass` / `fail` / `blocked` outcome (and lifecycle
+state) as a JSON document on stdout with the documented exit-code
+mapping.
+
 ## Design Principles
 
 ### 1. Public vs Internal

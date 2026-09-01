@@ -66,6 +66,7 @@ For transport health, start `aegis-mcp` from the configured allowed root and sen
 | CLI | `aegis scan --env` | Scan environment variables |
 | CLI | `aegis list` | List bundled detection patterns |
 | CLI | `aegis update` | Update the pattern bundle when configured |
+| CLI | `aegis adapter scan --work-request-id <ID> --source <SRC> [--content <C> \| --content-file <F>] [--evidence-output <P>]` | Run the Control Center pre-pipeline adapter over a single work request; fail-closed JSON on stdout |
 | MCP stdio | `scan_string` | Scan in-memory content |
 | MCP stdio | `scan_file` | Scan one file |
 | MCP stdio | `scan_dir` | Scan a directory |

@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use aegis_cli::{
-    benchmark, config, disable_pattern_message, enable_pattern_message, output, scanner,
+    adapter, benchmark, config, disable_pattern_message, enable_pattern_message, output, scanner,
     OutputFormat,
 };
 
@@ -137,6 +137,38 @@ enum Commands {
         #[arg(long)]
         compare: bool,
     },
+
+    /// Run the Control Center pre-pipeline adapter over a single work request
+    Adapter {
+        #[command(subcommand)]
+        command: AdapterCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum AdapterCommands {
+    /// Scan a single work request through the fail-closed adapter
+    Scan {
+        /// Stable identifier for the work request
+        #[arg(long)]
+        work_request_id: String,
+
+        /// Source identifier (file path, PR number, etc.)
+        #[arg(long)]
+        source: String,
+
+        /// Inline content to scan (mutually exclusive with --content-file)
+        #[arg(long)]
+        content: Option<String>,
+
+        /// Read the content from this file (mutually exclusive with --content)
+        #[arg(long)]
+        content_file: Option<PathBuf>,
+
+        /// Persist redacted evidence records to this JSON path
+        #[arg(long)]
+        evidence_output: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -216,6 +248,29 @@ async fn main() -> Result<()> {
                 compare,
             })?;
         }
+        Commands::Adapter { command } => match command {
+            AdapterCommands::Scan {
+                work_request_id,
+                source,
+                content,
+                content_file,
+                evidence_output,
+            } => {
+                let outcome = adapter::run_adapter_scan(adapter::AdapterScanOptions {
+                    work_request_id,
+                    source,
+                    content,
+                    content_file,
+                    evidence_output,
+                });
+                let json = serde_json::to_string(&outcome.response)?;
+                println!("{json}");
+                if outcome.exit_code != adapter::AdapterExitCode::Pass {
+                    eprintln!("{}", outcome.response.error.as_deref().unwrap_or(""));
+                }
+                std::process::exit(outcome.exit_code.as_i32());
+            }
+        },
     }
 
     Ok(())

@@ -2,11 +2,13 @@
 //!
 //! This library exposes internal components for testing.
 
+pub mod adapter;
 pub mod benchmark;
 pub mod config;
 pub mod output;
 pub mod scanner;
 
+pub use adapter::{AdapterExitCode, AdapterScanOptions, AdapterScanOutcome, AdapterScanResponse};
 pub use benchmark::{run_benchmark, BenchmarkOptions};
 pub use config::{
     disable_pattern, disable_pattern_message, enable_pattern, enable_pattern_message, load_config,
