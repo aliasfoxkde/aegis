@@ -284,4 +284,27 @@ jobs:
       - name: Publish release after assets upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${{ github.ref_name }}" --repo "${{ github.repository }}" --draft=false
+        run: |
+          tag="${{ github.ref_name }}"
+          assets="$(gh release view "$tag" --repo "${{ github.repository }}" --json assets --jq '[.assets[].name] | sort | join("\n")')"
+          for asset in \
+            aegis-darwin-arm64.tar.gz \
+            aegis-darwin-x86_64.tar.gz \
+            aegis-linux-arm64.tar.gz \
+            aegis-linux-x86_64.tar.gz \
+            aegis-windows-x86_64.tar.gz \
+            aegis_wasm.wasm \
+            checksums.txt \
+            source.tar.gz \
+            source.zip; do
+            if ! grep -Fqx -- "$asset" <<<"$assets"; then
+              echo "missing release asset: $asset"
+              exit 1
+            fi
+          done
+          is_draft="$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')"
+          if [ "$is_draft" = "true" ]; then
+            gh release edit "$tag" --repo "${{ github.repository }}" --draft=false
+          else
+            echo "release $tag is already published with all expected assets"
+          fi
