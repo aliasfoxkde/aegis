@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-09-01
+
+### Fixes
+
+- **FIXED**: release automation now uploads artifacts to a mutable draft
+  release and publishes only after every artifact is attached.
+- **FIXED**: tag-triggered release runs normalize any published placeholder
+  into a draft before asset upload, avoiding GitHub immutable-release errors.
+
 ## [0.2.4] - 2026-09-01
 
 ### Fixes
