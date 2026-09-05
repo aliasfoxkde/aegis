@@ -194,8 +194,7 @@ impl Preset {
 
     /// Parse a preset from YAML string
     pub fn from_str(yaml: &str) -> io::Result<Self> {
-        serde_yaml::from_str(yaml)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        serde_yaml::from_str(yaml).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
     /// Save a preset to a YAML file
@@ -206,8 +205,7 @@ impl Preset {
 
     /// Convert preset to YAML string
     pub fn to_string(&self) -> io::Result<String> {
-        serde_yaml::to_string(self)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        serde_yaml::to_string(self).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
     /// Merge multiple presets together (later presets override earlier ones)
@@ -238,7 +236,9 @@ impl Preset {
         // Merge collections
         merged.output_formats.extend(other.output_formats.clone());
         merged.webhooks.extend(other.webhooks.clone());
-        merged.database_outputs.extend(other.database_outputs.clone());
+        merged
+            .database_outputs
+            .extend(other.database_outputs.clone());
 
         for (key, value) in &other.settings {
             merged.settings.insert(key.clone(), value.clone());
@@ -295,7 +295,10 @@ impl PresetRegistry {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+            if path
+                .extension()
+                .map_or(false, |ext| ext == "yaml" || ext == "yml")
+            {
                 if let Ok(preset) = Preset::from_file(&path) {
                     self.presets.insert(preset.name.clone(), preset);
                 }
