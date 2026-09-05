@@ -147,7 +147,8 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pgp-private-key".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r"-----BEGIN PGP PRIVATE KEY BLOCK-----".to_string(),
+            // This detector literal is intentionally not a credential.
+            match_pattern: r"-----BEGIN PGP PRIVATE KEY BLOCK-----".to_string(), // aegis:ignore:pgp-private-key,ssh-private-key
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -483,7 +484,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rsa-private-key".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r"-----BEGIN RSA PRIVATE KEY-----".to_string(),
+            match_pattern: r"-----BEGIN RSA PRIVATE KEY-----".to_string(), // aegis:ignore:rsa-private-key,ssh-private-key
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -497,7 +498,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ec-private-key".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r"-----BEGIN EC PRIVATE KEY-----".to_string(),
+            match_pattern: r"-----BEGIN EC PRIVATE KEY-----".to_string(), // aegis:ignore:ec-private-key,ssh-private-key
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -511,7 +512,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "github-ssh-key".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r"-----BEGIN OPENSSH PRIVATE KEY-----".to_string(),
+            match_pattern: r"-----BEGIN OPENSSH PRIVATE KEY-----".to_string(), // aegis:ignore:github-ssh-key,ssh-private-key
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),

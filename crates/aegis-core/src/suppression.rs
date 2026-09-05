@@ -85,12 +85,11 @@ impl SuppressionManager {
 
         // Check for specific pattern
         if let Some(pattern_part) = rest.strip_prefix(':') {
-            let pattern = pattern_part.trim();
-            if !pattern.is_empty() {
-                self.suppressions
-                    .write()
-                    .unwrap()
-                    .insert(Suppression::new(pattern, line));
+            let mut suppressions = self.suppressions.write().unwrap();
+            for pattern in pattern_part.split(',').map(str::trim) {
+                if !pattern.is_empty() {
+                    suppressions.insert(Suppression::new(pattern, line));
+                }
             }
         } else if let Some(reason_part) = rest.strip_prefix("reason:") {
             // aegis:ignore reason:...
@@ -172,6 +171,15 @@ mod tests {
         let mut manager = SuppressionManager::new();
         manager.parse_content("let fixture = \"test\"; // aegis:ignore:hardcoded-secret\n");
         assert!(manager.is_suppressed("hardcoded-secret", 1));
+        assert!(!manager.is_suppressed("other-pattern", 1));
+    }
+
+    #[test]
+    fn test_parse_multiple_inline_pattern_suppressions() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("fixture // aegis:ignore:first-pattern, second-pattern\n");
+        assert!(manager.is_suppressed("first-pattern", 1));
+        assert!(manager.is_suppressed("second-pattern", 1));
         assert!(!manager.is_suppressed("other-pattern", 1));
     }
 

@@ -492,6 +492,24 @@ impl Scanner {
         let start = Instant::now();
         let io_start = Instant::now();
 
+        // Apply ignore rules before metadata, binary detection, or content
+        // reads. Repository metadata such as .git objects is intentionally
+        // excluded and may be binary or unreadable; inspecting it first turns
+        // an expected exclusion into a false required failure.
+        if self.ignore_manager.should_ignore(path) {
+            let mut stats = ScanStats {
+                files_skipped: 1,
+                ..Default::default()
+            };
+            stats.inspection_ledger.record(
+                path.to_string_lossy(),
+                InspectionStatus::Excluded,
+                false,
+                Some("ignore_rule".to_string()),
+            );
+            return Ok((Vec::new(), stats));
+        }
+
         // Check file size
         let metadata = match std::fs::metadata(path) {
             Ok(m) => m,
@@ -538,21 +556,6 @@ impl Scanner {
         };
 
         let io_time = io_start.elapsed().as_millis() as u64;
-
-        // Check ignore
-        if self.ignore_manager.should_ignore(path) {
-            let mut stats = ScanStats {
-                files_skipped: 1,
-                ..Default::default()
-            };
-            stats.inspection_ledger.record(
-                path.to_string_lossy(),
-                InspectionStatus::Excluded,
-                false,
-                Some("ignore_rule".to_string()),
-            );
-            return Ok((Vec::new(), stats));
-        }
 
         // Scan content through the regular pattern pipeline and the AST
         // pipeline. AST coverage is recorded separately so a fallback or
@@ -1026,6 +1029,31 @@ mod tests {
         let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
         // Should have scanned at least the 2 files we created
         assert!(stats.files_scanned >= 2);
+    }
+
+    #[test]
+    fn test_scan_dir_excludes_binary_git_metadata_before_reading() {
+        let temp_dir = TempDir::new().unwrap();
+        let git_object_dir = temp_dir.path().join(".git/objects/aa");
+        std::fs::create_dir_all(&git_object_dir).unwrap();
+        File::create(git_object_dir.join("deadbeef"))
+            .unwrap()
+            .write_all(&[0, 159, 146, 150])
+            .unwrap();
+        File::create(temp_dir.path().join("source.rs"))
+            .unwrap()
+            .write_all(b"fn main() {}")
+            .unwrap();
+
+        let scanner = Scanner::from_definitions(vec![]).unwrap();
+        let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
+
+        assert_eq!(stats.files_failed, 0);
+        assert!(stats.inspection_ledger.units.iter().any(|unit| {
+            unit.unit_id.ends_with(".git/objects/aa/deadbeef")
+                && unit.status == InspectionStatus::Excluded
+                && !unit.required
+        }));
     }
 
     #[test]
