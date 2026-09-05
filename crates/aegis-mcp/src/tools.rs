@@ -49,11 +49,7 @@ impl AegisTools {
     }
 
     /// Execute scan_dir tool
-    pub async fn scan_dir(
-        state: &ServerState,
-        path: String,
-        _recursive: bool,
-    ) -> jsonrpc_core::Result<ScanResponse> {
+    pub async fn scan_dir(state: &ServerState, path: String) -> jsonrpc_core::Result<ScanResponse> {
         let path = PathBuf::from(&path);
 
         // Security: validate path
@@ -226,7 +222,7 @@ mod tests {
             let mut scanner = state.scanner.write().await;
             *scanner = init_test_scanner();
         }
-        let result = AegisTools::scan_dir(&state, "/etc".to_string(), false).await;
+        let result = AegisTools::scan_dir(&state, "/etc".to_string()).await;
         assert!(result.is_err());
     }
 
