@@ -416,9 +416,12 @@ fn parse_optional_string_param(params: jsonrpc_core::Params) -> Result<Option<St
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
+    // Route tracing output to stderr so it cannot corrupt the stdout JSON-RPC stream.
+    // use try_init: multiple initializations in tests are silent no-ops.
+    let _ = tracing_subscriber::fmt()
         .with_env_filter("aegis=info")
-        .init();
+        .with_writer(std::io::stderr)
+        .try_init();
 
     let state = Arc::new(ServerState::new());
 
