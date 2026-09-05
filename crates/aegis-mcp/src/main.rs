@@ -171,7 +171,7 @@ impl AegisRpcImpl {
         })
     }
 
-    fn scan_dir(&self, path: String, _recursive: bool) -> BoxFuture<Result<ScanResponse>> {
+    fn scan_dir(&self, path: String) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
             let path = PathBuf::from(&path);
@@ -398,7 +398,7 @@ fn parse_required_string_param(params: jsonrpc_core::Params) -> Result<String> {
                 .map_err(invalid_params)
         }
         _ => Err(invalid_params(
-            "expected exactly one string parameter: [\"/path/to/file\"]",
+            "expected exactly one string parameter: [\"/path/to/scan/target\"]",
         )),
     }
 }
@@ -451,8 +451,8 @@ async fn main() -> anyhow::Result<()> {
     io.add_method("scan_dir", move |params| {
         let handler = handler.clone();
         async move {
-            let (path, recursive) = parse_params(params)?;
-            serialize_result(handler.scan_dir(path, recursive).await?)
+            let path = parse_required_string_param(params)?;
+            serialize_result(handler.scan_dir(path).await?)
         }
     });
     let handler = rpc.clone();
