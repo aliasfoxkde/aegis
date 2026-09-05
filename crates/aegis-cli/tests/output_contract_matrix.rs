@@ -85,6 +85,14 @@ fn cross_entry_outputs_preserve_identity_and_ledger() {
         cli_json["stats"]["inspection_ledger"],
         cli_sarif["runs"][0]["properties"]["inspectionLedger"]
     );
+    assert_eq!(
+        cli_json["stats"]["inspection_ledger"]["schema_version"],
+        aegis_core::finding::INSPECTION_LEDGER_SCHEMA_VERSION
+    );
+    assert_eq!(
+        cli_sarif["runs"][0]["properties"]["inspectionLedger"]["schema_version"],
+        aegis_core::finding::INSPECTION_LEDGER_SCHEMA_VERSION
+    );
     assert_eq!(cli_sarif["runs"][0]["results"][0]["ruleId"], stable_id);
 
     let temp_dir = TempDir::new().unwrap();
@@ -102,6 +110,10 @@ fn cross_entry_outputs_preserve_identity_and_ledger() {
     assert_eq!(
         core_json["stats"]["inspection_ledger"],
         core_sarif["runs"][0]["properties"]["inspectionLedger"]
+    );
+    assert_eq!(
+        core_json["stats"]["inspection_ledger"]["schema_version"],
+        aegis_core::finding::INSPECTION_LEDGER_SCHEMA_VERSION
     );
     assert_eq!(core_sarif["runs"][0]["results"][0]["ruleId"], stable_id);
     assert_eq!(
