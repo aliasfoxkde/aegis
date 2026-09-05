@@ -316,6 +316,116 @@ fn test_mcp_scan_dir_unsafe_path_rejected() {
     );
 }
 
+fn send_mcp_request_with_stderr_capture(request: &str) -> (String, String) {
+    use std::io::{BufRead, BufReader};
+
+    let mut child = std::process::Command::new(mcp_binary())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn MCP server");
+
+    let mut stdin = child.stdin.take().unwrap();
+    stdin
+        .write_all(request.as_bytes())
+        .expect("Failed to write to stdin");
+    drop(stdin);
+
+    let stdout_h = child.stdout.take().unwrap();
+    let stderr_h = child.stderr.take().unwrap();
+
+    let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+    let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout_h);
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            stdout_tx.send(std::mem::take(&mut line)).unwrap();
+            line.clear();
+        }
+    });
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stderr_h);
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            stderr_tx.send(std::mem::take(&mut line)).unwrap();
+            line.clear();
+        }
+    });
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        match child.try_wait().expect("Failed to poll MCP server") {
+            Some(_) => break,
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("MCP server did not exit before the 30-second deadline");
+            }
+            None => std::thread::sleep(std::time::Duration::from_millis(25)),
+        }
+    }
+
+    let _ = child.wait().expect("Failed to collect MCP server status");
+    let stdout = stdout_rx.into_iter().collect::<Vec<_>>().join("");
+    let stderr = stderr_rx.into_iter().collect::<Vec<_>>().join("");
+    (stdout, stderr)
+}
+
+/// Verify that tracing output appears only on stderr and stdout carries clean
+/// JSON-RPC with no tracing contamination.
+#[test]
+fn test_tracing_stays_off_stdout_json_rpc_clean() {
+    // A request that produces at least one finding triggers internal span/logging.
+    let request = r#"{"jsonrpc":"2.0","method":"scan_string","params":["AWS_SECRET_KEY=abcdefghijk","test.rs"],"id":99}"#;
+
+    let (stdout, _stderr) = send_mcp_request_with_stderr_capture(request);
+
+    // --- stdout must be a single valid JSON-RPC response line ---
+    let lines: Vec<_> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    assert_eq!(
+        lines.len(),
+        1,
+        "stdout must have exactly one response line, got {} lines: {stdout:?}",
+        lines.len()
+    );
+
+    let value: serde_json::Value =
+        serde_json::from_str(lines[0]).expect("stdout must be valid JSON");
+    assert_eq!(
+        value["jsonrpc"], "2.0",
+        "stdout must be a JSON-RPC 2.0 response"
+    );
+    assert_eq!(value["id"], 99, "stdout id must match request id");
+    assert!(
+        value.get("result").is_some(),
+        "stdout must contain a result (not an error)"
+    );
+
+    // --- no tracing keywords on stdout ---
+    let lower = stdout.to_lowercase();
+    assert!(
+        !lower.contains("tracing")
+            && !lower.contains("span")
+            && !lower.contains("debug")
+            && !lower.contains("info"),
+        "stdout must not contain tracing output, but got: {stdout}"
+    );
+
+    // --- result is a valid scan response ---
+    let result = &value["result"];
+    assert!(
+        result.get("findings").is_some(),
+        "result must be a scan response"
+    );
+    assert!(
+        result["finding_count"].as_i64().unwrap_or(0) > 0,
+        "AWS secret should produce a finding"
+    );
+}
+
 #[test]
 fn test_mcp_scan_dir_malformed_params_rejected() {
     for (label, request) in [
