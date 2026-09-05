@@ -405,6 +405,23 @@ mod tests {
     }
 
     #[test]
+    fn test_output_write_findings_json_preserves_location() {
+        let mut output = Output::new(OutputFormat::Json, false);
+        let finding = make_test_finding();
+        let stats = make_test_stats();
+        let risk = make_test_risk();
+
+        output.write_findings(&[finding], &stats, &risk).unwrap();
+        let document: serde_json::Value = serde_json::from_str(&output.buffer).unwrap();
+        let location = &document["findings"][0]["location"];
+
+        assert_eq!(location["file"], "test.rs");
+        assert_eq!(location["line"], 10);
+        assert_eq!(location["column"], 5);
+        assert!(location.get("content").is_none());
+    }
+
+    #[test]
     fn test_output_write_findings_sarif() {
         let mut output = Output::new(OutputFormat::Sarif, false);
         let finding = Finding::new(
