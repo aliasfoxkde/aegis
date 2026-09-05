@@ -391,6 +391,18 @@ fn parse_no_params(params: jsonrpc_core::Params) -> Result<()> {
     }
 }
 
+fn parse_required_string_param(params: jsonrpc_core::Params) -> Result<String> {
+    match params {
+        jsonrpc_core::Params::Array(mut values) if values.len() == 1 => {
+            serde_json::from_value(values.pop().expect("array length checked by match guard"))
+                .map_err(invalid_params)
+        }
+        _ => Err(invalid_params(
+            "expected exactly one string parameter: [\"/path/to/file\"]",
+        )),
+    }
+}
+
 fn parse_optional_string_param(params: jsonrpc_core::Params) -> Result<Option<String>> {
     match params {
         jsonrpc_core::Params::None => Ok(None),
@@ -431,7 +443,7 @@ async fn main() -> anyhow::Result<()> {
     io.add_method("scan_file", move |params| {
         let handler = handler.clone();
         async move {
-            let path = parse_params(params)?;
+            let path = parse_required_string_param(params)?;
             serialize_result(handler.scan_file(path).await?)
         }
     });
