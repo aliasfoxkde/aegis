@@ -117,8 +117,8 @@ fn cross_entry_outputs_preserve_identity_and_ledger() {
     );
     assert_eq!(core_sarif["runs"][0]["results"][0]["ruleId"], stable_id);
     assert_eq!(
-        core_sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]
-            ["artifactLocation"]["uri"],
+        core_sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]
+            ["uri"],
         "fixture.rs"
     );
     assert_eq!(
