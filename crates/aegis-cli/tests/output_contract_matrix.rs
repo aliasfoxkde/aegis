@@ -85,7 +85,7 @@ fn cross_entry_outputs_preserve_identity_and_ledger() {
         cli_json["stats"]["inspection_ledger"],
         cli_sarif["runs"][0]["properties"]["inspectionLedger"]
     );
-    assert_eq!(cli_sarif["runs"][0]["results"][0]["rule_id"], stable_id);
+    assert_eq!(cli_sarif["runs"][0]["results"][0]["ruleId"], stable_id);
 
     let temp_dir = TempDir::new().unwrap();
     let json_path = temp_dir.path().join("core.json");
@@ -103,7 +103,17 @@ fn cross_entry_outputs_preserve_identity_and_ledger() {
         core_json["stats"]["inspection_ledger"],
         core_sarif["runs"][0]["properties"]["inspectionLedger"]
     );
-    assert_eq!(core_sarif["runs"][0]["results"][0]["rule_id"], stable_id);
+    assert_eq!(core_sarif["runs"][0]["results"][0]["ruleId"], stable_id);
+    assert_eq!(
+        core_sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]
+            ["artifactLocation"]["uri"],
+        "fixture.rs"
+    );
+    assert_eq!(
+        core_sarif["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"]
+            ["startLine"],
+        4
+    );
 
     let receipt =
         ScanReceipt::from_scan("fixture.rs", "fixture", "default", None, &findings, stats);

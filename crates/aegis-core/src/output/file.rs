@@ -201,19 +201,27 @@ impl FileOutput {
 
         #[derive(serde::Serialize)]
         struct SarifResult {
+            #[serde(rename = "ruleId")]
             rule_id: String,
             level: String,
-            message: String,
+            message: SarifMessage,
             locations: Vec<SarifLocation>,
         }
 
         #[derive(serde::Serialize)]
+        struct SarifMessage {
+            text: String,
+        }
+
+        #[derive(serde::Serialize)]
         struct SarifLocation {
+            #[serde(rename = "physicalLocation")]
             physical_location: SarifPhysicalLocation,
         }
 
         #[derive(serde::Serialize)]
         struct SarifPhysicalLocation {
+            #[serde(rename = "artifactLocation")]
             artifact_location: SarifArtifactLocation,
             region: SarifRegion,
         }
@@ -225,7 +233,9 @@ impl FileOutput {
 
         #[derive(serde::Serialize)]
         struct SarifRegion {
+            #[serde(rename = "startLine")]
             start_line: usize,
+            #[serde(rename = "startColumn")]
             start_column: usize,
         }
 
@@ -250,7 +260,9 @@ impl FileOutput {
             .map(|f| SarifResult {
                 rule_id: f.stable_id.clone(),
                 level: severity_to_level(&f.severity).to_string(),
-                message: f.description.clone(),
+                message: SarifMessage {
+                    text: f.description.clone(),
+                },
                 locations: vec![SarifLocation {
                     physical_location: SarifPhysicalLocation {
                         artifact_location: SarifArtifactLocation {
