@@ -204,8 +204,22 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
     Ok(())
 }
 
+/// Retire the configured receipt path, if one is set.
+/// Called before scan so a failed scan leaves no stale receipt.
+fn retire_receipt_if_configured() {
+    if let Ok(path) = std::env::var("AEGIS_RECEIPT_FILE") {
+        if !path.trim().is_empty() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
 /// Run scan and return exit code (testable async wrapper)
 pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
+    // Fail-closed: remove any existing receipt before scan so a failed scan
+    // cannot be confused with a successful one whose result we never persisted.
+    retire_receipt_if_configured();
+
     let result = if opts.scan_stdin {
         let content = read_stdin_content().await?;
         execute_scan_with_stdin(&opts, &content)?
@@ -801,5 +815,97 @@ mod tests {
         let expected_exit = if result.has_findings { 1 } else { 0 };
         assert!(expected_exit == 0 || expected_exit == 1);
         std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Regression test: a failing scan must not leave a stale receipt.
+    /// The old receipt is removed before the scan; if the scan fails, the
+    /// file is simply absent — not a mix of old and new data.
+    #[tokio::test]
+    async fn test_failing_scan_does_not_leave_stale_receipt() {
+        // Use a process-unique temp path to avoid races between parallel test
+        // invocations. process::id is embedded in the receipt tmp-name so we
+        // further isolate by including a monotonic fixture counter.
+        static FIXTURE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let receipt_path = std::env::temp_dir().join(format!(
+            "aegis_stale_receipt_test_{}_{}",
+            std::process::id(),
+            fixture_id
+        ));
+
+        // Pre-write a valid receipt so we have something that "stales".
+        let pre_existing_receipt = ScanReceipt::from_scan(
+            String::from("/always/succeeds"),
+            String::from("pre-existing-scan"),
+            String::from("fixture"),
+            None,
+            &[],
+            ScanStats::default(),
+        );
+        pre_existing_receipt
+            .write_atomic(&receipt_path)
+            .expect("pre-existing receipt should be writable");
+        assert!(
+            receipt_path.exists(),
+            "precondition: receipt file must exist before scan"
+        );
+
+        // Point AEGIS_RECEIPT_FILE at our temp path and run a scan that is
+        // guaranteed to fail (scan_file with a path that does not exist).
+        let guard = OnDropEnvVar::new(
+            "AEGIS_RECEIPT_FILE",
+            receipt_path.to_string_lossy().as_ref(),
+        );
+        let opts = ScanOptions {
+            path: std::path::PathBuf::from("/this/path/does/not/exist/at/all"),
+            scan_file: true,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        };
+
+        let exit_code = run_scan_and_get_exit_code(opts).await;
+        // Scan must fail (file does not exist).
+        assert!(exit_code.is_err(), "failing scan should propagate error");
+        // Receipt file must be gone — not readable as evidence of a scan.
+        assert!(
+            !receipt_path.exists(),
+            "stale receipt must be retired; found {} which should not exist",
+            receipt_path.display()
+        );
+
+        // Suppress unused field warning.
+        let _ = guard;
+    }
+
+    /// RAII guard that sets an env var on construction and removes it on drop.
+    struct OnDropEnvVar {
+        key: String,
+        _original: Option<String>,
+    }
+
+    impl OnDropEnvVar {
+        fn new(key: &str, value: &str) -> Self {
+            let original = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self {
+                key: key.to_string(),
+                _original: original,
+            }
+        }
+    }
+
+    impl Drop for OnDropEnvVar {
+        fn drop(&mut self) {
+            std::env::remove_var(&self.key);
+        }
     }
 }
