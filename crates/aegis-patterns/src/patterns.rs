@@ -4,38 +4,38 @@
 
 use crate::Pattern;
 
-pub mod secrets;
-pub mod code_quality;
-pub mod devops;
-pub mod ai_detection;
-pub mod security_hardening;
 pub mod accessibility;
-pub mod web_security;
-pub mod pii;
-pub mod cloud_native;
-pub mod performance;
-pub mod supply_chain;
-pub mod infrastructure;
-pub mod compliance;
-pub mod git_hygiene;
+pub mod ai_detection;
 pub mod ai_safety;
-pub mod llm_guardrails;
-pub mod shift_left;
 pub mod api_integration;
-pub mod kubernetes;
-pub mod container;
-pub mod git_ops;
 pub mod arm;
+pub mod cloud_native;
 pub mod cloudformation;
+pub mod code_quality;
+pub mod compliance;
+pub mod container;
 pub mod data_visualization;
+pub mod devops;
 pub mod finance;
 pub mod frameworks;
+pub mod git_hygiene;
+pub mod git_ops;
 pub mod graphql;
 pub mod healthcare;
+pub mod infrastructure;
+pub mod kubernetes;
+pub mod llm_guardrails;
 pub mod metadata;
+pub mod performance;
+pub mod pii;
 pub mod pwa;
+pub mod secrets;
+pub mod security_hardening;
+pub mod shift_left;
+pub mod supply_chain;
 pub mod terraform;
 pub mod web_development;
+pub mod web_security;
 
 /// Get all patterns
 pub fn all_patterns() -> Vec<Pattern> {
@@ -121,22 +121,55 @@ mod tests {
     #[test]
     fn test_all_patterns() {
         let patterns = all_patterns();
-        assert!(patterns.len() >= 500, "Expected 500+ patterns, got {}", patterns.len());
+        assert!(
+            patterns.len() >= 500,
+            "Expected 500+ patterns, got {}",
+            patterns.len()
+        );
     }
 
     #[test]
     fn test_category_patterns() {
         for cat in &[
-            "secrets", "code-quality", "devops", "ai-detection",
-            "security-hardening", "accessibility", "web-security", "pii",
-            "cloud-native", "performance", "supply-chain", "infrastructure",
-            "compliance", "git-hygiene", "ai-safety", "llm-guardrails", "shift-left",
-            "api-integration", "kubernetes", "container", "git-ops", "arm",
-            "cloudformation", "data-visualization", "finance", "frameworks",
-            "graphql", "healthcare", "metadata", "pwa", "terraform", "web-development"
+            "secrets",
+            "code-quality",
+            "devops",
+            "ai-detection",
+            "security-hardening",
+            "accessibility",
+            "web-security",
+            "pii",
+            "cloud-native",
+            "performance",
+            "supply-chain",
+            "infrastructure",
+            "compliance",
+            "git-hygiene",
+            "ai-safety",
+            "llm-guardrails",
+            "shift-left",
+            "api-integration",
+            "kubernetes",
+            "container",
+            "git-ops",
+            "arm",
+            "cloudformation",
+            "data-visualization",
+            "finance",
+            "frameworks",
+            "graphql",
+            "healthcare",
+            "metadata",
+            "pwa",
+            "terraform",
+            "web-development",
         ] {
             let patterns = by_category(cat);
-            assert!(!patterns.is_empty(), "Category {} should have patterns", cat);
+            assert!(
+                !patterns.is_empty(),
+                "Category {} should have patterns",
+                cat
+            );
         }
     }
 }
