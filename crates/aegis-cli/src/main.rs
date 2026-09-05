@@ -13,7 +13,7 @@ use aegis_cli::{
 
 #[derive(Parser)]
 #[command(name = "aegis")]
-#[command(version = "0.1.0")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Aegis - Security scanning for DevOps and CI/CD", long_about = None)]
 struct Cli {
     /// Enable verbose output

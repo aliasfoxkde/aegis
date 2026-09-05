@@ -7,6 +7,16 @@ fn aegis_cmd() -> Command {
 }
 
 #[test]
+fn test_cli_version_matches_package_version() {
+    let output = aegis_cmd().arg("--version").output().unwrap();
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        format!("aegis {}", env!("CARGO_PKG_VERSION"))
+    );
+}
+
+#[test]
 fn test_scan_detects_aws_key() {
     let file_path = std::env::temp_dir().join("aegis_test_aws.yaml");
     std::fs::write(&file_path, "aws_key: AKIAIOSFODNN7EXAMPLE").unwrap();
