@@ -124,6 +124,23 @@ impl ScanReceipt {
             hex::encode(Sha256::digest(identity_material.as_bytes()))
         );
         let inspection_ledger = stats.inspection_ledger.clone();
+        // Keep the embedded statistics consistent with the embedded findings:
+        // callers such as the CLI diff/env/stdin paths pass coverage-only stats,
+        // so recompute the finding-derived counts from the actual findings.
+        let mut stats = stats;
+        stats.finding_count = redacted_findings.len();
+        stats.findings_by_severity.clear();
+        stats.findings_by_category.clear();
+        for finding in &redacted_findings {
+            *stats
+                .findings_by_severity
+                .entry(finding.severity.clone())
+                .or_insert(0) += 1;
+            *stats
+                .findings_by_category
+                .entry(finding.category.clone())
+                .or_insert(0) += 1;
+        }
 
         Self {
             schema_version: SCAN_RECEIPT_SCHEMA_VERSION,
@@ -265,5 +282,57 @@ mod tests {
         let receipt = ScanReceipt::from_scan("fixture.rs", "fixture", "default", None, &[], stats);
 
         assert!(!receipt.allows_safe());
+    }
+
+    #[test]
+    fn receipt_stats_align_with_embedded_findings() {
+        let high = finding();
+        let low = Finding::new(
+            "weak-rule",
+            "injection",
+            "low",
+            "medium",
+            Location::new("fixture2.rs", 9, 1, "query = input"),
+            "input",
+            "redacted low finding",
+        );
+        let findings = [high, low];
+        // Coverage-only stats (as produced by CLI diff/env/stdin paths): they
+        // carry no finding-derived counts even though findings exist.
+        let stats = ScanStats::for_content("string:fixture.rs", 42);
+
+        let receipt =
+            ScanReceipt::from_scan("fixture.rs", "fixture", "default", None, &findings, stats);
+
+        assert_eq!(receipt.finding_count, 2);
+        assert_eq!(receipt.stats.finding_count, receipt.finding_count);
+        assert_eq!(receipt.stats.findings_by_severity.get("high"), Some(&1));
+        assert_eq!(receipt.stats.findings_by_severity.get("low"), Some(&1));
+        assert_eq!(receipt.stats.findings_by_severity.len(), 2);
+        assert_eq!(receipt.stats.findings_by_category.get("secrets"), Some(&1));
+        assert_eq!(
+            receipt.stats.findings_by_category.get("injection"),
+            Some(&1)
+        );
+        assert_eq!(receipt.stats.findings_by_category.len(), 2);
+        // Coverage fields from the caller are preserved, not discarded.
+        assert_eq!(receipt.stats.files_scanned, 1);
+        assert_eq!(receipt.stats.bytes_scanned, 42);
+    }
+
+    #[test]
+    fn empty_receipt_stats_show_no_findings() {
+        let mut stats = ScanStats::for_content("string:fixture.rs", 0);
+        // Simulate stale finding-derived counts that disagree with zero findings.
+        stats.finding_count = 3;
+        stats.findings_by_severity.insert("high".to_string(), 3);
+        stats.findings_by_category.insert("secrets".to_string(), 3);
+
+        let receipt = ScanReceipt::from_scan("fixture.rs", "fixture", "default", None, &[], stats);
+
+        assert_eq!(receipt.finding_count, 0);
+        assert_eq!(receipt.stats.finding_count, 0);
+        assert!(receipt.stats.findings_by_severity.is_empty());
+        assert!(receipt.stats.findings_by_category.is_empty());
     }
 }
