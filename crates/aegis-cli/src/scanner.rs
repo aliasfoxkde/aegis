@@ -7,7 +7,8 @@ use aegis_core::{
     ScanStats, Scanner, Severity,
 };
 use anyhow::Result;
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
 pub struct ScanOptions {
@@ -19,6 +20,8 @@ pub struct ScanOptions {
     pub categories: Option<String>,
     pub severity_threshold: Option<String>,
     pub output_file: Option<PathBuf>,
+    /// Baseline file (`--format json` output from a previous scan) whose
+    /// findings are treated as pre-existing and filtered out
     pub baseline: Option<PathBuf>,
     /// Include disabled patterns in scan
     pub all: bool,
@@ -89,6 +92,63 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     Ok(scanner)
 }
 
+/// Load the set of finding fingerprints recorded in a baseline file.
+///
+/// A baseline is the JSON output of a previous `--format json` scan,
+/// accepted either as the full `{findings, stats}` document or as a bare
+/// findings array. `Finding::matched_content` is `#[serde(skip)]`, so a
+/// baseline never contains the flagged text itself — only its one-way
+/// digest — and baseline files are safe to commit or share.
+fn load_baseline_fingerprints(path: &Path) -> Result<HashSet<String>> {
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("Failed to read baseline file {}: {}", path.display(), e))?;
+
+    #[derive(serde::Deserialize)]
+    struct BaselineFinding {
+        fingerprint: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct BaselineDocument {
+        findings: Vec<BaselineFinding>,
+    }
+
+    if let Ok(document) = serde_json::from_str::<BaselineDocument>(&content) {
+        return Ok(document
+            .findings
+            .into_iter()
+            .map(|finding| finding.fingerprint)
+            .collect());
+    }
+
+    let findings: Vec<BaselineFinding> = serde_json::from_str(&content).map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to parse baseline file {} (expected `--format json` \
+             output from a previous scan): {}",
+            path.display(),
+            e
+        )
+    })?;
+    Ok(findings
+        .into_iter()
+        .map(|finding| finding.fingerprint)
+        .collect())
+}
+
+/// Drop findings already recorded in the baseline file, if one was given.
+///
+/// The match is exact — pattern, file, line, and a digest of the matched
+/// text must all agree — so edited or moved code re-fires the finding.
+/// Exit codes are computed after this filter, which is what makes
+/// `--baseline` usable as a CI gate over "new findings only".
+fn apply_baseline_filter(findings: &mut Vec<Finding>, baseline: Option<&PathBuf>) -> Result<()> {
+    let Some(path) = baseline else {
+        return Ok(());
+    };
+    let known = load_baseline_fingerprints(path)?;
+    findings.retain(|finding| !known.contains(&finding.fingerprint));
+    Ok(())
+}
+
 /// Perform scan based on options (testable)
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
@@ -119,6 +179,9 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
             .scan_dir(&opts.path)
             .map_err(|e| anyhow::anyhow!("{}", e))?
     };
+
+    let mut findings = findings;
+    apply_baseline_filter(&mut findings, opts.baseline.as_ref())?;
 
     Ok((findings, stats))
 }
@@ -983,5 +1046,181 @@ mod tests {
         fn drop(&mut self) {
             std::env::remove_var(&self.key);
         }
+    }
+
+    /// Fixture directory holding one file with the same known-bad AWS
+    /// access key on two separate lines, so fingerprint-precise filtering
+    /// can be observed finding-by-finding (fingerprints bind the line).
+    fn baseline_fixture_path() -> PathBuf {
+        let path = scan_fixture_path();
+        std::fs::write(
+            path.join("fixture.env"),
+            "aws_key: AKIAIOSFODNN7EXAMPLE\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n",
+        )
+        .expect("write baseline fixture");
+        path
+    }
+
+    fn baseline_scan_opts(path: PathBuf, baseline: Option<PathBuf>) -> ScanOptions {
+        ScanOptions {
+            path,
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        }
+    }
+
+    /// Serialize findings in the exact shape `--format json` writes.
+    fn write_baseline_document(path: &Path, findings: &[Finding]) {
+        #[derive(serde::Serialize)]
+        struct BaselineDocument<'a> {
+            findings: &'a [Finding],
+            stats: ScanStats,
+        }
+        let document = BaselineDocument {
+            findings,
+            stats: ScanStats::default(),
+        };
+        std::fs::write(path, serde_json::to_string(&document).unwrap())
+            .expect("write baseline document");
+    }
+
+    #[test]
+    fn test_baseline_filters_known_findings() {
+        let fixture = baseline_fixture_path();
+        let opts = baseline_scan_opts(fixture.clone(), None);
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(
+            findings.len() >= 2,
+            "precondition: fixture must produce one finding per flagged line, got {}",
+            findings.len()
+        );
+
+        // The baseline lives outside the scanned tree: a baseline inside
+        // it would itself be scanned (and flagged) on the next run.
+        let outside = tempfile::tempdir().unwrap();
+        let baseline_path = outside.path().join("baseline.json");
+        write_baseline_document(&baseline_path, &findings);
+
+        let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(
+            filtered.is_empty(),
+            "all baseline findings must be filtered, got {}",
+            filtered.len()
+        );
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_baseline_keeps_findings_absent_from_baseline() {
+        let fixture = baseline_fixture_path();
+        let opts = baseline_scan_opts(fixture.clone(), None);
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(findings.len() >= 2, "precondition: two flagged lines");
+
+        // Record only the first finding; the second must survive.
+        let outside = tempfile::tempdir().unwrap();
+        let baseline_path = outside.path().join("partial_baseline.json");
+        write_baseline_document(&baseline_path, &findings[..1]);
+
+        let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(filtered.len(), 1, "only the non-baselined finding remains");
+        assert_ne!(filtered[0].fingerprint, findings[0].fingerprint);
+        assert_eq!(filtered[0].fingerprint, findings[1].fingerprint);
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_baseline_accepts_bare_findings_array() {
+        let fixture = baseline_fixture_path();
+        let opts = baseline_scan_opts(fixture.clone(), None);
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(!findings.is_empty());
+
+        let outside = tempfile::tempdir().unwrap();
+        let baseline_path = outside.path().join("baseline.json");
+        std::fs::write(&baseline_path, serde_json::to_string(&findings).unwrap())
+            .expect("write bare-array baseline");
+
+        let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(filtered.is_empty(), "bare array baseline must filter too");
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_baseline_changed_code_refires_finding() {
+        let fixture = baseline_fixture_path();
+        let opts = baseline_scan_opts(fixture.clone(), None);
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(findings.len() >= 2);
+
+        // Baseline records the line-1 finding, then the code moves the
+        // surviving key down to line 3 — a (pattern, line, digest) triple
+        // no baseline entry covers. The exact-position baseline must
+        // re-fire it.
+        let outside = tempfile::tempdir().unwrap();
+        let baseline_path = outside.path().join("baseline.json");
+        write_baseline_document(&baseline_path, &findings[..1]);
+
+        std::fs::write(
+            fixture.join("fixture.env"),
+            "# the key moved down\n# with the edit\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n",
+        )
+        .expect("rewrite fixture with key moved down");
+
+        let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(
+            filtered.len(),
+            1,
+            "moved code must re-fire even when baselined elsewhere"
+        );
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_baseline_missing_file_is_an_error() {
+        let fixture = scan_fixture_path();
+        let opts = baseline_scan_opts(fixture.clone(), Some(fixture.join("nope.json")));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let err = perform_scan(&scanner, &opts).unwrap_err();
+        assert!(
+            err.to_string().contains("baseline"),
+            "error must mention the baseline file, got: {err}"
+        );
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_baseline_malformed_file_is_an_error() {
+        let fixture = baseline_fixture_path();
+        let outside = tempfile::tempdir().unwrap();
+        let baseline_path = outside.path().join("garbage.json");
+        std::fs::write(&baseline_path, "not json at all").unwrap();
+
+        let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let err = perform_scan(&scanner, &opts).unwrap_err();
+        assert!(
+            err.to_string().contains("baseline"),
+            "error must mention the baseline file, got: {err}"
+        );
+        std::fs::remove_dir_all(fixture).ok();
     }
 }
