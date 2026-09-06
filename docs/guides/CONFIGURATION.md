@@ -108,29 +108,42 @@ timeout = 30
 
 ## Ignoring Files
 
-Create `.aegisignore` in your project root:
+Create `.aegisignore` in your project root. Rules are gitignore-style
+globs; a later rule overrides an earlier one, and a `!` prefix
+re-includes a path that an earlier rule (including one from
+`.gitignore`) excluded. `.aegisignore` rules are evaluated after
+`.gitignore` rules, so they always win.
 
 ```
-# Patterns (glob)
+# Glob patterns
 node_modules/
 dist/
 build/
 *.min.js
-
-# Directories
-.git/
-target/
-vendor/
 
 # File types
 **/*.png
 **/*.jpg
 **/*.lock
 
-# Specific findings
-ignore: aws-access-key
-ignore: commented-secret
+# Re-include a path excluded above or by .gitignore
+!docs/public-api.md
 ```
+
+Semantics:
+
+- `*.log` matches at any depth (basename matching).
+- `build/` or `build` ignores the directory and everything beneath it.
+- `docs/keep.md` (a rule containing `/`) is anchored to the scan root.
+- Blank lines and `#` comments are skipped; invalid globs are ignored.
+- `.atheonignore` is still read as a legacy alias when `.aegisignore`
+  is absent.
+- `node_modules/`, `target/`, and `.git/` are always ignored.
+
+Both sources can be toggled independently in configuration:
+`gitignore_respect` and `aegisignore_respect` (both default to `true`;
+the legacy config key `gitignore_atheon_respect` is still accepted for
+the latter).
 
 ## Environment Variables
 

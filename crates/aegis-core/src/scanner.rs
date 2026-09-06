@@ -69,10 +69,10 @@ pub struct ScanOptions {
     pub categories: Vec<String>,
     /// Severity threshold
     pub severity_threshold: Option<String>,
-    /// Use gitignore
+    /// Respect .gitignore when walking the scan root
     pub use_gitignore: bool,
-    /// Use atheonignore
-    pub use_atheonignore: bool,
+    /// Respect .aegisignore (or legacy .atheonignore)
+    pub use_aegisignore: bool,
     /// Number of workers
     pub workers: usize,
     /// Baseline file to suppress known findings
@@ -92,7 +92,7 @@ impl Default for ScanOptions {
             categories: Vec::new(),
             severity_threshold: None,
             use_gitignore: true,
-            use_atheonignore: true,
+            use_aegisignore: true,
             workers: num_cpus(),
             baseline: None,
             include_disabled: false,
@@ -186,7 +186,7 @@ impl Scanner {
 
         scanner.options.max_file_size = config.max_file_size_mb * 1024 * 1024;
         scanner.options.use_gitignore = config.gitignore_respect;
-        scanner.options.use_atheonignore = config.gitignore_respect;
+        scanner.options.use_aegisignore = config.aegisignore_respect;
 
         Ok(scanner)
     }
@@ -672,8 +672,13 @@ impl Scanner {
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
 
-        // Initialize ignore manager with the root directory
-        if let Err(e) = self.ignore_manager.set_root(root) {
+        // Initialize ignore manager with the root directory, honoring the
+        // configured ignore sources.
+        if let Err(e) = self.ignore_manager.set_root_with(
+            root,
+            self.options.use_gitignore,
+            self.options.use_aegisignore,
+        ) {
             tracing::debug!("Failed to load ignore files: {}", e);
         }
 
@@ -1244,7 +1249,7 @@ mod tests {
         assert!(options.categories.is_empty());
         assert!(options.severity_threshold.is_none());
         assert!(options.use_gitignore);
-        assert!(options.use_atheonignore);
+        assert!(options.use_aegisignore);
     }
 
     #[test]
@@ -1256,7 +1261,7 @@ mod tests {
             categories: vec!["secrets".to_string()],
             severity_threshold: Some("high".to_string()),
             use_gitignore: false,
-            use_atheonignore: false,
+            use_aegisignore: false,
             workers: 8,
             baseline: Some(PathBuf::from("/baseline.json")),
             include_disabled: true,
@@ -1269,7 +1274,7 @@ mod tests {
         assert_eq!(options.categories, vec!["secrets"]);
         assert_eq!(options.severity_threshold.as_deref(), Some("high"));
         assert!(!options.use_gitignore);
-        assert!(!options.use_atheonignore);
+        assert!(!options.use_aegisignore);
         assert_eq!(options.workers, 8);
     }
 

@@ -45,9 +45,9 @@ pub struct YamlPreset {
     /// Use gitignore
     #[serde(default = "default_true")]
     pub gitignore_respect: bool,
-    /// Use atheonignore
-    #[serde(default = "default_true")]
-    pub gitignore_atheon_respect: bool,
+    /// Respect .aegisignore (or legacy .atheonignore)
+    #[serde(default = "default_true", alias = "gitignore_atheon_respect")]
+    pub aegisignore_respect: bool,
     /// Output formats
     #[serde(default)]
     pub output_formats: Vec<YamlOutputFormatConfig>,
@@ -173,6 +173,7 @@ impl YamlPreset {
                 .then(|| self.enabled_categories.clone()),
             max_file_size_mb: self.max_file_size_mb,
             gitignore_respect: self.gitignore_respect,
+            aegisignore_respect: self.aegisignore_respect,
             severity_threshold: self.severity_threshold.clone(),
             ..Config::default()
         }
@@ -268,6 +269,9 @@ pub struct Config {
     /// Respect gitignore
     #[serde(default = "default_true")]
     pub gitignore_respect: bool,
+    /// Respect .aegisignore (or legacy .atheonignore)
+    #[serde(default = "default_true", alias = "gitignore_atheon_respect")]
+    pub aegisignore_respect: bool,
     /// Output format
     #[serde(default)]
     pub output_format: OutputFormat,
@@ -359,6 +363,7 @@ impl Config {
                 max_file_size_mb: 5,
                 binary_file_detection: true,
                 gitignore_respect: true,
+                aegisignore_respect: true,
                 output_format: OutputFormat::Sarif,
                 timeout_seconds: 60,
                 severity_threshold: None,
@@ -380,6 +385,7 @@ impl Config {
                 max_file_size_mb: 10,
                 binary_file_detection: true,
                 gitignore_respect: true,
+                aegisignore_respect: true,
                 output_format: OutputFormat::Json,
                 timeout_seconds: 300,
                 severity_threshold: None,
@@ -394,6 +400,7 @@ impl Config {
                 max_file_size_mb: 50,
                 binary_file_detection: false,
                 gitignore_respect: true,
+                aegisignore_respect: true,
                 output_format: OutputFormat::Human,
                 timeout_seconds: 0,
                 severity_threshold: None,
@@ -408,6 +415,7 @@ impl Config {
                 max_file_size_mb: 10,
                 binary_file_detection: true,
                 gitignore_respect: true,
+                aegisignore_respect: true,
                 output_format: OutputFormat::Json,
                 timeout_seconds: 30,
                 severity_threshold: None,
@@ -433,6 +441,7 @@ impl Config {
             max_file_size_mb: 10,
             binary_file_detection: true,
             gitignore_respect: true,
+            aegisignore_respect: true,
             output_format: OutputFormat::Human,
             timeout_seconds: 300,
             severity_threshold: None,

@@ -72,7 +72,7 @@ aegis scan . --profile production
 
 ## Ignoring Files
 
-Create `.aegisignore` in your project root:
+Create `.aegisignore` in your project root (gitignore-style globs):
 
 ```
 # Ignore node_modules
@@ -86,10 +86,13 @@ build/
 **/*_test.go
 **/*.test.ts
 
-# Ignore specific findings by pattern name
-ignore: aws-access-key
-ignore: commented-secret
+# Re-include a path excluded above or by .gitignore
+!src/generated/keep.ts
 ```
+
+A `!` prefix re-includes a path; later rules override earlier ones.
+`.aegisignore` is evaluated after `.gitignore`, so it always wins. See
+[Configuration](CONFIGURATION.md#ignoring-files) for full semantics.
 
 ## CI/CD Examples
 
