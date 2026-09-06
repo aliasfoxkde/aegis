@@ -15,7 +15,18 @@ fn mcp_binary() -> std::path::PathBuf {
         .join("aegis-mcp")
 }
 
+/// Deadline for methods that only parse a single request. `update_bundle`
+/// rebuilds the scanner from every bundled pattern, which takes tens of
+/// seconds under a fully loaded CI runner, so it gets its own deadline
+/// (see `UPDATE_BUNDLE_DEADLINE`).
+const REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+const UPDATE_BUNDLE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
+
 fn send_mcp_request(request: &str) -> String {
+    send_mcp_request_with_deadline(request, REQUEST_DEADLINE)
+}
+
+fn send_mcp_request_with_deadline(request: &str, deadline_duration: std::time::Duration) -> String {
     let mut child = std::process::Command::new(mcp_binary())
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -38,7 +49,7 @@ fn send_mcp_request(request: &str) -> String {
         output
     });
 
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let deadline = std::time::Instant::now() + deadline_duration;
     loop {
         match child.try_wait().expect("Failed to poll MCP server") {
             Some(_) => break,
@@ -46,7 +57,7 @@ fn send_mcp_request(request: &str) -> String {
                 let _ = child.kill();
                 let _ = child.wait();
                 let _ = reader.join();
-                panic!("MCP server did not exit before the 30-second deadline");
+                panic!("MCP server did not exit within {:?}", deadline_duration);
             }
             None => std::thread::sleep(std::time::Duration::from_millis(25)),
         }
@@ -103,7 +114,9 @@ fn test_mcp_stdout_contains_only_json_rpc_responses() {
 #[test]
 fn test_mcp_update_bundle() {
     let request = r#"{"jsonrpc":"2.0","method":"update_bundle","params":[null,false],"id":4}"#;
-    let response = send_mcp_request(request);
+    // Rebuilding the scanner compiles every bundled pattern synchronously,
+    // which can exceed the default deadline on a loaded runner.
+    let response = send_mcp_request_with_deadline(request, UPDATE_BUNDLE_DEADLINE);
     assert!(response.contains("success"), "Response: {}", response);
 }
 
