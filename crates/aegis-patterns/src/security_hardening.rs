@@ -55,7 +55,10 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sql-query".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)SELECT|INSERT|UPDATE|DELETE|DROP|ALTER"#.to_string(),
+            // Require a quoted, SQL-shaped phrase: bare prose like "update the
+            // docs" or the word "alternative" must not match, but string
+            // literals carrying real statement structure still do.
+            match_pattern: r#"(?i)['"][^'"\n]{0,300}?(?:\bselect\s+[^'\"\n]{0,200}?\bfrom\s|\binsert\s+into\s|\bdelete\s+from\s|\bupdate\s+\w+\s+set\s|\bdrop\s+(?:table|database|schema)\s|\balter\s+table\s)"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "low".to_string(),
@@ -132,23 +135,7 @@ pub fn get() -> Vec<Pattern> {
             exclude: None,
             file_extensions: Vec::new(),
         },
-        Pattern {
-            name: "csrf-missing".to_string(),
-            category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)csrf|srftoken|csrf_token"#.to_string(),
-            enabled: true,
-            severity: "low".to_string(),
-            confidence: "low".to_string(),
-            min_entropy: None,
-            description: "CSRF protection reference detected".to_string(),
-            reference: None,
-            tags: vec!["csrf".to_string(), "security".to_string()],
-            env_var: false,
-            binary: false,
-            exclude: None,
-            file_extensions: Vec::new(),
-        },
-        Pattern {
+                Pattern {
             name: "hardcoded-iv".to_string(),
             category: "security-hardening".to_string(),
             match_pattern: r#"(?i)(iv|initialization_vector)\s*[:=]\s*['"][a-fA-F0-9]{16,}"#.to_string(),

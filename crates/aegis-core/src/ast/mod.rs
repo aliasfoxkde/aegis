@@ -281,11 +281,12 @@ impl AstAnalyzer {
 
             // Check for eval usage
             if trimmed.contains("eval(") {
+                // aegis:ignore:eval-usage
                 findings.push(AstFinding {
                     pattern: "dangerous-execution".to_string(),
                     file: source.to_string(),
                     line: line_num,
-                    description: "Use of eval() - dynamic code execution".to_string(),
+                    description: "Use of eval() - dynamic code execution".to_string(), // aegis:ignore:eval-usage
                     severity: "high".to_string(),
                     confidence: "high".to_string(),
                 });
@@ -397,11 +398,12 @@ impl AstAnalyzer {
 
             // Check for eval usage
             if trimmed.contains("eval(") {
+                // aegis:ignore:eval-usage
                 findings.push(AstFinding {
                     pattern: "dangerous-execution".to_string(),
                     file: source.to_string(),
                     line: line_num,
-                    description: "Use of eval() - dynamic code execution".to_string(),
+                    description: "Use of eval() - dynamic code execution".to_string(), // aegis:ignore:eval-usage
                     severity: "high".to_string(),
                     confidence: "high".to_string(),
                 });
@@ -601,17 +603,10 @@ impl AstAnalyzer {
                 });
             }
 
-            // Check for unwrap() usage
-            if trimmed.contains(".unwrap()") || trimmed.contains(".expect(") {
-                findings.push(AstFinding {
-                    pattern: "panic-possible".to_string(),
-                    file: source.to_string(),
-                    line: line_num,
-                    description: "Use of unwrap() or expect() can cause panics".to_string(),
-                    severity: "medium".to_string(),
-                    confidence: "high".to_string(),
-                });
-            }
+            // Note: unwrap()/expect() panics are intentionally NOT reported
+            // here. The regex pack already owns that signal
+            // (`rust-unwrap-usage`, `rust-expect-usage`); reporting it from
+            // both layers triple-counts every occurrence.
 
             // Check for TODO
             if trimmed.contains("TODO") || trimmed.contains("FIXME") || trimmed.contains("HACK") {
@@ -694,7 +689,7 @@ impl AstAnalyzer {
             }
 
             // Eval/exec usage
-            if trimmed.contains("eval(")
+            if trimmed.contains("eval(")  // aegis:ignore:eval-usage
                 || trimmed.contains("exec(")
                 || trimmed.contains("Runtime.getRuntime().exec")
             {
@@ -771,19 +766,23 @@ func main() {
     }
 
     #[test]
-    fn test_rust_analysis() {
+    fn test_rust_analysis_flags_unsafe_not_unwrap() {
         let analyzer = AstAnalyzer::new(Language::Rust);
         let content = r#"
 fn main() {
     let x = Some(1);
+    let y = unsafe { x };
     println!("{:?}", x.unwrap());
 }
 "#;
         let result = analyzer.analyze_content(content, "test.rs").unwrap();
+        // unsafe blocks are AST-reported; unwrap() is left to the regex
+        // pack (rust-unwrap-usage) to avoid double-counting.
+        assert!(result.findings.iter().any(|f| f.pattern == "unsafe-code"));
         assert!(result
             .findings
             .iter()
-            .any(|f| f.pattern == "panic-possible"));
+            .all(|f| f.pattern != "panic-possible"));
     }
 
     #[test]
@@ -792,7 +791,7 @@ fn main() {
         let content = r#"
 function test() {
     console.log("debug");
-    eval("dynamic code");
+    eval("dynamic code");  // aegis:ignore:eval-usage
 }
 "#;
         let findings = analyzer.check_common_patterns(content, "test.js");
@@ -1020,7 +1019,7 @@ func main() {}
     #[test]
     fn test_check_common_patterns_exec() {
         let analyzer = AstAnalyzer::new(Language::JavaScript);
-        let content = "eval('code');\n";
+        let content = "eval('code');\n"; // aegis:ignore:eval-usage
         let findings = analyzer.check_common_patterns(content, "test.js");
         assert!(findings.iter().any(|f| f.pattern == "dangerous-execution"));
     }
@@ -1044,7 +1043,7 @@ func main() {}
 
     #[test]
     fn test_inspect_source_reports_parser_coverage() {
-        let inspection = AstAnalyzer::inspect_source("eval('x')\n", "fixture.py");
+        let inspection = AstAnalyzer::inspect_source("eval('x')\n", "fixture.py"); // aegis:ignore:eval-usage
         assert_eq!(inspection.language.as_deref(), Some("py"));
         assert!(!inspection.findings.is_empty());
         #[cfg(feature = "tree-sitter")]
@@ -1319,7 +1318,7 @@ pub fn get_security_patterns() -> Vec<SecurityPattern> {
             name: "eval-usage".to_string(),
             node_types: vec!["call".to_string()],
             dangerous_parents: vec![],
-            description: "Use of eval() - dynamic code execution".to_string(),
+            description: "Use of eval() - dynamic code execution".to_string(), // aegis:ignore:eval-usage
             severity: "high",
             confidence: "high",
         },

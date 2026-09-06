@@ -126,7 +126,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: None,
-            file_extensions: Vec::new(),
+            file_extensions: vec!["js".to_string(), "ts".to_string(), "jsx".to_string(), "tsx".to_string(), "vue".to_string(), "svelte".to_string(), "php".to_string(), "rb".to_string(), "py".to_string(), "java".to_string(), "kt".to_string(), "cs".to_string()],
         },
         Pattern {
             name: "csrf-token-header".to_string(),
@@ -526,7 +526,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "server-version".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)Server|X-Powered-By|X-AspNet-Version"#.to_string(),
+            // Match the header form only ("Server: nginx"), not the bare word
+            // "server" which appears in prose, identifiers, and configs.
+            match_pattern: r#"(?im)^\s*(?:server|x-powered-by|x-aspnet-version|x-aspnetmvc-version|x-generator)\s*:\s*\S[^\n]{0,80}$"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

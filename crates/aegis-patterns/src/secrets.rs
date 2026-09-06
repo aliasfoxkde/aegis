@@ -650,7 +650,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "env-credential-assignment".to_string(),
             category: "secrets".to_string(),
-            match_pattern: r#"(?i)\b[A-Z][A-Z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD|CREDENTIAL)[A-Z0-9_]*\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{8,}['"]?"#.to_string(),
+            // No (?i): the uppercase naming IS the signal. Case-insensitive
+            // matching made "topologyKey: kubernetes.io/hostname" a finding.
+            match_pattern: r#"\b[A-Z][A-Z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD|CREDENTIAL)[A-Z0-9_]*\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{8,}['"]?"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),

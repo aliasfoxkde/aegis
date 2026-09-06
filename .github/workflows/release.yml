@@ -188,7 +188,7 @@ jobs:
           certutil -hashfile aegis-mcp.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
           certutil -hashfile aegis-daemon.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
           certutil -hashfile aegis-bundler.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
-          tar -czf aegis-windows-x86_64.tar.gz aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe
+          tar -czf aegis-windows-x86_64.tar.gz aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe  # aegis:ignore:executable-file-upload
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

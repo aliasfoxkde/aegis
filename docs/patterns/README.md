@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis ships **638 detection patterns** across **33 categories**.
+Aegis ships **633 detection patterns** across **33 categories**.
 This document is generated from the pattern source in
 `crates/aegis-patterns/src/`; regenerate with:
 
@@ -26,7 +26,7 @@ Each pattern can carry two optional scoping fields:
 |----------|----------|-------------|
 
 | [accessibility](#accessibility) | 28 | WCAG 2.x success criteria for markup, media, and styles |
-| [ai-detection](#aidetection) | 24 | Heuristics that flag likely AI-generated code |
+| [ai-detection](#aidetection) | 22 | Heuristics that flag likely AI-generated code |
 | [ai-safety](#aisafety) | 25 | Agentic and LLM application safety checks |
 | [api-integration](#apiintegration) | 9 | HTTP client and webhook integration mistakes |
 | [arm](#arm) | 2 | Azure Resource Manager template issues |
@@ -47,11 +47,11 @@ Each pattern can carry two optional scoping fields:
 | [kubernetes](#kubernetes) | 11 | Kubernetes manifest hardening |
 | [llm-guardrails](#llmguardrails) | 25 | Prompt-injection and LLM guardrail checks |
 | [metadata](#metadata) | 4 | Metadata and editor configuration leaks |
-| [performance](#performance) | 22 | Performance anti-patterns |
+| [performance](#performance) | 20 | Performance anti-patterns |
 | [pii](#pii) | 39 | Personal data: emails, phones, national IDs |
 | [pwa](#pwa) | 5 | Progressive web app checks |
 | [secrets](#secrets) | 41 | Credentials, API keys, and tokens |
-| [security-hardening](#securityhardening) | 33 | General hardening practices |
+| [security-hardening](#securityhardening) | 32 | General hardening practices |
 | [shift-left](#shiftleft) | 20 | Early-lifecycle security practices |
 | [supply-chain](#supplychain) | 35 | Dependency and artifact supply-chain rules |
 | [terraform](#terraform) | 7 | HashiCorp Terraform issues |
@@ -102,13 +102,11 @@ Each pattern can carry two optional scoping fields:
 | `ai-generated-comment` | low | medium | AI-generated code comment detected |
 | `ai-generated-marker` | low | medium | AI generation marker detected |
 | `ai-header-comment` | low | medium | AI-style header comment with permissions |
-| `ai-magic-number` | low | low | Magic number without constant declaration |
 | `ai-overexplanation` | low | low | AI overexplanation pattern detected |
 | `ai-placeholder` | low | medium | AI placeholder text detected |
 | `ai-repetitive-structure` | low | low | Highly repetitive code structure detected |
 | `ai-template-marker` | low | medium | AI template marker detected |
 | `chatgpt-conversation` | low | low | ChatGPT prompt pattern detected |
-| `comment-block-repeat` | low | low | Excessive comment blocks detected |
 | `console-log-debug` | low | low | Console logging statements detected |
 | `function-comment-every` | low | low | Every function has descriptive comments (AI style) |
 | `function-name-verbose` | low | low | Verbose function naming detected |
@@ -561,7 +559,6 @@ Each pattern can carry two optional scoping fields:
 | `inner-html-assignment` | medium | medium | innerHTML assignment may cause performance issues |
 | `missing-database-index` | medium | low | CREATE TABLE without explicit index |
 | `missing-limit` | medium | high | Query missing LIMIT clause |
-| `multiple-redirects` | low | medium | HTTP redirect detected |
 | `n-plus-one-query` | medium | low | Potential N+1 query pattern |
 | `no-cache-headers` | low | high | Cache headers not detected in response |
 | `no-connection-pool` | medium | medium | Database connection without pooling |
@@ -571,7 +568,6 @@ Each pattern can carry two optional scoping fields:
 | `sync-in-async` | medium | medium | Blocking *Sync() call detected; prefer the async API |
 | `synchronous-xmlhttprequest` | high | high | Synchronous XMLHttpRequest blocks UI thread |
 | `unsized-image` | low | high | Image without explicit dimensions |
-| `vector-initial-capacity` | low | medium | Vec::new() without capacity hint - consider Vec::with_capacity() |
 
 ## pii
 
@@ -680,7 +676,6 @@ Each pattern can carry two optional scoping fields:
 | `aws-secret-key` | critical | high | AWS secret access key detected |
 | `basic-auth-url` | high | high | Basic authentication credentials in URL |
 | `bearer-token-url` | medium | high | Bearer token detected in code |
-| `csrf-missing` | low | low | CSRF protection reference detected |
 | `deserialization-vulnerability` | critical | high | Potential insecure deserialization vulnerability |
 | `eval-usage` | high | high | Dangerous eval() usage detected |
 | `github-token` | critical | high | GitHub token detected |

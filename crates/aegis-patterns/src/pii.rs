@@ -552,7 +552,9 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "password".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            // Suppress documented placeholder values; the value sits inside
+            // the matched span so the exclude can see it.
+            exclude: Some(r#"(?i)['\"](example|placeholder|changeme|change-me|dummy|sample|test|testing|redacted|password|not-a-real-?password|\$\{[^}]*\}|<[^>]*>|\*\*\*)['\"]"#.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

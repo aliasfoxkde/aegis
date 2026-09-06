@@ -373,7 +373,7 @@ mod tests {
             "secrets",
             "high",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
             "abc",
             "Hardcoded secret detected",
         )
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn test_file_outputs_redact_sensitive_material() {
         let temp_dir = TempDir::new().unwrap();
-        let secret = "TOP-SECRET-FILE-FIXTURE";
+        let secret = "TOP-SECRET-FILE-FIXTURE"; // aegis:ignore:hardcoded-password
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
