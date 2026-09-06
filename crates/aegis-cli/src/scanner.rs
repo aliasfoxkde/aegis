@@ -7,8 +7,7 @@ use aegis_core::{
     ScanStats, Scanner, Severity,
 };
 use anyhow::Result;
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::io::AsyncReadExt;
 
 pub struct ScanOptions {
@@ -65,12 +64,20 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         })
         .unwrap_or_default();
 
+    // Fail loudly on an unusable baseline rather than silently reporting
+    // unfiltered results as if they were new-findings-only.
+    if let Some(path) = &opts.baseline {
+        aegis_core::scanner::load_baseline_fingerprints(path)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    }
+
     let core_opts = CoreOptions {
         follow_symlinks: opts.follow_symlinks,
         categories: categories.clone(),
         severity_threshold: opts.severity_threshold.clone(),
         include_disabled: opts.all,
         diff_file: opts.diff.clone(),
+        baseline: opts.baseline.clone(),
         ..Default::default()
     };
 
@@ -90,63 +97,6 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     }
 
     Ok(scanner)
-}
-
-/// Load the set of finding fingerprints recorded in a baseline file.
-///
-/// A baseline is the JSON output of a previous `--format json` scan,
-/// accepted either as the full `{findings, stats}` document or as a bare
-/// findings array. `Finding::matched_content` is `#[serde(skip)]`, so a
-/// baseline never contains the flagged text itself — only its one-way
-/// digest — and baseline files are safe to commit or share.
-fn load_baseline_fingerprints(path: &Path) -> Result<HashSet<String>> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| anyhow::anyhow!("Failed to read baseline file {}: {}", path.display(), e))?;
-
-    #[derive(serde::Deserialize)]
-    struct BaselineFinding {
-        fingerprint: String,
-    }
-    #[derive(serde::Deserialize)]
-    struct BaselineDocument {
-        findings: Vec<BaselineFinding>,
-    }
-
-    if let Ok(document) = serde_json::from_str::<BaselineDocument>(&content) {
-        return Ok(document
-            .findings
-            .into_iter()
-            .map(|finding| finding.fingerprint)
-            .collect());
-    }
-
-    let findings: Vec<BaselineFinding> = serde_json::from_str(&content).map_err(|e| {
-        anyhow::anyhow!(
-            "Failed to parse baseline file {} (expected `--format json` \
-             output from a previous scan): {}",
-            path.display(),
-            e
-        )
-    })?;
-    Ok(findings
-        .into_iter()
-        .map(|finding| finding.fingerprint)
-        .collect())
-}
-
-/// Drop findings already recorded in the baseline file, if one was given.
-///
-/// The match is exact — pattern, file, line, and a digest of the matched
-/// text must all agree — so edited or moved code re-fires the finding.
-/// Exit codes are computed after this filter, which is what makes
-/// `--baseline` usable as a CI gate over "new findings only".
-fn apply_baseline_filter(findings: &mut Vec<Finding>, baseline: Option<&PathBuf>) -> Result<()> {
-    let Some(path) = baseline else {
-        return Ok(());
-    };
-    let known = load_baseline_fingerprints(path)?;
-    findings.retain(|finding| !known.contains(&finding.fingerprint));
-    Ok(())
 }
 
 /// Perform scan based on options (testable)
@@ -179,9 +129,6 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
             .scan_dir(&opts.path)
             .map_err(|e| anyhow::anyhow!("{}", e))?
     };
-
-    let mut findings = findings;
-    apply_baseline_filter(&mut findings, opts.baseline.as_ref())?;
 
     Ok((findings, stats))
 }
@@ -1080,7 +1027,7 @@ mod tests {
     }
 
     /// Serialize findings in the exact shape `--format json` writes.
-    fn write_baseline_document(path: &Path, findings: &[Finding]) {
+    fn write_baseline_document(path: &std::path::Path, findings: &[Finding]) {
         #[derive(serde::Serialize)]
         struct BaselineDocument<'a> {
             findings: &'a [Finding],
@@ -1113,6 +1060,7 @@ mod tests {
         write_baseline_document(&baseline_path, &findings);
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
         let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
         assert!(
             filtered.is_empty(),
@@ -1136,6 +1084,7 @@ mod tests {
         write_baseline_document(&baseline_path, &findings[..1]);
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
         let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
         assert_eq!(filtered.len(), 1, "only the non-baselined finding remains");
         assert_ne!(filtered[0].fingerprint, findings[0].fingerprint);
@@ -1157,6 +1106,7 @@ mod tests {
             .expect("write bare-array baseline");
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
         let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
         assert!(filtered.is_empty(), "bare array baseline must filter too");
         std::fs::remove_dir_all(fixture).ok();
@@ -1185,6 +1135,7 @@ mod tests {
         .expect("rewrite fixture with key moved down");
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
+        let scanner = build_scanner_from_opts(&opts).unwrap();
         let (filtered, _) = perform_scan(&scanner, &opts).unwrap();
         assert_eq!(
             filtered.len(),
@@ -1198,8 +1149,12 @@ mod tests {
     fn test_baseline_missing_file_is_an_error() {
         let fixture = scan_fixture_path();
         let opts = baseline_scan_opts(fixture.clone(), Some(fixture.join("nope.json")));
-        let scanner = build_scanner_from_opts(&opts).unwrap();
-        let err = perform_scan(&scanner, &opts).unwrap_err();
+        // Validation happens at scanner construction: a missing baseline
+        // must fail loudly before anything is scanned.
+        let err = match build_scanner_from_opts(&opts) {
+            Err(err) => err,
+            Ok(_) => panic!("baseline validation must fail before scanning"),
+        };
         assert!(
             err.to_string().contains("baseline"),
             "error must mention the baseline file, got: {err}"
@@ -1215,8 +1170,10 @@ mod tests {
         std::fs::write(&baseline_path, "not json at all").unwrap();
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
-        let scanner = build_scanner_from_opts(&opts).unwrap();
-        let err = perform_scan(&scanner, &opts).unwrap_err();
+        let err = match build_scanner_from_opts(&opts) {
+            Err(err) => err,
+            Ok(_) => panic!("baseline validation must fail before scanning"),
+        };
         assert!(
             err.to_string().contains("baseline"),
             "error must mention the baseline file, got: {err}"
