@@ -122,7 +122,70 @@ pub struct Scanner {
         RwLock<std::collections::HashMap<String, Vec<crate::pattern::CategoryScanner>>>,
     /// Track last include_disabled setting to invalidate cache
     last_include_disabled: AtomicBool,
+    /// Baseline fingerprints loaded once when options are set. `Some(Err)`
+    /// records a load failure so it can be reported instead of silently
+    /// scanning unfiltered.
+    baseline_cache: std::sync::OnceLock<Result<std::collections::HashSet<String>, String>>,
 }
+
+/// Load the set of finding fingerprints recorded in a baseline file.
+///
+/// A baseline is the JSON output of a previous `--format json` scan,
+/// accepted either as the full `{findings, stats}` document or as a bare
+/// findings array. `Finding::matched_content` is `#[serde(skip)]`, so a
+/// baseline never contains the flagged text itself — only its one-way
+/// digest — and baseline files are safe to commit or share.
+pub fn load_baseline_fingerprints(
+    path: &Path,
+) -> Result<std::collections::HashSet<String>, BaselineError> {
+    let content = std::fs::read_to_string(path).map_err(|e| BaselineError {
+        path: path.display().to_string(),
+        message: format!("failed to read: {e}"),
+    })?;
+
+    #[derive(serde::Deserialize)]
+    struct BaselineFinding {
+        fingerprint: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct BaselineDocument {
+        findings: Vec<BaselineFinding>,
+    }
+
+    if let Ok(document) = serde_json::from_str::<BaselineDocument>(&content) {
+        return Ok(document
+            .findings
+            .into_iter()
+            .map(|finding| finding.fingerprint)
+            .collect());
+    }
+
+    let findings: Vec<BaselineFinding> =
+        serde_json::from_str(&content).map_err(|e| BaselineError {
+            path: path.display().to_string(),
+            message: format!("expected `--format json` output from a previous scan: {e}"),
+        })?;
+    Ok(findings
+        .into_iter()
+        .map(|finding| finding.fingerprint)
+        .collect())
+}
+
+/// A baseline file could not be loaded or parsed.
+#[derive(Debug, Clone)]
+pub struct BaselineError {
+    /// Baseline file path
+    pub path: String,
+    /// What went wrong
+    pub message: String,
+}
+
+impl std::fmt::Display for BaselineError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "baseline file {}: {}", self.path, self.message)
+    }
+}
+impl std::error::Error for BaselineError {}
 
 impl Scanner {
     /// Create a new scanner
@@ -135,6 +198,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            baseline_cache: std::sync::OnceLock::new(),
         }
     }
 
@@ -149,6 +213,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            baseline_cache: std::sync::OnceLock::new(),
         })
     }
 
@@ -165,6 +230,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            baseline_cache: std::sync::OnceLock::new(),
         })
     }
 
@@ -210,7 +276,15 @@ impl Scanner {
                 .store(options.include_disabled, Ordering::SeqCst);
         }
         self.extension_scanners.write().unwrap().clear();
+        let baseline = options.baseline.clone();
         self.options = options;
+        if let Some(path) = baseline {
+            // Load once here so scans pay no per-file I/O and a broken
+            // baseline is reported instead of silently ignored.
+            let _ = self
+                .baseline_cache
+                .set(load_baseline_fingerprints(&path).map_err(|e| e.to_string()));
+        }
         self
     }
 
@@ -459,38 +533,29 @@ impl Scanner {
         (findings, ast_inspection, suppressed_count)
     }
 
-    /// Load baseline findings and filter them from results
-    /// Uses fingerprint for stable matching (fingerprint = pattern:file:line:content)
+    /// Filter findings recorded in the configured baseline file.
+    ///
+    /// The baseline is loaded once when options are set; a load failure
+    /// is reported through `tracing` and the scan proceeds unfiltered so
+    /// a broken baseline never masquerades as a clean result. The CLI
+    /// pre-validates baselines and fails loudly before scanning.
     fn filter_baseline(&self, findings: Vec<Finding>) -> Vec<Finding> {
-        if self.options.baseline.is_none() {
+        let Some(baseline_path) = self.options.baseline.clone() else {
             return findings;
+        };
+        let cached = self
+            .baseline_cache
+            .get_or_init(|| load_baseline_fingerprints(&baseline_path).map_err(|e| e.to_string()));
+        match cached {
+            Ok(known) => findings
+                .into_iter()
+                .filter(|finding| !known.contains(&finding.fingerprint))
+                .collect(),
+            Err(error) => {
+                tracing::error!("baseline unusable, scanning unfiltered: {error}");
+                findings
+            }
         }
-
-        let baseline_path = self.options.baseline.as_ref().unwrap();
-        let Ok(baseline_content) = std::fs::read_to_string(baseline_path) else {
-            return findings;
-        };
-
-        // Parse baseline JSON - expected format: [{"fingerprint": "..."}, ...]
-        // Also supports simple string array format: ["fingerprint1", "fingerprint2", ...]
-        let baseline_fingerprints: std::collections::HashSet<String> = if let Ok(items) =
-            serde_json::from_str::<Vec<serde_json::Value>>(&baseline_content)
-        {
-            items
-                .iter()
-                .filter_map(|v| v.get("fingerprint").and_then(|f| f.as_str()))
-                .map(String::from)
-                .collect()
-        } else if let Ok(fingerprints) = serde_json::from_str::<Vec<String>>(&baseline_content) {
-            fingerprints.into_iter().collect()
-        } else {
-            return findings;
-        };
-
-        findings
-            .into_iter()
-            .filter(|f| !baseline_fingerprints.contains(&f.fingerprint))
-            .collect()
     }
 
     /// Process a category scanner and return findings
@@ -1863,5 +1928,32 @@ mod tests {
         let (findings, stats) = scanner.scan_file(&path).unwrap();
         assert!(findings.is_empty(), "directive must suppress the finding");
         assert_eq!(stats.suppressed_count, 1);
+    }
+
+    #[test]
+    fn test_load_baseline_fingerprints_formats_and_errors() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("baseline.json");
+
+        // A bare findings array (without the stats wrapper) is accepted.
+        std::fs::write(&path, r#"[{"fingerprint":"fp-1"},{"fingerprint":"fp-2"}]"#).unwrap();
+        let fingerprints = load_baseline_fingerprints(&path).unwrap();
+        let expected: HashSet<String> = ["fp-1", "fp-2"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(fingerprints, expected);
+
+        // Malformed content produces a descriptive error.
+        std::fs::write(&path, "not json").unwrap();
+        let err = load_baseline_fingerprints(&path).unwrap_err();
+        assert!(
+            err.to_string().contains("baseline file"),
+            "error must name the file, got: {err}"
+        );
+
+        // Missing file produces a descriptive error.
+        let err = load_baseline_fingerprints(&temp.path().join("gone.json")).unwrap_err();
+        assert!(
+            err.to_string().contains("failed to read"),
+            "read failures must be reported, got: {err}"
+        );
     }
 }
