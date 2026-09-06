@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-09-05
+
+### Features
+
+- **ADDED**: working `.aegisignore` support with gitignore-compatible
+  semantics — `!` re-inclusion, basename matching for unanchored rules,
+  `./`-prefixed walker paths, directory rules that cover contents, and
+  last-match-wins precedence across `.gitignore` and `.aegisignore`;
+- **ADDED**: independent respect flags `gitignore_respect` and
+  `aegisignore_respect` in `Config` and every preset, with legacy
+  `gitignore_atheon_respect` still accepted as an alias;
+- **ADDED**: registry hygiene suite — fail-loud category and pattern-shape
+  validation plus a generated pattern catalog kept fresh by test
+  (`cargo run -p aegis-patterns --example generate_docs`);
+- **ADDED**: rebuilt `api-integration` pack and kebab-case category
+  normalization across all 33 categories (633 patterns);
+- **ADDED**: suppression parser hardening — directives embedded in string
+  literals tokenize cleanly, and mid-line `# aegis:ignore` directives now
+  work in YAML, shell, and Python.
+
+### Fixes
+
+- **FIXED**: removed five semantically broken patterns (`csrf-missing`,
+  `vector-initial-capacity`, `multiple-redirects`, `comment-block-repeat`,
+  `ai-magic-number`) and re-anchored eight context-starved matchers,
+  cutting self-scan noise by 71%;
+- **FIXED**: CI-parity scan (`secrets,security-hardening,web-security` at
+  high+ severity) now reports zero findings on this repository;
+- **FIXED**: Rust AST analysis no longer double-emits panic signals already
+  owned by their regex patterns;
+- **FIXED**: receipt statistics stay aligned with findings, and stale
+  receipt files fail closed (#68, #69);
+- **FIXED**: MCP tracing stays off the stdout JSON-RPC transport, and the
+  documented positional `scan_file`/`scan_dir` parameters are accepted
+  (#70);
+- **FIXED**: release publication is idempotent (#61).
+
 ## [0.2.6] - 2026-09-01
 
 ### Fixes
