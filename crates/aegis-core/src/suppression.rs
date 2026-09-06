@@ -68,6 +68,12 @@ impl SuppressionManager {
                 self.parse_suppression_line(line_num, &line[marker + 15..]);
             } else if let Some(remaining) = line.trim_start().strip_prefix("# aegis:ignore") {
                 self.parse_suppression_line(line_num, remaining);
+            } else if let Some(marker) = line.find("# aegis:ignore") {
+                // Mid-line `#` directives (YAML, shell, Python) — mirrors
+                // the mid-line `//` handling above.
+                if !line[..marker].contains("//") {
+                    self.parse_suppression_line(line_num, &line[marker + 14..]);
+                }
             } else if let Some(remaining) = line.trim_start().strip_prefix("/* aegis:ignore") {
                 self.parse_multiline_start(line_num, remaining);
             }
@@ -87,8 +93,15 @@ impl SuppressionManager {
         if let Some(pattern_part) = rest.strip_prefix(':') {
             let mut suppressions = self.suppressions.write().unwrap();
             for pattern in pattern_part.split(',').map(str::trim) {
-                if !pattern.is_empty() {
-                    suppressions.insert(Suppression::new(pattern, line));
+                // A directive embedded in a string literal (common in
+                // fixtures that test this parser) carries trailing source
+                // characters like `")`. Take only the name token.
+                let name: String = pattern
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    suppressions.insert(Suppression::new(name, line));
                 }
             }
         } else if let Some(reason_part) = rest.strip_prefix("reason:") {
@@ -181,6 +194,37 @@ mod tests {
         assert!(manager.is_suppressed("first-pattern", 1));
         assert!(manager.is_suppressed("second-pattern", 1));
         assert!(!manager.is_suppressed("other-pattern", 1));
+    }
+
+    #[test]
+    fn test_directive_embedded_in_string_literal() {
+        // Fixtures that test this parser embed the directive inside a
+        // string literal; trailing source characters like `")` after the
+        // last pattern name must not poison the token.
+        let mut manager = SuppressionManager::new();
+        manager.parse_content(
+            "    let f = b\"let secret = 'abc'; // aegis:ignore:hardcoded-password\");\n",
+        );
+        assert!(manager.is_suppressed("hardcoded-password", 1));
+        assert!(!manager.is_suppressed("hardcoded-password\"", 1));
+    }
+
+    #[test]
+    fn test_midline_hash_directive() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content(
+            "  uses: actions/upload-artifact@v4 # v4.6.2 # aegis:ignore:executable-file-upload\n",
+        );
+        assert!(manager.is_suppressed("executable-file-upload", 1));
+    }
+
+    #[test]
+    fn test_hash_directive_skipped_when_url_fragment() {
+        // A `# ...` after `//` is a URL fragment or Rust comment text, not
+        // a YAML/shell directive.
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("let url = \"http://x/# aegis:ignore:eval-usage\";\n");
+        assert!(!manager.is_suppressed("eval-usage", 1));
     }
 
     #[test]

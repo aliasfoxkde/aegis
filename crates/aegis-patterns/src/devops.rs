@@ -92,7 +92,8 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "env-file-in-git".to_string(),
             category: "devops".to_string(),
-            match_pattern: r"\.env(\.\w+)?".to_string(),
+            // Trailing \b stops ".env" from matching inside ".environment".
+            match_pattern: r"\.env(\.\w+)?\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

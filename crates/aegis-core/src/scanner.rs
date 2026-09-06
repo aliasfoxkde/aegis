@@ -903,7 +903,7 @@ mod tests {
     #[test]
     fn test_scan_string_includes_ast_findings() {
         let scanner = Scanner::new();
-        let findings = scanner.scan_string("eval('untrusted')\n", "fixture.py");
+        let findings = scanner.scan_string("eval('untrusted')\n", "fixture.py"); // aegis:ignore:eval-usage
         assert!(findings.iter().any(|finding| {
             finding.kind == FindingKind::Ast && finding.pattern == "dangerous-execution"
         }));
@@ -1066,7 +1066,7 @@ mod tests {
         let temp_file = temp_dir.path().join("fixture.py");
         File::create(&temp_file)
             .unwrap()
-            .write_all(b"eval('untrusted')\n")
+            .write_all(b"eval('untrusted')\n") // aegis:ignore:eval-usage
             .unwrap();
 
         let scanner = Scanner::new();

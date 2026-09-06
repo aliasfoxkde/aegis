@@ -7,7 +7,7 @@
 
 ## Features
 
-- **[638 Detection Patterns](docs/patterns/README.md)** across 33 categories
+- **[633 Detection Patterns](docs/patterns/README.md)** across 33 categories
 - **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
@@ -77,7 +77,7 @@ More examples in the [Quick Start Guide](docs/guides/QUICK_START.md).
 
 ## Pattern Categories
 
-Aegis includes **638 patterns** across **33 categories** (counts generated
+Aegis includes **633 patterns** across **33 categories** (counts generated
 from source; see the full catalog for every rule):
 
 | Category | Patterns | Description |
@@ -98,7 +98,7 @@ from source; see the full catalog for every rule):
 | [typescript](docs/patterns/README.md#typescript) | 13 | Typed-JavaScript rules |
 | [api-integration](docs/patterns/README.md#api-integration) | 9 | HTTP client, webhook mistakes |
 
-Browse all [638 detection patterns](docs/patterns/README.md).
+Browse all [633 detection patterns](docs/patterns/README.md).
 
 ## Documentation
 
@@ -178,7 +178,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/    # 638 pattern definitions
+│   └── aegis-patterns/    # 633 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation
 ```

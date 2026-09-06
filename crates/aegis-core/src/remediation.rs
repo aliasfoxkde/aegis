@@ -739,7 +739,7 @@ mod tests {
             category,
             severity,
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"),
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
             "secret",
             "Test finding",
         )

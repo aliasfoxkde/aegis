@@ -243,7 +243,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "jailbreak-attempt".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(jailbreak|unlock|DAN|do\s+anything\s+now)"#.to_string(),
+            // Word boundaries are essential: without them "DAN" matched inside
+            // "abundant" and "unlock" inside ordinary prose.
+            match_pattern: r#"(?i)\b(?:jailbreak|jail_break|do\s+any\s*thing\s+now|developer\s+mode|dan\s+mode|ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions)\b"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

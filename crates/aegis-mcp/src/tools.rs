@@ -196,7 +196,7 @@ mod tests {
         }
         let result = AegisTools::scan_string(
             &state,
-            "AWS_SECRET_KEY=abcdefghijk".to_string(),
+            "AWS_SECRET_KEY=abcdefghijk".to_string(), // aegis:ignore:env-credential-assignment
             "test.txt".to_string(),
         )
         .await;

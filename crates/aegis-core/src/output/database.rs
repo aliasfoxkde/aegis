@@ -371,7 +371,7 @@ mod tests {
     fn test_sqlite_output_redacts_matched_content() {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let path = temp_dir.path().join("findings.db");
-        let secret = "TOP-SECRET-DATABASE-FIXTURE";
+        let secret = "TOP-SECRET-DATABASE-FIXTURE"; // aegis:ignore:hardcoded-password
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",

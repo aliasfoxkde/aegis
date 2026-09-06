@@ -19,3 +19,12 @@ community/
 # All markdown is prose with intentional examples (README, CHANGELOG,
 # integration guides) — never executable code
 *.md
+
+# Detection definitions necessarily contain example payloads, sample
+# secrets, and vulnerable snippets — the raw material of the patterns
+# themselves. Scanning the pattern source only measures itself.
+crates/aegis-patterns/src/
+
+# Integration tests are intentionally vulnerable fixtures — positive test
+# cases must contain real detections by construction.
+crates/*/tests/
