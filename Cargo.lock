@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aegis"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "assert_cmd",
  "predicates",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-bundler"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-core",
  "anyhow",
@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-cli"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-core"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-patterns",
  "anyhow",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-daemon"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-mcp"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-patterns"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "lazy_static",
  "regex",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-wasm"
-version = "0.2.7"
+version = "0.3.0"
 dependencies = [
  "aegis-core",
  "console_error_panic_hook",

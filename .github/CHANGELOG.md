@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-09-06
+
+### Features
+
+- **ADDED**: custom user detection patterns via `.aegis.yml` /
+  `.aegis.yaml` at the scan root — fail-loud validation (unknown fields,
+  invalid regex, unknown severity, duplicate names all abort the scan
+  with the file and pattern named), `remediation` guidance threaded
+  through to findings and JSON output (#78);
+- **ADDED**: `aegis scan . --staged` pre-commit mode that scans the git
+  index instead of the working tree, with binary-blob skipping and a
+  clean pass when nothing is staged (#79);
+- **ADDED**: suppression upgrades — per-directive reasons, span/range
+  suppression, and file-level directives; baseline fingerprint filtering
+  is now a real engine option with fail-loud baseline loading (#74, #75,
+  #76);
+- **ADDED**: quality infrastructure — codecov thresholds pinned to
+  measured coverage (94.5% lines), criterion benchmarks for the
+  pattern-matching hot path (`cargo bench -p aegis-core`), four
+  cargo-fuzz targets (suppression directives, ignore globs, baseline
+  JSON, user pattern configs) with a weekly fuzz workflow, and a
+  labelled corpus precision/recall harness gated at 0.95 (#80, #81).
+
+### Fixes
+
+- **FIXED**: `secrets-aws-access-key` was unreachable — its 4.5 entropy
+  floor exceeds the log2(20) ceiling for any 20-character match; lowered
+  to 3.5;
+- **FIXED**: `flask-debug-enabled` now catches `app.run(host=...,
+  debug=True)`, not just `debug` as the first argument;
+- **FIXED**: `indian-aadhaar` no longer matches 12-digit sequences with
+  leading 0/1 (UIDAI numbers start with 2-9), unflagging AWS ARN account
+  ids;
+- **FIXED**: MCP integration tests no longer flake on a fixed 30-second
+  deadline while the ~633-pattern registry compiles synchronously;
+  request and bundle-update deadlines are now separate constants (#77).
+
 ## [0.2.7] - 2026-09-05
 
 ### Features
