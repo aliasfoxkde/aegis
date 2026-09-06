@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["crypto".to_string(), "security".to_string(), "ssl".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-encryption-key".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["crypto".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "insecure-random".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "random".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "sql-query".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["sql".to_string(), "database".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-hardening-command-injection".to_string(),
@@ -73,20 +81,24 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-hardening-path-traversal".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)\.\.[\\/]|\.\.%2f|%2e%2e"#.to_string(),
+            match_pattern: r#"(?i)\b(?:open|read|readFile|readFileSync|writeFile|unlink|load|include|require|join|fopen|sendFile|createReadStream|createWriteStream|Path)[\w:.!]*\s*\([^)\n]*\+[^)\n]*(?:req\.|params|query|user|input)"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
-            confidence: "high".to_string(),
+            confidence: "medium".to_string(),
             min_entropy: None,
             description: "Potential path traversal vulnerability".to_string(),
             reference: Some("https://owasp.org/www-community/attacks/Path_Traversal".to_string()),
             tags: vec!["injection".to_string(), "security".to_string(), "path".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "xss-vulnerability".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["xss".to_string(), "security".to_string(), "javascript".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "insecure-cookie".to_string(),
@@ -115,6 +129,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cookie".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "csrf-missing".to_string(),
@@ -129,6 +145,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["csrf".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-iv".to_string(),
@@ -143,6 +161,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["crypto".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "jwt-secret-hardcoded".to_string(),
@@ -157,6 +177,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["jwt".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "private-key-exposed".to_string(),
@@ -171,11 +193,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["crypto".to_string(), "security".to_string(), "keys".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "password-in-url".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)https?://[^:]+:[^@]+@"#.to_string(),
+            match_pattern: r#"(?i)\bhttps?://[^\s:/@]+:[^\s/@]+@[^\s"'<>]*"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -185,6 +209,11 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "credentials".to_string(), "url".to_string()],
             env_var: false,
             binary: false,
+            exclude: Some(
+                r#"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"#
+                    .to_string(),
+            ),
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "bearer-token-url".to_string(),
@@ -199,11 +228,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "auth".to_string(), "token".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "basic-auth-url".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)https?://[^:]+:[^@/]+@"#.to_string(),
+            match_pattern: r#"(?i)\bhttps?://[^\s:/@]+:[^\s/@]+@[^\s"'<>]*"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -213,6 +244,11 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "auth".to_string(), "credentials".to_string()],
             env_var: false,
             binary: false,
+            exclude: Some(
+                r#"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"#
+                    .to_string(),
+            ),
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-hardening-aws-access-key".to_string(),
@@ -227,6 +263,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "aws-secret-key".to_string(),
@@ -241,6 +279,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "github-token".to_string(),
@@ -255,6 +295,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "slack-token".to_string(),
@@ -269,6 +311,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["slack".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "stripe-api-key".to_string(),
@@ -283,6 +327,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["stripe".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "sendgrid-api-key".to_string(),
@@ -297,6 +343,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["sendgrid".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "twilio-api-key".to_string(),
@@ -311,6 +359,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["twilio".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "mailgun-api-key".to_string(),
@@ -325,11 +375,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["mailgun".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-hardening-jwt-none-algorithm".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(alg.*none|algorithm.*none|none.*algorithm)"#.to_string(),
+            match_pattern: r#"(?i)\balg(?:orithm)?\s*["']?\s*[:=]\s*["']?\s*none\b"#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -339,6 +391,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["jwt".to_string(), "security".to_string(), "algorithm".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-hardening-xml-external-entity".to_string(),
@@ -353,6 +407,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["xxe".to_string(), "security".to_string(), "xml".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "deserialization-vulnerability".to_string(),
@@ -367,6 +423,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["deserialization".to_string(), "security".to_string(), "rce".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "eval-usage".to_string(),
@@ -381,6 +439,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "eval".to_string(), "rce".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "setuid-root".to_string(),
@@ -395,6 +455,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "permissions".to_string(), "linux".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "world-writable".to_string(),
@@ -409,6 +471,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "permissions".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "sensitive-file-access".to_string(),
@@ -423,6 +487,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["security".to_string(), "filesystem".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ldap-injection".to_string(),
@@ -437,11 +503,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ldap".to_string(), "injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "xpath-injection".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(xpath|XPath).*\+.*input|string concatenation"#.to_string(),
+            match_pattern: r#"(?i)(?:xpath|XPath)[^\n]*\+[^\n]*(?:input|param|query)"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -451,6 +519,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["xpath".to_string(), "injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ssti-template".to_string(),
@@ -465,6 +535,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ssti".to_string(), "injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

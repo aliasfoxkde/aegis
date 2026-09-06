@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "merge-conflict".to_string(), "hygiene".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-commit-signoff".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "commit".to_string(), "signoff".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-commit-verify".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "gpg".to_string(), "signing".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gitignore-entry".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "gitignore".to_string(), "hygiene".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gitattributes-entry".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "gitattributes".to_string(), "hygiene".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gitmodules-entry".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "submodule".to_string(), "hygiene".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "commit-message-conventional".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "commit".to_string(), "conventional".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "branch-naming-feature".to_string(),
@@ -115,6 +129,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "branch".to_string(), "naming".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "branch-naming-bugfix".to_string(),
@@ -129,6 +145,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "branch".to_string(), "naming".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "branch-naming-hotfix".to_string(),
@@ -143,6 +161,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "branch".to_string(), "naming".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "branch-naming-release".to_string(),
@@ -157,6 +177,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "branch".to_string(), "naming".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "commit-sha-reference".to_string(),
@@ -171,6 +193,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "commit".to_string(), "sha".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "merge-commit".to_string(),
@@ -185,6 +209,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "merge".to_string(), "commit".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "tag-reference".to_string(),
@@ -199,6 +225,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "tag".to_string(), "version".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-hygiene-github-actions-workflow".to_string(),
@@ -213,6 +241,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "ci-cd".to_string(), "workflow".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-hygiene-dependabot-config".to_string(),
@@ -227,6 +257,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["dependabot".to_string(), "dependencies".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-hygiene-renovate-config".to_string(),
@@ -241,6 +273,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["renovate".to_string(), "dependencies".to_string(), "automation".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "commitizen-config".to_string(),
@@ -255,6 +289,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["commitizen".to_string(), "commit".to_string(), "convention".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "semantic-release-config".to_string(),
@@ -269,6 +305,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["semantic-release".to_string(), "release".to_string(), "automation".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-flow-model".to_string(),
@@ -283,6 +321,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "git-flow".to_string(), "branching".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "github-issue-reference".to_string(),
@@ -297,6 +337,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "issue".to_string(), "commit".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-hooks-husky".to_string(),
@@ -311,6 +353,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["husky".to_string(), "git-hooks".to_string(), "automation".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pre-commit-config".to_string(),
@@ -325,6 +369,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pre-commit".to_string(), "git-hooks".to_string(), "quality".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-worktree".to_string(),
@@ -339,6 +385,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "worktree".to_string(), "branching".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-stash".to_string(),
@@ -353,6 +401,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "stash".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-lfs".to_string(),
@@ -367,6 +417,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "lfs".to_string(), "storage".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "force-push-detected".to_string(),
@@ -381,6 +433,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "force-push".to_string(), "dangerous".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "commit-ampersand".to_string(),
@@ -395,6 +449,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git".to_string(), "commit-message".to_string(), "style".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

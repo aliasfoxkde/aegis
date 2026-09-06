@@ -21,6 +21,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pr-review-marker".to_string(),
@@ -39,6 +41,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // CI/CD patterns
         Pattern {
@@ -58,6 +62,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gitlab-ci-pipeline".to_string(),
@@ -76,6 +82,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "jenkinsfile".to_string(),
@@ -94,6 +102,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "azure-pipeline".to_string(),
@@ -112,6 +122,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "circleci-config".to_string(),
@@ -130,6 +142,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "travis-yml".to_string(),
@@ -148,6 +162,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "drone-ci".to_string(),
@@ -166,6 +182,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Quality gates
         Pattern {
@@ -185,6 +203,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "sonarqube-config".to_string(),
@@ -203,6 +223,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "snyk-config".to_string(),
@@ -221,6 +243,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "shift-left-dependabot-config".to_string(),
@@ -239,6 +263,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Testing patterns
         Pattern {
@@ -258,6 +284,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "integration-test-marker".to_string(),
@@ -276,6 +304,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "security-test-marker".to_string(),
@@ -294,6 +324,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // IaC scanning
         Pattern {
@@ -313,6 +345,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "checkov-config".to_string(),
@@ -331,6 +365,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Container scanning
         Pattern {
@@ -350,6 +386,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "grype-config".to_string(),
@@ -368,6 +406,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

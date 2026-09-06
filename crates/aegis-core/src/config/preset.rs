@@ -378,14 +378,14 @@ max_file_size_mb: 10
 name: extended
 enabled_categories:
   - pii
-  - security
+  - web-security
 max_file_size_mb: 20
 "#;
         let base: Preset = Preset::from_str(yaml1).unwrap();
         let extended: Preset = Preset::from_str(yaml2).unwrap();
         let merged = base.merge(&extended);
 
-        assert_eq!(merged.enabled_categories, vec!["pii", "security"]);
+        assert_eq!(merged.enabled_categories, vec!["pii", "web-security"]);
         assert_eq!(merged.max_file_size_mb, 20);
     }
 

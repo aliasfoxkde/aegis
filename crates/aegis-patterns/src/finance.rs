@@ -21,6 +21,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "finance-bitcoin-address".to_string(),
@@ -39,6 +41,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ethereum-address".to_string(),
@@ -57,6 +61,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "finance-iban".to_string(),
@@ -77,6 +83,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "stripe-publishable-key".to_string(),
@@ -95,6 +103,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "swift-bic".to_string(),
@@ -115,6 +125,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

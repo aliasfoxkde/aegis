@@ -7,13 +7,13 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sync-in-async".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)(await\s+.*\.)?(sync|sleep|delay|wait)"#.to_string(),
+            match_pattern: r"\b\w+Sync\s*\(".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
             min_entropy: None,
-            description: "Synchronous call in async context".to_string(),
-            reference: Some("https://rust-lang.github.io/async-book/".to_string()),
+            description: "Blocking *Sync() call detected; prefer the async API".to_string(),
+            reference: Some("https://nodejs.org/api/fs.html#synchronous-apis".to_string()),
             tags: vec![
                 "performance".to_string(),
                 "async".to_string(),
@@ -21,6 +21,15 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: vec![
+                "js".to_string(),
+                "mjs".to_string(),
+                "cjs".to_string(),
+                "ts".to_string(),
+                "tsx".to_string(),
+                "jsx".to_string(),
+            ],
         },
         Pattern {
             name: "n-plus-one-query".to_string(),
@@ -43,6 +52,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "vector-initial-capacity".to_string(),
@@ -65,6 +76,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "string-concatenation-loop".to_string(),
@@ -83,6 +96,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "box-inside-loop".to_string(),
@@ -101,6 +116,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "missing-database-index".to_string(),
@@ -119,6 +136,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "select-star".to_string(),
@@ -137,6 +156,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "missing-limit".to_string(),
@@ -155,6 +176,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "no-cache-headers".to_string(),
@@ -173,11 +196,13 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "unsized-image".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"<img[^>]*>"#.to_string(),
+            match_pattern: r#"(?i)<img\b[^>]*(?:/>|>)"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -191,6 +216,15 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: Some(r#"(?i)\bwidth\s*=|\bheight\s*=|aspect-ratio"#.to_string()),
+            file_extensions: vec![
+                "html".to_string(),
+                "htm".to_string(),
+                "jsx".to_string(),
+                "tsx".to_string(),
+                "vue".to_string(),
+                "svelte".to_string(),
+            ],
         },
         Pattern {
             name: "document-write".to_string(),
@@ -209,6 +243,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "synchronous-xmlhttprequest".to_string(),
@@ -227,6 +263,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "inner-html-assignment".to_string(),
@@ -245,6 +283,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "force-reflow".to_string(),
@@ -265,6 +305,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "multiple-redirects".to_string(),
@@ -283,6 +325,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gzip-not-enabled".to_string(),
@@ -301,6 +345,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "expensive-computation-loop".to_string(),
@@ -320,6 +366,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "regex-in-loop".to_string(),
@@ -340,6 +388,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "no-connection-pool".to_string(),
@@ -358,6 +408,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "event-listener-leak".to_string(),
@@ -376,6 +428,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "global-variable".to_string(),
@@ -394,6 +448,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "console-log-production".to_string(),
@@ -412,6 +468,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

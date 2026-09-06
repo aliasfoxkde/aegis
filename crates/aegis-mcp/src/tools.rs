@@ -163,6 +163,8 @@ mod tests {
                 tags: p.tags,
                 env_var: p.env_var,
                 binary: p.binary,
+                exclude_pattern: p.exclude,
+                file_extensions: p.file_extensions,
             })
             .collect();
         Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())

@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["npm".to_string(), "supply-chain".to_string(), "package".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Package.json patterns
         Pattern {
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["npm".to_string(), "package".to_string(), "manifest".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "npm-shrinkwrap".to_string(),
@@ -46,6 +50,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["npm".to_string(), "lockfile".to_string(), "reproducible".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "yarn-lockfile".to_string(),
@@ -60,6 +66,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["yarn".to_string(), "lockfile".to_string(), "reproducible".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pnpm-lockfile".to_string(),
@@ -74,6 +82,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pnpm".to_string(), "lockfile".to_string(), "reproducible".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Go patterns
         Pattern {
@@ -89,6 +99,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "module".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "go-sum".to_string(),
@@ -103,6 +115,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "checksum".to_string(), "integrity".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "go-replace-directive".to_string(),
@@ -117,6 +131,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "replace".to_string(), "dependency".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Python patterns
         Pattern {
@@ -132,6 +148,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "pip".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pipfile".to_string(),
@@ -146,6 +164,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "pipenv".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pipfile-lock".to_string(),
@@ -160,6 +180,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "pipenv".to_string(), "lockfile".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pyproject-toml".to_string(),
@@ -174,6 +196,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "packaging".to_string(), "build".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "poetry-lock".to_string(),
@@ -188,6 +212,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "poetry".to_string(), "lockfile".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "setup-py".to_string(),
@@ -202,6 +228,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "setuptools".to_string(), "packaging".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Rust patterns
         Pattern {
@@ -217,6 +245,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "cargo".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cargo-lock".to_string(),
@@ -231,6 +261,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "cargo".to_string(), "lockfile".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Java/Gradle patterns
         Pattern {
@@ -246,6 +278,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["java".to_string(), "maven".to_string(), "build".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gradle-build".to_string(),
@@ -260,6 +294,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["java".to_string(), "gradle".to_string(), "build".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gradle-lockfile".to_string(),
@@ -274,6 +310,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["java".to_string(), "gradle".to_string(), "lockfile".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "maven-wrapper".to_string(),
@@ -288,6 +326,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["java".to_string(), "maven".to_string(), "wrapper".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gradle-wrapper".to_string(),
@@ -302,6 +342,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["java".to_string(), "gradle".to_string(), "wrapper".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // .NET patterns
         Pattern {
@@ -317,6 +359,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec![".net".to_string(), "nuget".to_string(), "package-manager".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "packages-config".to_string(),
@@ -331,6 +375,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec![".net".to_string(), "packages".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dotnet-csproj".to_string(),
@@ -345,6 +391,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec![".net".to_string(), "project".to_string(), "msbuild".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Security/advisories
         Pattern {
@@ -360,6 +408,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "advisory".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "npm-audit".to_string(),
@@ -374,6 +424,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["npm".to_string(), "audit".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "safety-db".to_string(),
@@ -388,6 +440,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["python".to_string(), "safety".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cargo-audit".to_string(),
@@ -402,6 +456,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "audit".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // SBOM patterns
         Pattern {
@@ -417,6 +473,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["sbom".to_string(), "spdx".to_string(), "software-bill-of-materials".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "sbom-cyclonedx".to_string(),
@@ -431,6 +489,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["sbom".to_string(), "cyclonedx".to_string(), "software-bill-of-materials".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Container images
         Pattern {
@@ -446,6 +506,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "container".to_string(), "base-image".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "helm-chart-dependency".to_string(),
@@ -460,6 +522,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "dependency".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "github-actions-workflow".to_string(),
@@ -474,6 +538,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "ci".to_string(), "actions".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dependabot-config".to_string(),
@@ -488,6 +554,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "dependabot".to_string(), "updates".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "renovate-config".to_string(),
@@ -502,6 +570,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["renovate".to_string(), "updates".to_string(), "dependencies".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git_ops".to_string(), "git".to_string(), "force-push".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-credential-leak".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git_ops".to_string(), "git".to_string(), "credentials".to_string(), "leak".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "protected-branch-delete".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["git_ops".to_string(), "git".to_string(), "protected-branch".to_string(), "destructive".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

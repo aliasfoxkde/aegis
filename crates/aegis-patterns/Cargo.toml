@@ -15,7 +15,3 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 lazy_static = { workspace = true }
 regex = { workspace = true }
-
-[build-dependencies]
-serde_json = { workspace = true }
-walkdir = { workspace = true }

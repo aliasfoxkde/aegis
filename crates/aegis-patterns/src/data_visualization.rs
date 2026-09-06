@@ -6,7 +6,7 @@ pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "chart-accessibility".to_string(),
-            category: "data_visualization".to_string(),
+            category: "data-visualization".to_string(),
             match_pattern: r"canvas[^>]*[^aria-]|tooltip.*enabled.*false|legend.*display.*false".to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -17,10 +17,12 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["chart".to_string(), "accessibility".to_string(), "a11y".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "chart-config".to_string(),
-            category: "data_visualization".to_string(),
+            category: "data-visualization".to_string(),
             match_pattern: r"Chart\.js.*type.*bar.*data.*1000\+|options.*responsive.*false|scale.*ticks.*display.*false".to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -31,10 +33,12 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["chart".to_string(), "configuration".to_string(), "performance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "chart-types".to_string(),
-            category: "data_visualization".to_string(),
+            category: "data-visualization".to_string(),
             match_pattern: r"type.*bar.*data.*1000\+|type.*line.*categories.*10\+|type.*pie.*slices.*20\+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -45,10 +49,12 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["chart".to_string(), "type".to_string(), "data-visualization".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "color-schemes".to_string(),
-            category: "data_visualization".to_string(),
+            category: "data-visualization".to_string(),
             match_pattern: r"backgroundColor.*#[fF]{6}|borderColor.*#[0F]{6}|color.*palette.*contrast".to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -59,10 +65,12 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["chart".to_string(), "color".to_string(), "accessibility".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "mobile-optimization".to_string(),
-            category: "data_visualization".to_string(),
+            category: "data-visualization".to_string(),
             match_pattern: r"responsive.*false|width.*100%.*height.*100%|chart.*mobile.*breakpoint".to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["chart".to_string(), "mobile".to_string(), "responsive".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

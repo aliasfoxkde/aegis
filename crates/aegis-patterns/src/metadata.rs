@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["metadata".to_string(), "backup".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "IDE-config-leak".to_string(),
@@ -33,6 +35,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["metadata".to_string(), "IDE".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "os-cache-file".to_string(),
@@ -49,6 +53,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["metadata".to_string(), "os-cache".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "temporary-file".to_string(),
@@ -63,6 +69,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["metadata".to_string(), "temporary".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

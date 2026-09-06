@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ci-cd".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-ip".to_string(),
@@ -36,6 +38,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "debug-endpoint".to_string(),
@@ -50,6 +54,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["endpoint".to_string(), "debug".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "docker-socket".to_string(),
@@ -64,6 +70,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubeconfig-reference".to_string(),
@@ -78,6 +86,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "config".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "env-file-in-git".to_string(),
@@ -96,6 +106,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-state".to_string(),
@@ -110,6 +122,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "infrastructure".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ansible-vault".to_string(),
@@ -124,6 +138,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ansible".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ci-secret-hardcoded".to_string(),
@@ -140,6 +156,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ci-cd".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerignore-missing".to_string(),
@@ -154,6 +172,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "best-practice".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "privileged-container".to_string(),
@@ -172,6 +192,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "root-user".to_string(),
@@ -186,11 +208,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-in-dockerfile".to_string(),
             category: "devops".to_string(),
-            match_pattern: r"(?i)(ARG|ENV).*SECRET|KEY|TOKEN|PASSWORD".to_string(),
+            match_pattern: r"(?i)\b(?:ARG|ENV)\b[^\n]*(?:SECRET|KEY|TOKEN|PASSWORD)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -200,6 +224,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "exposed-port".to_string(),
@@ -214,6 +240,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "latest-tag".to_string(),
@@ -228,6 +256,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "best-practice".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

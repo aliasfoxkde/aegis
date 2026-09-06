@@ -1,6 +1,12 @@
 {
   "name": "production",
-  "enabled_categories": ["secrets", "pii", "security", "security-hardening", "compliance"],
+  "enabled_categories": [
+    "secrets",
+    "pii",
+    "security-hardening",
+    "web-security",
+    "compliance"
+  ],
   "strict_mode": "strict",
   "performance_mode": "optimized",
   "exit_on_findings": true,

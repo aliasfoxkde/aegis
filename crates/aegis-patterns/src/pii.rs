@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "ssn".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ssn-no-dashes".to_string(),
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "ssn".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "itin".to_string(),
@@ -46,6 +50,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "itin".to_string(), "tax".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ein".to_string(),
@@ -60,6 +66,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "ein".to_string(), "business".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Contact information
         Pattern {
@@ -75,6 +83,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "email".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: Some(r"(?i)@example\.(?:com|org|net)\z".to_string()),
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "phone-number".to_string(),
@@ -89,11 +99,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "phone".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "international-phone".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"\+?\d{1,3}[-.\s]?\(?\d{1,4}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,9}"#.to_string(),
+            match_pattern: r#"\+\d{1,3}[-.\s]?(?:\(\d{1,4}\)|\d{1,4})[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b"#.to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -103,6 +115,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "phone".to_string(), "international".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Financial data
         Pattern {
@@ -118,6 +132,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "credit-card-mastercard".to_string(),
@@ -132,6 +148,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "credit-card-amex".to_string(),
@@ -146,6 +164,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "credit-card-discover".to_string(),
@@ -160,6 +180,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "credit-card-number-generic".to_string(),
@@ -174,6 +196,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cvv".to_string(),
@@ -188,6 +212,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "payment".to_string(), "cvv".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "bank-routing-number".to_string(),
@@ -202,6 +228,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "banking".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "iban".to_string(),
@@ -216,6 +244,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "banking".to_string(), "international".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "bitcoin-address".to_string(),
@@ -230,6 +260,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "cryptocurrency".to_string(), "financial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "aws-access-key".to_string(),
@@ -244,6 +276,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "aws".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Names and identifiers
         Pattern {
@@ -259,6 +293,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "name".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "date-of-birth".to_string(),
@@ -273,6 +309,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "dob".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "passport-number".to_string(),
@@ -287,6 +325,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "passport".to_string(), "travel".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "drivers-license".to_string(),
@@ -301,6 +341,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "license".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "national-id".to_string(),
@@ -315,6 +357,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "national-id".to_string(), "personal".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "military-id".to_string(),
@@ -329,6 +373,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "military".to_string(), "government".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Address patterns
         Pattern {
@@ -344,6 +390,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "address".to_string(), "location".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "zip-code".to_string(),
@@ -358,6 +406,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "zip".to_string(), "location".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "uk-national-insurance".to_string(),
@@ -372,6 +422,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "uk".to_string(), "government".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "canadian-sin".to_string(),
@@ -386,6 +438,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "canada".to_string(), "sin".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "australian-tfn".to_string(),
@@ -400,6 +454,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "australia".to_string(), "tax".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "indian-aadhaar".to_string(),
@@ -414,6 +470,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "india".to_string(), "aadhaar".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Medical and Health
         Pattern {
@@ -429,6 +487,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "medical".to_string(), "health".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "health-insurance-number".to_string(),
@@ -443,6 +503,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "insurance".to_string(), "health".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "prescription-number".to_string(),
@@ -457,6 +519,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "medical".to_string(), "prescription".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Authentication credentials
         Pattern {
@@ -472,6 +536,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "username".to_string(), "auth".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "password-field".to_string(),
@@ -486,6 +552,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "password".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "api-key-field".to_string(),
@@ -500,6 +568,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "api-key".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // GDPR/Privacy keywords
         Pattern {
@@ -515,6 +585,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "data-processing".to_string(),
@@ -529,6 +601,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "consent-record".to_string(),
@@ -543,6 +617,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "consent".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "right-to-erasure".to_string(),
@@ -557,6 +633,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pii".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["angular".to_string(), "xss".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "angular-innerhtml-xss".to_string(),
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["angular".to_string(), "xss".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Django patterns
         Pattern {
@@ -47,6 +51,10 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["django".to_string(), "debug".to_string(), "python".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: vec![
+                "py".to_string(),
+            ],
         },
         Pattern {
             name: "django-csrf-exempt".to_string(),
@@ -61,6 +69,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["django".to_string(), "csrf".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "django-secret-key-hardcoded".to_string(),
@@ -75,6 +85,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["django".to_string(), "secret".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Express patterns
         Pattern {
@@ -90,6 +102,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["express".to_string(), "nodejs".to_string(), "rce".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "express-sql-injection".to_string(),
@@ -104,6 +118,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["express".to_string(), "nodejs".to_string(), "sql-injection".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Flask patterns
         Pattern {
@@ -119,6 +135,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["flask".to_string(), "python".to_string(), "debug".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "flask-sqlalchemy-raw-sql".to_string(),
@@ -133,6 +151,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["flask".to_string(), "sqlalchemy".to_string(), "sql-injection".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Go patterns
         Pattern {
@@ -148,6 +168,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "goroutine".to_string(), "concurrency".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "go-json-marshal-error-ignore".to_string(),
@@ -162,6 +184,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "json".to_string(), "error-handling".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "go-strconv-error-ignore".to_string(),
@@ -176,6 +200,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["go".to_string(), "strconv".to_string(), "error-handling".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Laravel patterns
         Pattern {
@@ -191,6 +217,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["laravel".to_string(), "php".to_string(), "secret".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "laravel-raw-db-query".to_string(),
@@ -205,6 +233,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["laravel".to_string(), "php".to_string(), "sql-injection".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // NodeJS patterns
         Pattern {
@@ -220,6 +250,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["nodejs".to_string(), "jwt".to_string(), "secret".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "nodejs-sync-fs-readfile".to_string(),
@@ -234,6 +266,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["nodejs".to_string(), "filesystem".to_string(), "performance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "nodejs-todo-development".to_string(),
@@ -248,6 +282,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["nodejs".to_string(), "code-quality".to_string(), "todo".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Rails patterns
         Pattern {
@@ -263,6 +299,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rails".to_string(), "ruby".to_string(), "sql-injection".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rails-secret-key-hardcoded".to_string(),
@@ -277,6 +315,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rails".to_string(), "ruby".to_string(), "secret".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // React patterns
         Pattern {
@@ -292,6 +332,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["react".to_string(), "javascript".to_string(), "debug".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "react-missing-key-prop".to_string(),
@@ -306,6 +348,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["react".to_string(), "javascript".to_string(), "jsx".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Rust patterns
         Pattern {
@@ -321,6 +365,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "env".to_string(), "panic".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-expect-usage".to_string(),
@@ -335,6 +381,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "error-handling".to_string(), "panic".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-hardcoded-secret".to_string(),
@@ -349,6 +397,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "secret".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-println-debug".to_string(),
@@ -363,6 +413,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "debug".to_string(), "println".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-unsafe-block".to_string(),
@@ -377,6 +429,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "unsafe".to_string(), "memory-safety".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-unsafe-extern".to_string(),
@@ -391,6 +445,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "unsafe".to_string(), "ffi".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rust-unwrap-usage".to_string(),
@@ -405,6 +461,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "error-handling".to_string(), "panic".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Spring pattern
         Pattern {
@@ -420,6 +478,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["spring".to_string(), "java".to_string(), "deserialization".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Vue patterns
         Pattern {
@@ -435,6 +495,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["vue".to_string(), "xss".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "vue-template-injection".to_string(),
@@ -449,6 +511,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["vue".to_string(), "template-injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

@@ -17,6 +17,20 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["graphql".to_string(), "debug".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: vec![
+                "js".to_string(),
+                "mjs".to_string(),
+                "cjs".to_string(),
+                "ts".to_string(),
+                "tsx".to_string(),
+                "jsx".to_string(),
+                "yaml".to_string(),
+                "yml".to_string(),
+                "json".to_string(),
+                "graphql".to_string(),
+                "gql".to_string(),
+            ],
         },
         Pattern {
             name: "graphql-field-cost-undefined".to_string(),
@@ -33,6 +47,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["graphql".to_string(), "performance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "graphql-introspection-enabled".to_string(),
@@ -47,6 +63,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["graphql".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "graphql-query-depth-unlimited".to_string(),
@@ -63,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["graphql".to_string(), "dos".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

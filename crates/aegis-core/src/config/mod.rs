@@ -349,7 +349,8 @@ impl Config {
                 enabled_categories: Some(vec![
                     "secrets".to_string(),
                     "pii".to_string(),
-                    "security".to_string(),
+                    "security-hardening".to_string(),
+                    "web-security".to_string(),
                     "code-quality".to_string(),
                 ]),
                 strict_mode: StrictMode::Strict,
@@ -368,7 +369,8 @@ impl Config {
                 enabled_categories: Some(vec![
                     "secrets".to_string(),
                     "pii".to_string(),
-                    "security".to_string(),
+                    "security-hardening".to_string(),
+                    "web-security".to_string(),
                     "code-quality".to_string(),
                     "devops".to_string(),
                 ]),

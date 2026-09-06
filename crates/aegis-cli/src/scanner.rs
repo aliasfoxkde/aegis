@@ -43,20 +43,28 @@ pub fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
         tags: p.tags,
         env_var: p.env_var,
         binary: p.binary,
+        exclude_pattern: p.exclude,
+        file_extensions: p.file_extensions,
     }
 }
 
 /// Build scanner from scan options (testable)
 pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
-    let categories = opts
+    // Trimmed, non-empty category list shared by the filter and validation
+    let categories: Vec<String> = opts
         .categories
         .as_ref()
-        .map(|c| c.split(',').map(|s| s.to_string()).collect::<Vec<_>>())
+        .map(|c| {
+            c.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
         .unwrap_or_default();
 
     let core_opts = CoreOptions {
         follow_symlinks: opts.follow_symlinks,
-        categories,
+        categories: categories.clone(),
         severity_threshold: opts.severity_threshold.clone(),
         include_disabled: opts.all,
         diff_file: opts.diff.clone(),
@@ -68,6 +76,15 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     let scanner = Scanner::from_definitions(definitions)
         .map_err(|e| anyhow::anyhow!("Failed to load patterns: {}", e))?
         .with_options(core_opts);
+
+    // Fail loudly on unknown --categories values; a typo would otherwise
+    // filter every scanner out and report a clean pass.
+    if !categories.is_empty() {
+        scanner
+            .registry()
+            .validate_categories(&categories)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    }
 
     Ok(scanner)
 }
@@ -301,6 +318,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let converted = convert_pattern(pattern);
@@ -325,6 +344,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let converted = convert_pattern(pattern);
@@ -354,6 +375,8 @@ mod tests {
             tags: vec!["secret".to_string(), "entropy".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let converted = convert_pattern(pattern);
@@ -379,6 +402,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let converted = convert_pattern(pattern);
@@ -453,6 +478,8 @@ mod tests {
             ],
             env_var: true,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let converted = convert_pattern(pattern.clone());
@@ -518,6 +545,55 @@ mod tests {
 
         let scanner = build_scanner_from_opts(&opts);
         assert!(scanner.is_ok());
+    }
+
+    #[test]
+    fn test_build_scanner_from_opts_rejects_unknown_category() {
+        let opts = ScanOptions {
+            path: std::path::PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: Some("secrets,security".to_string()), // "security" is phantom
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        };
+
+        let err = match build_scanner_from_opts(&opts) {
+            Err(err) => err,
+            Ok(_) => panic!("phantom category must fail the build"),
+        };
+        assert!(
+            err.to_string().contains("security"),
+            "must name the unknown category: {err}"
+        );
+    }
+
+    #[test]
+    fn test_build_scanner_from_opts_tolerates_whitespace_in_categories() {
+        let opts = ScanOptions {
+            path: std::path::PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: Some("secrets, web-security".to_string()),
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        };
+
+        assert!(build_scanner_from_opts(&opts).is_ok());
     }
 
     #[test]
