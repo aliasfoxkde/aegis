@@ -166,17 +166,25 @@ webhooks:
 
 ## CI/CD Best Practices
 
-1. **Baseline**: Create a baseline of current findings
+1. **Baseline**: Record a baseline of current findings once
    ```bash
-   aegis scan . --json > baseline.json
+   aegis -f json scan . --output-file baseline.json
    ```
 
-2. **Diff Mode**: Only report new findings
+2. **Baseline Gate**: Only new findings fail the build. Store the
+   baseline outside the scanned tree (or add it to `.aegisignore`) so it
+   does not get scanned itself:
    ```bash
-   aegis scan . --diff=baseline.json --json
+   aegis scan . --baseline=../baseline.json
    ```
 
-3. **Severity Threshold**: Start with critical only
+3. **Diff Mode**: Scan only the changed lines of a PR
+   ```bash
+   git diff origin/main...HEAD > pr.diff
+   aegis scan . --diff=pr.diff
+   ```
+
+4. **Severity Threshold**: Start with critical only
    ```bash
    aegis scan . --severity-threshold=critical
    ```
