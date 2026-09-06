@@ -72,7 +72,8 @@ enum Commands {
         #[arg(long)]
         output_file: Option<PathBuf>,
 
-        /// Baseline file for diff
+        /// Filter out findings recorded in this baseline (JSON output from
+        /// a previous --format json scan); exit code reflects new findings only
         #[arg(long)]
         baseline: Option<PathBuf>,
 

@@ -14,13 +14,21 @@ aegis scan [path] [options]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--format` | Output format: `text`, `json`, `sarif` | `text` |
-| `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` | `low` |
-| `--profile` | Configuration profile | `development` |
-| `--output`, `-o` | Output file path | stdout |
-| `--env` | Scan environment variables | `false` |
-| `--workers` | Number of worker threads | auto |
-| `--ignore` | Paths to ignore | `.aegisignore` |
+| `path` | Path to scan | `.` |
+| `-f, --file` | Treat the path as a single file | `false` |
+| `-e, --env` | Scan environment variables | `false` |
+| `--stdin` | Read content to scan from stdin | `false` |
+| `--follow-symlinks` | Follow symbolic links | `false` |
+| `--categories` | Comma-separated category list to include | all |
+| `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` | all |
+| `--output-file` | Write results to a file instead of stdout | stdout |
+| `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only | none |
+| `--diff` | Scan only the changed lines of a unified diff file | none |
+| `--all` | Include disabled patterns | `false` |
+
+**Global flags** (usable before the subcommand): `-f, --format`
+(`human`, `json`, `sarif`), `--config` (configuration profile),
+`--quiet`, `--verbose`.
 
 **Examples:**
 
@@ -29,16 +37,21 @@ aegis scan [path] [options]
 aegis scan .
 
 # Scan with JSON output
-aegis scan . --format json
+aegis -f json scan .
 
 # Scan with severity filter
 aegis scan . --severity-threshold high
 
 # Scan and save to file
-aegis scan . -o results.sarif --format sarif
+aegis -f sarif scan . --output-file results.sarif
 
 # Scan environment variables
 aegis scan --env
+
+# CI gate over new findings only: record a baseline once, then
+# compare every subsequent scan against it
+aegis -f json scan . --output-file baseline.json
+aegis scan . --baseline baseline.json
 ```
 
 ### aegis list
