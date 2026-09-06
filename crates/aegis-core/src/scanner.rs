@@ -352,7 +352,7 @@ impl Scanner {
         &self,
         content: &str,
         source: &str,
-    ) -> (Vec<Finding>, crate::ast::AstInspection) {
+    ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         let ext = Self::extension_of_source(source);
         self.scan_string_with_inspection_ext(content, source, ext.as_deref())
     }
@@ -362,7 +362,7 @@ impl Scanner {
         content: &str,
         source: &str,
         ext: Option<&str>,
-    ) -> (Vec<Finding>, crate::ast::AstInspection) {
+    ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         let start = Instant::now();
 
         // Parse suppressions from content
@@ -411,6 +411,12 @@ impl Scanner {
             ast_findings_to_findings(&ast_inspection, content, source)
                 .into_iter()
                 .filter(|finding| {
+                    // Inline directives must reach AST-emitted findings
+                    // just as they do regex-path findings.
+                    if suppression_mgr.is_suppressed(&finding.pattern, finding.location.line as u32)
+                    {
+                        return false;
+                    }
                     self.options.categories.is_empty()
                         || self
                             .options
@@ -449,7 +455,8 @@ impl Scanner {
             .collect();
 
         let _ = start.elapsed();
-        (findings, ast_inspection)
+        let suppressed_count = suppression_mgr.suppressed_count();
+        (findings, ast_inspection, suppressed_count)
     }
 
     /// Load baseline findings and filter them from results
@@ -628,13 +635,15 @@ impl Scanner {
         // pipeline. AST coverage is recorded separately so a fallback or
         // parser failure cannot be mistaken for complete inspection.
         let source = path.to_string_lossy().into_owned();
-        let (findings, ast_inspection) = self.scan_string_with_inspection(&content, &source);
+        let (findings, ast_inspection, suppressed_count) =
+            self.scan_string_with_inspection(&content, &source);
 
         let scan_time = start.elapsed().as_millis() as u64;
 
         let mut stats = ScanStats {
             files_scanned: 1,
             bytes_scanned: metadata.len(),
+            suppressed_count,
             patterns_matched: distinct_patterns(&findings),
             scan_time_ms: scan_time,
             io_time_ms: io_time,
@@ -1774,5 +1783,85 @@ mod tests {
             1,
             "same extension across files must reuse one cache entry"
         );
+    }
+
+    #[test]
+    fn test_scan_string_suppresses_ast_findings_by_directive() {
+        let scanner = Scanner::new();
+        let unsuppressed = scanner.scan_string("eval('untrusted')\n", "fixture.py");
+        assert!(unsuppressed
+            .iter()
+            .any(|f| f.pattern == "dangerous-execution"));
+
+        let suppressed = scanner.scan_string(
+            "eval('untrusted')  # aegis:ignore:dangerous-execution\n",
+            "fixture.py",
+        );
+        assert!(
+            suppressed.is_empty(),
+            "inline directive must suppress AST-emitted findings too, got {:?}",
+            suppressed
+                .iter()
+                .map(|f| f.pattern.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_scan_string_range_directive_suppresses_span() {
+        let scanner = Scanner::new();
+        let findings = scanner.scan_string(
+            "ok = 1\n// aegis:ignore-start\neval('first')\neval('second')\n// aegis:ignore-end\neval('after-end')\n",
+            "fixture.js",
+        );
+        assert_eq!(
+            findings.len(),
+            1,
+            "only the finding after the range may fire"
+        );
+        assert_eq!(findings[0].location.line, 6);
+    }
+
+    #[test]
+    fn test_scan_string_file_level_directive_suppresses_everything() {
+        let scanner = Scanner::new();
+        let findings = scanner.scan_string(
+            "# aegis:ignore-file -- generated vendor bundle\neval('untrusted')\n",
+            "fixture.py",
+        );
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_scan_file_stats_record_suppressed_count() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("fixture.env");
+        std::fs::write(
+            &path,
+            "aws_key: AKIAIOSFODNN7EXAMPLE  # aegis:ignore:aws-access-key\n",
+        )
+        .unwrap();
+
+        let definition = PatternDefinition {
+            name: "aws-access-key".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
+            enabled: true,
+            severity: Severity::High,
+            confidence: crate::pattern::Confidence::High,
+            min_entropy: None,
+            description: "AWS access key".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+        };
+        let scanner = Scanner::from_definitions(vec![definition]).unwrap();
+
+        let (findings, stats) = scanner.scan_file(&path).unwrap();
+        assert!(findings.is_empty(), "directive must suppress the finding");
+        assert_eq!(stats.suppressed_count, 1);
     }
 }
