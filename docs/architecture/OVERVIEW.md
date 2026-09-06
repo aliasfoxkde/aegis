@@ -141,7 +141,20 @@ JSON-RPC 2.0 interface with tools:
 1. `.aegisignore` - Aegis-specific ignore patterns
 2. `.gitignore` - Standard git ignore
 3. `# aegis:ignore` - Line-level suppression
-4. `--baseline` - Baseline file suppression
+4. `aegis:ignore-start` / `aegis:ignore-end` - Range suppression
+5. `aegis:ignore-file` - Whole-file suppression
+6. `--baseline` - Baseline file suppression
+
+### Custom Patterns
+
+A scan root's `.aegis.yml` (or `.aegis.yaml`) defines user patterns
+(`patterns:` list with `name`, `severity`, `match`, `description`, and
+optional `category`, `exclude`, `confidence`, `remediation`,
+`reference`, `min_entropy`, `file_extensions`). They are validated
+eagerly at scan start — an invalid file aborts the scan — and merged
+into the registry alongside the bundled rules. Findings from custom
+patterns flow through the same suppression, baseline, and output
+pipeline as any other rule.
 
 ### Output Formats
 

@@ -102,6 +102,47 @@ aegis config [subcommand]
 - `aegis config set <key> <value>` - Set a config value
 - `aegis config profile <name>` - Switch profile
 
+## Custom Patterns
+
+A scan root may contain a `.aegis.yml` (or `.aegis.yaml`) file with a
+`patterns:` list. Directory scans (`aegis scan <dir>`, MCP `scan_dir`,
+daemon scans) merge these rules with the bundled patterns; every field
+is validated up front and an invalid file aborts the scan with a
+descriptive error rather than silently skipping a rule.
+
+```yaml
+patterns:
+  - name: internal-token
+    category: secrets          # optional, default: custom
+    severity: high             # required: critical | high | medium | low
+    match: 'INTT_[A-Za-z0-9]{24,}'
+    exclude: 'INTT_EXAMPLE'    # optional: suppress matching spans
+    description: Internal service token committed to source
+    remediation: Load the token from an environment variable
+    reference: https://internal.example.com/token-policy  # optional
+    confidence: medium         # optional: high | medium | low (default medium)
+    min_entropy: 3.5           # optional: 0.0–8.0 Shannon entropy gate
+    file_extensions: [rs, py, ts]  # optional: bare extensions, empty = all
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `name` | yes | Unique; the rule id shown in findings, suppressions, and baselines |
+| `severity` | yes | `critical`, `high`, `medium`, or `low` |
+| `match` | yes | Regex (Rust `regex` crate syntax) |
+| `description` | yes | Shown with every finding |
+| `category` | no | Defaults to `custom`; unknown categories use a neutral risk weight |
+| `exclude` | no | Suppress a candidate span when this regex also matches |
+| `confidence` | no | Defaults to `medium` |
+| `remediation` | no | Fix guidance surfaced with the finding |
+| `reference` | no | URL shown with the finding |
+| `min_entropy` | no | Skip matches below this Shannon entropy |
+| `file_extensions` | no | Bare extensions (`rs`), no leading dot |
+
+Names must be unique across the file and must not collide with bundled
+pattern names. Suppressions (`aegis:ignore:<name>`) and baselines work
+for custom patterns exactly as for bundled ones.
+
 ## Exit Codes
 
 | Code | Description |

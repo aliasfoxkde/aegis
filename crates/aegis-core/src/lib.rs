@@ -38,6 +38,7 @@ pub mod risk;
 pub mod sbom;
 pub mod scanner;
 pub mod suppression;
+pub mod user_patterns;
 
 #[cfg(feature = "output-pipeline")]
 pub mod output;

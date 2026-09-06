@@ -122,6 +122,10 @@ pub struct Scanner {
         RwLock<std::collections::HashMap<String, Vec<crate::pattern::CategoryScanner>>>,
     /// Track last include_disabled setting to invalidate cache
     last_include_disabled: AtomicBool,
+    /// `.aegis.yml` files already merged into the registry, keyed by
+    /// canonical path so repeated scans of a root (long-lived MCP server)
+    /// do not re-register the same rules
+    loaded_user_pattern_files: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 impl Scanner {
@@ -135,6 +139,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }
 
@@ -149,6 +154,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
         })
     }
 
@@ -165,6 +171,7 @@ impl Scanner {
             category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
+            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
         })
     }
 
@@ -548,6 +555,9 @@ impl Scanner {
             if let Some(reference) = pattern.reference() {
                 finding = finding.with_reference(reference);
             }
+            if let Some(remediation) = pattern.remediation() {
+                finding = finding.with_remediation(remediation);
+            }
             findings.push(finding);
         }
 
@@ -668,6 +678,41 @@ impl Scanner {
         Ok((findings, stats))
     }
 
+    /// Merge `.aegis.yml` custom patterns from the scan root into the
+    /// registry.
+    ///
+    /// Idempotent per canonical file path; a file that fails validation
+    /// aborts the scan loudly rather than silently running without a rule
+    /// its author believes is active.
+    fn load_user_patterns(&self, root: &Path) -> Result<(), ScanError> {
+        let Some(path) = crate::user_patterns::find_user_pattern_file(root) else {
+            return Ok(());
+        };
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+        let mut loaded = self.loaded_user_pattern_files.lock().unwrap();
+        if loaded.contains(&canonical) {
+            return Ok(());
+        }
+
+        let definitions = crate::user_patterns::load_user_pattern_definitions(root)
+            .map_err(|e| ScanError::CustomPatterns(e.to_string()))?;
+        for definition in definitions.unwrap_or_default() {
+            self.registry
+                .register(definition)
+                .map_err(|e| ScanError::CustomPatterns(e.to_string()))?;
+        }
+        loaded.insert(canonical);
+        drop(loaded);
+
+        // The registry changed: cached category scanners no longer include
+        // the user patterns and must be rebuilt for this and later scans.
+        *self.category_scanners.write().unwrap() = None;
+        self.extension_scanners.write().unwrap().clear();
+
+        tracing::debug!("Loaded custom patterns from {}", path.display());
+        Ok(())
+    }
+
     /// Scan a directory recursively
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
@@ -681,6 +726,9 @@ impl Scanner {
         ) {
             tracing::debug!("Failed to load ignore files: {}", e);
         }
+
+        // Merge user-defined patterns from the scan root before walking.
+        self.load_user_patterns(root)?;
 
         let walker = if self.options.follow_symlinks {
             WalkDir::new(root).follow_links(true)
@@ -883,6 +931,11 @@ pub enum ScanError {
         root: PathBuf,
         stats: Box<ScanStats>,
     },
+
+    /// A `.aegis.yml` custom-patterns file exists but is invalid; scanning
+    /// with a misconfigured rule silently is worse than failing loudly
+    #[error("{0}")]
+    CustomPatterns(String),
 }
 
 #[cfg(test)]
@@ -1011,6 +1064,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: true,
+            remediation: None,
         }];
 
         let scanner = Scanner::from_definitions(patterns)
@@ -1052,6 +1106,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }];
 
         let scanner = Scanner::from_definitions(patterns).unwrap();
@@ -1315,6 +1370,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             },
             crate::pattern::PatternDefinition {
                 name: "excluded-pattern".to_string(),
@@ -1331,6 +1387,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             },
         ];
         let scanner = Scanner::from_definitions(definitions)
@@ -1367,6 +1424,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             },
             crate::pattern::PatternDefinition {
                 name: "low-pattern".to_string(),
@@ -1383,6 +1441,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             },
         ];
         let scanner = Scanner::from_definitions(definitions)
@@ -1450,6 +1509,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }];
 
         let scanner = Scanner::from_definitions(patterns).unwrap();
@@ -1542,6 +1602,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             });
         }
 
@@ -1611,6 +1672,7 @@ mod tests {
             tags: vec!["aws".to_string()],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         // Create scanner using from_definitions (the normal path)
@@ -1672,6 +1734,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }
     }
 
@@ -1774,5 +1837,81 @@ mod tests {
             1,
             "same extension across files must reuse one cache entry"
         );
+    }
+
+    #[test]
+    fn test_scan_dir_loads_custom_patterns_from_aegis_yml() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join(".aegis.yml"),
+            r#"
+patterns:
+  - name: internal-token
+    category: secrets
+    severity: high
+    match: 'INTT_[A-Za-z0-9]{24,}'
+    description: Internal service token committed to source
+    remediation: Load the token from an environment variable
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            temp.path().join("fixture.rs"),
+            "fn main() { let token = \"INTT_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456\"; }\n",
+        )
+        .unwrap();
+
+        let scanner = Scanner::from_definitions(Vec::new()).unwrap();
+        let (findings, _) = scanner.scan_dir(temp.path()).unwrap();
+        assert_eq!(findings.len(), 1, "custom pattern must fire");
+        assert_eq!(findings[0].pattern, "internal-token");
+        assert_eq!(findings[0].severity, "high");
+        assert_eq!(
+            findings[0].remediation.as_deref(),
+            Some("Load the token from an environment variable")
+        );
+
+        // A second scan of the same root must not re-register (duplicate
+        // names abort the scan) — the loaded file is tracked per scanner.
+        let (findings, _) = scanner.scan_dir(temp.path()).unwrap();
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn test_scan_dir_fails_loudly_on_invalid_custom_patterns() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(
+            temp.path().join(".aegis.yml"),
+            r#"
+patterns:
+  - name: broken
+    severity: high
+    match: '[unclosed'
+    description: Broken regex
+"#,
+        )
+        .unwrap();
+        std::fs::write(temp.path().join("fixture.txt"), "nothing to see\n").unwrap();
+
+        let scanner = Scanner::from_definitions(Vec::new()).unwrap();
+        let err = match scanner.scan_dir(temp.path()) {
+            Err(err) => err,
+            Ok(_) => panic!("invalid custom patterns must abort the scan"),
+        };
+        assert!(
+            err.to_string().contains("invalid `match` regex"),
+            "error must name the validation failure, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_scan_dir_without_custom_patterns_is_unaffected() {
+        let temp = TempDir::new().unwrap();
+        std::fs::write(temp.path().join("fixture.txt"), "plain content\n").unwrap();
+
+        let scanner = Scanner::from_definitions(Vec::new()).unwrap();
+        let (findings, stats) = scanner.scan_dir(temp.path()).unwrap();
+        assert!(findings.is_empty());
+        assert_eq!(stats.files_scanned, 1);
     }
 }

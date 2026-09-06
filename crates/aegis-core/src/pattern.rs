@@ -145,6 +145,10 @@ pub struct PatternDefinition {
     /// Reference URL
     #[serde(default)]
     pub reference: Option<String>,
+    /// Actionable fix guidance surfaced with findings; user-defined patterns
+    /// set this from `.aegis.yml` to explain how to resolve a hit
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
     /// Taxonomy tags
     #[serde(default)]
     pub tags: Vec<String>,
@@ -175,6 +179,7 @@ impl Default for PatternDefinition {
             min_entropy: None,
             description: String::new(),
             reference: None,
+            remediation: None,
             tags: Vec::new(),
             env_var: false,
             binary: false,
@@ -271,6 +276,7 @@ impl Pattern {
             min_entropy: None,
             description: description.into(),
             reference: None,
+            remediation: None,
             tags: Vec::new(),
             env_var: false,
             binary: false,
@@ -313,6 +319,10 @@ impl Pattern {
     /// Get the reference URL
     pub fn reference(&self) -> Option<&str> {
         self.inner.definition.reference.as_deref()
+    }
+    /// Remediation guidance for this pattern, when provided
+    pub fn remediation(&self) -> Option<&str> {
+        self.inner.definition.remediation.as_deref()
     }
 
     /// Get the tags
@@ -868,6 +878,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         registry.register(def).unwrap();
@@ -902,6 +913,7 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                remediation: None,
             };
             registry.register(def).unwrap();
         }
@@ -932,6 +944,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         registry.register(def.clone()).unwrap();
@@ -988,6 +1001,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let pattern = Pattern::new(def).unwrap();
@@ -1013,6 +1027,7 @@ mod tests {
             tags: vec!["tag1".to_string()],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let pattern = Pattern::new(def).unwrap();
@@ -1040,6 +1055,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let def2 = PatternDefinition {
@@ -1057,6 +1073,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let def3 = PatternDefinition {
@@ -1074,6 +1091,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         registry.register(def1).unwrap();
@@ -1111,6 +1129,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         registry.register(def).unwrap();
 
@@ -1137,6 +1156,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         registry.register(def).unwrap();
 
@@ -1164,6 +1184,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         registry.register(def).unwrap();
 
@@ -1194,6 +1215,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let def2 = PatternDefinition {
@@ -1211,6 +1233,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         registry.register(def1).unwrap();
@@ -1248,6 +1271,7 @@ mod tests {
             tags: vec![],
             env_var: true,
             binary: false,
+            remediation: None,
         };
 
         let pattern = Pattern::new(def).unwrap();
@@ -1271,6 +1295,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: true,
+            remediation: None,
         };
 
         let def_disabled = PatternDefinition {
@@ -1288,6 +1313,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let pattern_enabled = Pattern::new(def_enabled).unwrap();
@@ -1332,6 +1358,7 @@ mod tests {
             tags: vec!["test".to_string()],
             env_var: false,
             binary: true,
+            remediation: None,
         };
 
         let json = serde_json::to_string(&def).unwrap();
@@ -1357,6 +1384,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let pattern = Pattern::new(def).unwrap();
@@ -1397,6 +1425,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         let pattern = Pattern::new(def).unwrap();
         assert!(pattern.is_enabled());
@@ -1419,6 +1448,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         let pattern = Pattern::new(def).unwrap();
         assert_eq!(pattern.min_entropy(), Some(3.5));
@@ -1442,6 +1472,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         let pattern = Pattern::new(def).unwrap();
 
@@ -1470,6 +1501,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         let pattern = Pattern::new(def).unwrap();
 
@@ -1499,6 +1531,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         let pattern = Pattern::new(def).unwrap();
         assert_eq!(pattern.pattern_str(), r"\d+");
@@ -1537,6 +1570,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         let def2 = PatternDefinition {
@@ -1554,6 +1588,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
 
         registry.register(def1).unwrap();
@@ -1594,6 +1629,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         };
         registry.register(def).unwrap();
         let debug_str = format!("{:?}", registry);
@@ -1624,6 +1660,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }
     }
 

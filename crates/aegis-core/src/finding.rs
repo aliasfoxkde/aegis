@@ -106,6 +106,9 @@ pub struct Finding {
     /// Reference URL
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reference: Option<String>,
+    /// Remediation guidance from the pattern, when provided
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
     /// Tags
     #[serde(default)]
     pub tags: Vec<String>,
@@ -160,6 +163,7 @@ impl Finding {
             matched_content: matched_content_str,
             description: description.into(),
             reference: None,
+            remediation: None,
             tags: Vec::new(),
             kind: FindingKind::Pattern,
             fingerprint,
@@ -170,6 +174,12 @@ impl Finding {
     /// Set the reference URL
     pub fn with_reference(mut self, reference: impl Into<String>) -> Self {
         self.reference = Some(reference.into());
+        self
+    }
+
+    /// Set the remediation guidance
+    pub fn with_remediation(mut self, remediation: impl Into<String>) -> Self {
+        self.remediation = Some(remediation.into());
         self
     }
 

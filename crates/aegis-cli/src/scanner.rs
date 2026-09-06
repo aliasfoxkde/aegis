@@ -45,6 +45,7 @@ pub fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
         binary: p.binary,
         exclude_pattern: p.exclude,
         file_extensions: p.file_extensions,
+        remediation: None,
     }
 }
 
