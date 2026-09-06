@@ -84,6 +84,12 @@ enum Commands {
         /// Diff file to scan (only changed lines)
         #[arg(long)]
         diff: Option<PathBuf>,
+
+        /// Scan the staged (index) content of the git repository instead
+        /// of files on disk — pre-commit mode; <path> selects the
+        /// repository and defaults to the current directory
+        #[arg(long)]
+        staged: bool,
     },
 
     /// List patterns
@@ -168,6 +174,7 @@ async fn main() -> Result<()> {
             baseline,
             all,
             diff,
+            staged,
         } => {
             scanner::run_scan(scanner::ScanOptions {
                 path,
@@ -181,6 +188,7 @@ async fn main() -> Result<()> {
                 baseline,
                 all,
                 diff,
+                staged,
                 format: cli.format,
                 quiet: cli.quiet,
             })
