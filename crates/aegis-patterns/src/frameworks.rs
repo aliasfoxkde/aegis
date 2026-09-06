@@ -125,7 +125,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "flask-debug-enabled".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"app\.run\s*\(\s*debug\s*=\s*True"#.to_string(),
+            match_pattern: r#"app\.run\s*\([^)]*debug\s*=\s*True"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

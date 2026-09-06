@@ -117,12 +117,24 @@ pub fn load_user_pattern_definitions(
         source,
     })?;
 
-    let file: UserPatternFile = serde_yaml::from_str(&content)
-        .map_err(|e| UserPatternError::invalid(&path, format!("invalid YAML: {e}")))?;
+    parse_user_pattern_content(&content, &path).map(Some)
+}
+
+/// Parse and validate the YAML content of a user patterns file.
+///
+/// Split from [`load_user_pattern_definitions`] so the validation logic is
+/// fuzzable without a filesystem. Diagnostics reference `path` exactly as
+/// they do when the content was read from disk.
+pub fn parse_user_pattern_content(
+    content: &str,
+    path: &Path,
+) -> Result<Vec<crate::pattern::PatternDefinition>, UserPatternError> {
+    let file: UserPatternFile = serde_yaml::from_str(content)
+        .map_err(|e| UserPatternError::invalid(path, format!("invalid YAML: {e}")))?;
 
     if file.patterns.is_empty() {
         return Err(UserPatternError::invalid(
-            &path,
+            path,
             "`patterns:` must list at least one pattern",
         ));
     }
@@ -130,11 +142,11 @@ pub fn load_user_pattern_definitions(
     let mut definitions = Vec::with_capacity(file.patterns.len());
     let mut seen = std::collections::HashSet::new();
     for pattern in file.patterns {
-        validate_unique_name(&path, &pattern.name, &mut seen)?;
-        definitions.push(convert(pattern, &path)?);
+        validate_unique_name(path, &pattern.name, &mut seen)?;
+        definitions.push(convert(pattern, path)?);
     }
 
-    Ok(Some(definitions))
+    Ok(definitions)
 }
 
 /// Reject empty and duplicate names; the name is the rule identity used in

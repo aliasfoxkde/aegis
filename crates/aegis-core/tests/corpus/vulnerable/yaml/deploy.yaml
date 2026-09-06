@@ -1,0 +1,10 @@
+# CI deploy step carrying inline credentials.
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ship it
+        env:
+          AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE  # aegis:expect aws-access-key
+          AUTH_HEADER: "Bearer SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c"  # aegis:expect bearer-token-url
+        run: ./deploy.sh

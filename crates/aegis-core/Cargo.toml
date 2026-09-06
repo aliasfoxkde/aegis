@@ -72,6 +72,7 @@ tree-sitter-typescript = { version = "0.23", optional = true }
 [dev-dependencies]
 proptest = { workspace = true }
 criterion = { workspace = true }
+aegis-patterns = { path = "../aegis-patterns" }
 tempfile = "3.10"
 pretty_assertions = "1.4"
 
@@ -81,3 +82,7 @@ tokio = ["dep:tokio"]
 jsonschema = ["dep:jsonschema"]
 output-pipeline = ["dep:reqwest", "dep:rusqlite"]
 tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-go", "dep:tree-sitter-rust", "dep:tree-sitter-python", "dep:tree-sitter-javascript", "dep:tree-sitter-typescript"]
+
+[[bench]]
+name = "pattern_matching"
+harness = false

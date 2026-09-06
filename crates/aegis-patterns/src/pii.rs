@@ -460,7 +460,10 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "indian-aadhaar".to_string(),
             category: "pii".to_string(),
-            match_pattern: r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b".to_string(),
+            // UIDAI numbers never start with 0 or 1; keeping the first-digit
+            // constraint avoids matching 12-digit sequences such as the
+            // account id inside an AWS ARN.
+            match_pattern: r"\b[2-9]\d{3}[-\s]?\d{4}[-\s]?\d{4}\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

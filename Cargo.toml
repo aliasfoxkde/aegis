@@ -26,6 +26,7 @@ members = [
     "crates/aegis-patterns",
     "crates/aegis-wasm",
 ]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.2.7"
