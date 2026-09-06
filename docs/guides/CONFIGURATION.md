@@ -178,6 +178,6 @@ severity_override = "high"
 enabled = true
 severity_override = null  # use pattern default
 
-[categories.ai_detection]
+[categories.ai-detection]
 enabled = false
 ```

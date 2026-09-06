@@ -6,7 +6,7 @@
 
 ### Goals
 - Complete rewrite in Rust (from Go)
-- 620 pattern coverage (expanding from 409)
+- 638 pattern coverage
 - 99%+ test coverage
 - DevOps/CI/CD integration focus
 - Early issue detection for AI systems
@@ -25,7 +25,7 @@ aegis/
 │   ├── aegis-mcp/         # MCP server
 │   ├── aegis-daemon/      # Daemon mode
 │   ├── aegis-bundler/     # Pattern bundler tool
-│   └── aegis-patterns/    # Pattern definitions (409 → 620)
+│   └── aegis-patterns/    # Pattern definitions
 ├── config/
 │   └── profiles/           # Configuration profiles
 ├── docs/                   # Documentation
@@ -67,81 +67,65 @@ Pattern bundling utility.
 - Validation
 
 #### aegis-patterns
-Generated pattern definitions.
-- 29 categories
-- 620 patterns
+Pattern definitions (hand-written Rust modules, generated docs).
+- 33 categories; counts in docs/patterns/README.md
 
 ---
 
 ## Phase 1: Project Setup
-- [ ] Initialize Rust workspace
-- [ ] Create crate structure
-- [ ] Set up cargo fmt and clippy
-- [ ] Configure CI/CD
+- [x] Initialize Rust workspace
+- [x] Create crate structure
+- [x] Set up cargo fmt and clippy
+- [x] Configure CI/CD
 - [ ] Create .cargo/config
 
 ## Phase 2: Core Engine
-- [ ] Pattern interface and registry
-- [ ] Bundle system (load/save/verify)
-- [ ] Pattern matching (regex engine)
-- [ ] Entropy calculation
-- [ ] Finding and Stats structures
-- [ ] Risk scoring
+- [x] Pattern interface and registry
+- [x] Bundle system (load/save/verify)
+- [x] Pattern matching (regex engine)
+- [x] Entropy calculation
+- [x] Finding and Stats structures
+- [x] Risk scoring
 
 ## Phase 3: Advanced Analysis
-- [ ] AST pattern analysis
-- [ ] Clone detection
-- [ ] CFG analysis
-- [ ] Taint tracking
-- [ ] Suppression handling
+- [x] AST pattern analysis
+- [x] Clone detection
+- [x] CFG analysis
+- [x] Taint tracking
+- [x] Suppression handling
 
 ## Phase 4: CLI Tool
-- [ ] scan subcommand
-- [ ] list/enable/disable subcommands
-- [ ] update subcommand
-- [ ] JSON/SARIF output
-- [ ] Configuration profiles
+- [x] scan subcommand
+- [x] list/enable/disable subcommands
+- [x] update subcommand
+- [x] JSON/SARIF output
+- [x] Configuration profiles
 
 ## Phase 5: MCP Server
-- [ ] JSON-RPC 2.0 implementation
-- [ ] Tool handlers
-- [ ] Security sandboxing
+- [x] JSON-RPC 2.0 implementation
+- [x] Tool handlers
+- [x] Security sandboxing
 - [ ] Rate limiting
 
 ## Phase 6: Bundler & Patterns
-- [ ] Bundler tool
-- [ ] Migrate 409 patterns
-- [ ] Add 100+ new patterns
+- [x] Bundler tool
+- [x] Migrate 409 patterns
+- [x] Add 100+ new patterns
 
 ## Phase 7: Testing & Documentation
 - [ ] 99%+ test coverage
-- [ ] Integration tests
+- [x] Integration tests
 - [ ] Property-based tests
-- [ ] Complete documentation
+- [x] Complete documentation
 
 ---
 
-## Pattern Categories (29 → 35)
+## Pattern Categories
 
-| Category | Count | Focus |
-|----------|-------|-------|
-| secrets | 75 | API keys, tokens, credentials |
-| code-quality | 60 | Debug, dead code, complexity |
-| devops | 35 | CI/CD, pipelines, secrets |
-| ai-detection | 30 | AI markers, template detection |
-| security-hardening | 30 | Insecure configs, weak crypto |
-| accessibility | 25 | WCAG, ARIA compliance |
-| web-security | 20 | XSS, SQLi, CORS |
-| pii | 20 | Personal data detection |
-| cloud-native | 20 | Kubernetes, Docker |
-| performance | 18 | Blocking calls, async issues |
-| supply-chain | 15 | Dependency vulnerabilities |
-| infrastructure | 15 | IaC, terraform, kubernetes |
-| compliance | 12 | GDPR, HIPAA, PCI |
-| git-hygiene | 10 | Conflicts, fixups |
-| ai-safety | 10 | Prompt injection, jailbreaks |
-| (new) llm-guardrails | 15 | LLM input/output safety |
-| (new) shift-left | 12 | Early detection patterns |
+The authoritative per-category pattern counts live in
+[docs/patterns/README.md](patterns/README.md), which is generated from
+source by `cargo run -p aegis-patterns --example generate_docs` and kept
+fresh by a CI test. Do not duplicate counts here.
 
 ---
 

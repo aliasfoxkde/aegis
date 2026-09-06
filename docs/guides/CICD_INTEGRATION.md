@@ -210,7 +210,7 @@ Upload SARIF to GitHub Security tab:
 ```json
 {
   "name": "pipeline",
-  "enabled_categories": ["secrets", "pii", "security", "code-quality", "devops"],
+  "enabled_categories": ["secrets", "pii", "security-hardening", "web-security", "code-quality", "devops"],
   "strict_mode": "standard",
   "performance_mode": "optimized",
   "exit_on_findings": true,
@@ -227,7 +227,7 @@ Upload SARIF to GitHub Security tab:
 ```json
 {
   "name": "production",
-  "enabled_categories": ["secrets", "pii", "security"],
+  "enabled_categories": ["secrets", "pii", "security-hardening", "web-security"],
   "strict_mode": "strict",
   "performance_mode": "optimized",
   "exit_on_findings": true,

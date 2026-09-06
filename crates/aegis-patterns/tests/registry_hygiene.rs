@@ -235,3 +235,42 @@ fn exclude_patterns_exclude_something_related() {
         .collect();
     assert!(offenders.is_empty(), "no-op excludes: {offenders:?}");
 }
+
+/// The committed docs must match the shipped patterns. Fails when a pattern
+/// is added or changed without regenerating `docs/patterns/README.md`
+/// (`cargo run -p aegis-patterns --example generate_docs`).
+#[test]
+fn pattern_docs_are_fresh() {
+    let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let readme = manifest
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|root| root.join("docs").join("patterns").join("README.md"))
+        .expect("crate must live inside the repository");
+
+    let committed = std::fs::read_to_string(&readme).unwrap_or_else(|e| {
+        panic!(
+            "cannot read {}: {e}; run cargo run -p aegis-patterns --example generate_docs",
+            readme.display()
+        )
+    });
+
+    assert_eq!(
+        committed,
+        aegis_patterns::docs::generate_pattern_docs(),
+        "docs/patterns/README.md is stale; run cargo run -p aegis-patterns --example generate_docs"
+    );
+}
+
+/// Entropy thresholds must fall in the Shannon range (bits per character).
+#[test]
+fn entropy_thresholds_are_within_shannon_range() {
+    let offenders: Vec<String> = all_patterns()
+        .iter()
+        .filter_map(|p| match p.min_entropy {
+            Some(e) if !(0.0..=8.0).contains(&e) => Some(format!("{}: {e}", p.name)),
+            _ => None,
+        })
+        .collect();
+    assert!(offenders.is_empty(), "out-of-range entropy: {offenders:?}");
+}

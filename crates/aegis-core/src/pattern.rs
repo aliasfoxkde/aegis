@@ -129,6 +129,7 @@ pub struct PatternDefinition {
     /// Category name
     pub category: String,
     /// Regex pattern to match
+    #[serde(alias = "match")]
     pub match_pattern: String,
     /// Whether the pattern is enabled by default
     pub enabled: bool,
@@ -155,7 +156,7 @@ pub struct PatternDefinition {
     pub binary: bool,
     /// Regex checked against each candidate match span: when it also matches,
     /// the finding is suppressed. Enables "element without attribute" rules.
-    #[serde(default)]
+    #[serde(default, alias = "exclude")]
     pub exclude_pattern: Option<String>,
     /// File extensions (without dot) this pattern applies to; empty = all files
     #[serde(default)]
@@ -188,7 +189,6 @@ lazy_static! {
     pub static ref DEFAULT_CATEGORIES: HashMap<String, Category> = {
         let mut m = HashMap::new();
         m.insert("secrets".to_string(), Category::new("secrets", "API keys, tokens, credentials", 1.5));
-        m.insert("security".to_string(), Category::new("security", "Security vulnerabilities", 1.4));
         m.insert("security-hardening".to_string(), Category::new("security-hardening", "Security hardening", 1.4));
         m.insert("code-quality".to_string(), Category::new("code-quality", "Code quality issues", 0.8));
         m.insert("devops".to_string(), Category::new("devops", "CI/CD and DevOps", 1.2));

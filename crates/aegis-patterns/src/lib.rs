@@ -47,6 +47,7 @@ pub mod compliance;
 pub mod container;
 pub mod data_visualization;
 pub mod devops;
+pub mod docs;
 pub mod finance;
 pub mod frameworks;
 pub mod git_hygiene;

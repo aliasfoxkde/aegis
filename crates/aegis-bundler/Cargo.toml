@@ -27,7 +27,9 @@ clap = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+aegis-core = { path = "../aegis-core" }
 
 [[bin]]
 name = "aegis-bundler"
 path = "src/main.rs"
+
