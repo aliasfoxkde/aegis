@@ -7,7 +7,7 @@ use aegis_core::{
     ScanStats, Scanner, Severity,
 };
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
 pub struct ScanOptions {
@@ -26,6 +26,9 @@ pub struct ScanOptions {
     pub all: bool,
     /// Diff file to scan (only changed lines)
     pub diff: Option<PathBuf>,
+    /// Scan the staged (index) content of the git repository at `path`
+    /// instead of files on disk — pre-commit mode
+    pub staged: bool,
     pub format: OutputFormat,
     pub quiet: bool,
 }
@@ -47,6 +50,7 @@ pub fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
         binary: p.binary,
         exclude_pattern: p.exclude,
         file_extensions: p.file_extensions,
+        remediation: None,
     }
 }
 
@@ -124,12 +128,99 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
                 .scan_file(path)
                 .map_err(|e| anyhow::anyhow!("{}", e))?
         }
+    } else if opts.staged {
+        scan_staged(scanner, opts)?
     } else {
         scanner
             .scan_dir(&opts.path)
             .map_err(|e| anyhow::anyhow!("{}", e))?
     };
 
+    Ok((findings, stats))
+}
+
+/// List the paths staged in the git index at `root` (added, copied,
+/// modified, renamed). Paths are relative to the repository root, which is
+/// also the form `git show :<path>` expects.
+fn staged_file_list(root: &Path) -> anyhow::Result<Vec<String>> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args([
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACMR",
+        ])
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git diff --cached failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .split('\0')
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
+/// Read the staged blob for one index path.
+fn staged_blob(root: &Path, file: &str) -> anyhow::Result<Vec<u8>> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["show", &format!(":{file}")])
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git show :{file} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(output.stdout)
+}
+
+/// Heuristic mirroring the engine's binary detection: NUL in the first
+/// window means the blob is binary and is skipped like scan_dir does.
+fn looks_binary(bytes: &[u8]) -> bool {
+    bytes[..bytes.len().min(8192)].contains(&0)
+}
+
+/// Scan the staged (index) content of the repository at `opts.path`.
+///
+/// Pre-commit semantics: the index is what a commit would contain and it
+/// can differ from the working tree, so blobs are read with
+/// `git show :<path>` rather than from disk. Nothing staged means nothing
+/// to scan and a clean result.
+fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> anyhow::Result<(Vec<Finding>, ScanStats)> {
+    let files = staged_file_list(&opts.path).map_err(|e| {
+        anyhow::anyhow!(
+            "--staged requires a git repository at {}: {e}",
+            opts.path.display()
+        )
+    })?;
+
+    let mut findings = Vec::new();
+    let mut stats = ScanStats::default();
+    for file in files {
+        let blob = staged_blob(&opts.path, &file)?;
+        if looks_binary(&blob) {
+            stats.files_skipped += 1;
+            continue;
+        }
+        let content = String::from_utf8_lossy(&blob);
+        let file_findings = scanner.scan_string(&content, &file);
+        stats.files_scanned += 1;
+        stats.bytes_scanned += blob.len() as u64;
+        findings.extend(file_findings);
+    }
+
+    stats.finding_count = findings.len();
     Ok((findings, stats))
 }
 
@@ -435,6 +526,7 @@ mod tests {
             baseline: None,
             all: false,
             diff: None,
+            staged: false,
             format: OutputFormat::Human,
             quiet: false,
         };
@@ -462,6 +554,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Json,
             quiet: true,
+            staged: false,
         };
 
         assert_eq!(opts.categories.as_ref().unwrap(), "secrets,pii");
@@ -529,6 +622,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -551,6 +645,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -573,6 +668,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let err = match build_scanner_from_opts(&opts) {
@@ -601,6 +697,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         assert!(build_scanner_from_opts(&opts).is_ok());
@@ -622,6 +719,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -644,6 +742,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -670,6 +769,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -695,6 +795,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan(&opts);
@@ -722,6 +823,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan_with_stdin(
@@ -750,6 +852,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -780,6 +883,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -806,6 +910,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Json,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan(&opts);
@@ -838,6 +943,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan(&opts);
@@ -867,6 +973,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Sarif,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan(&opts);
@@ -894,6 +1001,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let result = execute_scan(&opts).unwrap();
@@ -956,6 +1064,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         };
 
         let exit_code = run_scan_and_get_exit_code(opts).await;
@@ -1023,6 +1132,7 @@ mod tests {
             diff: None,
             format: OutputFormat::Human,
             quiet: false,
+            staged: false,
         }
     }
 
@@ -1160,6 +1270,125 @@ mod tests {
             "error must mention the baseline file, got: {err}"
         );
         std::fs::remove_dir_all(fixture).ok();
+    }
+
+    /// Create a git repository at `fixture` and stage `files`.
+    fn git_repo_with_staged(fixture: &std::path::Path, files: &[(&str, &str)]) {
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(fixture)
+                .args(args)
+                .output()
+                .expect("git must be available")
+        };
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture)
+            .output()
+            .expect("git init must succeed");
+        for (path, content) in files {
+            let target = fixture.join(path);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(target, content).unwrap();
+        }
+        let add = run(&["add", "."]);
+        assert!(
+            add.status.success(),
+            "git add failed: {}",
+            String::from_utf8_lossy(&add.stderr)
+        );
+    }
+
+    fn staged_scan_opts(path: PathBuf) -> ScanOptions {
+        ScanOptions {
+            path,
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            staged: true,
+            format: OutputFormat::Human,
+            quiet: false,
+        }
+    }
+
+    const STAGED_SECRET: &str = "aws_key: AKIAIOSFODNN7EXAMPLE\n";
+
+    #[test]
+    fn test_staged_scan_reports_staged_secret() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]);
+
+        let scanner = build_scanner_from_opts(&staged_scan_opts(fixture.path().into())).unwrap();
+        let (findings, stats) =
+            perform_scan(&scanner, &staged_scan_opts(fixture.path().into())).unwrap();
+        assert_eq!(findings.len(), 1, "staged secret must be reported");
+        assert_eq!(stats.files_scanned, 1);
+        assert_eq!(findings[0].location.file, "config.env");
+    }
+
+    #[test]
+    fn test_staged_scan_reads_index_not_working_tree() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]);
+
+        // The working tree was cleaned after staging and an unrelated
+        // secret was never staged at all; neither may change the result.
+        std::fs::write(fixture.path().join("config.env"), "aws_key: clean\n").unwrap();
+        std::fs::write(fixture.path().join("untracked.env"), STAGED_SECRET).unwrap();
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(
+            findings.len(),
+            1,
+            "scan must reflect the index, not the working tree or untracked files"
+        );
+    }
+
+    #[test]
+    fn test_staged_scan_clean_when_nothing_staged() {
+        let fixture = tempfile::tempdir().unwrap();
+        // Secret present on disk but never staged: nothing to commit,
+        // nothing to scan.
+        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture.path())
+            .output()
+            .expect("git init must succeed");
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_staged_scan_outside_repository_is_an_error() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap();
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let err = match perform_scan(&scanner, &opts) {
+            Err(err) => err,
+            Ok(_) => panic!("--staged outside a git repository must fail loudly"),
+        };
+        assert!(
+            err.to_string().contains("git repository"),
+            "error must name the requirement, got: {err}"
+        );
     }
 
     #[test]

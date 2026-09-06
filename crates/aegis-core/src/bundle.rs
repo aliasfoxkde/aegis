@@ -223,6 +223,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }
     }
 
@@ -337,6 +338,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }];
         let bundle = Bundle::new(patterns);
         assert!(matches!(
@@ -362,6 +364,7 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            remediation: None,
         }];
         let bundle = Bundle::new(patterns);
         assert!(matches!(

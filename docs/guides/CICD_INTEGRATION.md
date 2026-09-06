@@ -127,11 +127,17 @@ repos:
     hooks:
       - id: aegis-scan
         name: Aegis Security Scan
-        entry: aegis scan
+        entry: aegis scan . --staged
         args: ['--severity-threshold=high', '--quiet']
         language: system
-        files: .
+        pass_filenames: false
+        always_run: true
 ```
+
+`--staged` reads the git index, so the hook scans exactly what the
+commit would contain — including hunks staged with `git add -p` — not
+whatever currently sits in the working tree. Nothing staged is a clean
+pass, so the hook never blocks commits that touch no code.
 
 ## Docker Scan
 

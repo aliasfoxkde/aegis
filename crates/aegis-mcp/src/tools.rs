@@ -160,6 +160,7 @@ mod tests {
                 min_entropy: p.min_entropy,
                 description: p.description,
                 reference: p.reference,
+                remediation: None,
                 tags: p.tags,
                 env_var: p.env_var,
                 binary: p.binary,
