@@ -7,6 +7,7 @@ nightly):
 cargo fuzz run fuzz_suppression_parse -- -max_total_time=60
 cargo fuzz run fuzz_ignore_rules_compile -- -max_total_time=60
 cargo fuzz run fuzz_baseline_parse -- -max_total_time=60
+cargo fuzz run fuzz_user_patterns_config -- -max_total_time=60
 ```
 
 The `fuzz/` directory is excluded from the workspace so nightly-only

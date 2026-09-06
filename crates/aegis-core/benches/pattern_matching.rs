@@ -7,6 +7,9 @@ use aegis_core::Scanner;
 use aegis_patterns::Pattern;
 use criterion::{criterion_group, criterion_main, Criterion};
 
+/// criterion's own `black_box` is deprecated in favor of the std hint.
+use std::hint::black_box;
+
 /// Build a synthetic-but-realistic source: repetitive code lines (the
 /// common case for the combined-regex pre-filter) interspersed with a few
 /// lines that match bundled patterns.
@@ -74,7 +77,7 @@ fn bench_scan_string(c: &mut Criterion) {
     let mut group = c.benchmark_group("scan_string");
     group.throughput(criterion::Throughput::Bytes(source.len() as u64));
     group.bench_function("bundled_registry_1k_lines", |b| {
-        b.iter(|| scanner.scan_string(criterion::black_box(&source), "bench.rs"))
+        b.iter(|| scanner.scan_string(black_box(&source), "bench.rs"))
     });
     group.finish();
 }
@@ -92,12 +95,7 @@ fn bench_extension_dispatch(c: &mut Criterion) {
     let mut group = c.benchmark_group("extension_dispatch");
     for ext in ["rs", "py", "html", "yaml"] {
         group.bench_function(ext, |b| {
-            b.iter(|| {
-                scanner.scan_string(
-                    criterion::black_box(&source),
-                    &format!("bench.{ext}"),
-                )
-            })
+            b.iter(|| scanner.scan_string(black_box(&source), &format!("bench.{ext}")))
         });
     }
     group.finish();

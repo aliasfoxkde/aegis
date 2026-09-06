@@ -36,3 +36,13 @@ path = "fuzz_targets/fuzz_baseline_parse.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fuzz_user_patterns_config"
+path = "fuzz_targets/fuzz_user_patterns_config.rs"
+test = false
+doc = false
+bench = false
+
+[dependencies.regex]
+version = "1.10"
