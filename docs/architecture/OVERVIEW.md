@@ -148,6 +148,17 @@ JSON-RPC 2.0 interface with tools:
 4. `--baseline` - Baseline file suppression (findings from a previous
    `--format json` scan are filtered; exit codes reflect new findings)
 
+### Custom Patterns
+
+A scan root's `.aegis.yml` (or `.aegis.yaml`) defines user patterns
+(`patterns:` list with `name`, `severity`, `match`, `description`, and
+optional `category`, `exclude`, `confidence`, `remediation`,
+`reference`, `min_entropy`, `file_extensions`). They are validated
+eagerly at scan start — an invalid file aborts the scan — and merged
+into the registry alongside the bundled rules. Findings from custom
+patterns flow through the same suppression, baseline, and output
+pipeline as any other rule.
+
 ### Output Formats
 
 - **Human** - Pretty-printed with colors

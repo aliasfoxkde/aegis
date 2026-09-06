@@ -214,6 +214,7 @@ pub fn init_scanner() -> Scanner {
             binary: p.binary,
             exclude_pattern: p.exclude,
             file_extensions: p.file_extensions,
+            remediation: None,
         })
         .collect();
 
