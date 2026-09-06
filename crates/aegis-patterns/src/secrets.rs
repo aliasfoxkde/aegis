@@ -11,7 +11,9 @@ pub fn get() -> Vec<Pattern> {
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
-            min_entropy: Some(4.5),
+            // A 20-char match tops out at log2(20) ~ 4.32 bits, so anything
+            // higher (the old 4.5) makes the rule unreachable.
+            min_entropy: Some(3.5),
             description: "AWS Access Key ID detected".to_string(),
             reference: Some("https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html".to_string()),
             tags: vec!["aws".to_string(), "cloud".to_string(), "credential".to_string()],
