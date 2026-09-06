@@ -466,7 +466,7 @@ pub fn get() -> Vec<Pattern> {
         },
         // Spring pattern
         Pattern {
-            name: "spring-deserialization-readObject".to_string(),
+            name: "spring-deserialization-read-object".to_string(),
             category: "frameworks".to_string(),
             match_pattern: r#"(ObjectInputStream|readObject)\s*\(\s*\)"#.to_string(),
             enabled: true,

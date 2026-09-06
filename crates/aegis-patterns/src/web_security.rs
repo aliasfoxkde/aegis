@@ -540,19 +540,21 @@ pub fn get() -> Vec<Pattern> {
             file_extensions: Vec::new(),
         },
         Pattern {
-            name: "rate-limiting".to_string(),
+            name: "rate-limit-missing".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)rate\s*limit|throttle|rateLimit"#.to_string(),
+            // Auth-style route registered without a rate-limit/throttle
+            // middleware on the same handler chain.
+            match_pattern: r#"(?i)\b(?:post|put|patch)\s*\(\s*['"][^'"]*(?:login|auth|signin|sign-in|register|signup|password)[^'"]*['"]"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
-            confidence: "high".to_string(),
+            confidence: "medium".to_string(),
             min_entropy: None,
-            description: "Rate limiting detected".to_string(),
-            reference: None,
+            description: "Authentication route without visible rate limiting; brute-force protection not evident".to_string(),
+            reference: Some("https://owasp.org/www-community/controls/Blocking_Brute_Force_Attacks".to_string()),
             tags: vec!["rate-limiting".to_string(), "security".to_string(), "api".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            exclude: Some(r#"(?i)rate[_-]?limit|throttle|brute|slowdown"#.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

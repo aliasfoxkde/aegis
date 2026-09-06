@@ -230,3 +230,49 @@ fn extension_scoped_patterns_skip_extensionless_files() {
         pattern_names(&fs)
     );
 }
+
+/// Correct API-integration usage must never be flagged. The original
+/// api-integration pack fired on `Authorization: Bearer` headers and
+/// try/catch around fetch, labeling good code as leaked secrets.
+#[test]
+fn correct_api_usage_is_clean() {
+    let scanner = scanner();
+    let good = "const client = axios.create({ baseURL: api, timeout: 5000 });\n\
+                fetch('/api/items', { headers: { Authorization: `Bearer ${token}` } });\n\
+                const res = await fetch(url);\n\
+                if (!res.ok) throw new Error('bad status');\n\
+                const data = await res.json();\n\
+                app.post('/github/webhook', express.raw({type: 'application/json'}), verifySignature, handler);\n";
+    let fs = findings(&scanner, good, "fixtures/client.ts");
+    let api: Vec<_> = fs
+        .iter()
+        .filter(|f| f.category == "api-integration")
+        .map(|f| f.pattern.as_str())
+        .collect();
+    assert!(api.is_empty(), "correct API usage must be clean: {api:?}");
+}
+
+/// Genuine API-integration mistakes must be caught by the intended rules.
+#[test]
+fn api_integration_mistakes_are_caught() {
+    let scanner = scanner();
+    let bad = "const d = await (await fetch(url)).json();\n\
+               const c2 = axios.create({ baseURL: 'http://localhost:3000' });\n\
+               console.log('auth header was', authorization);\n\
+               const agent = new https.Agent({ rejectUnauthorized: false });\n\
+               app.post('/stripe/webhook', handler);\n";
+    let fs = findings(&scanner, bad, "fixtures/bad_client.ts");
+    let names = pattern_names(&fs);
+
+    for rule in [
+        "api-response-status-unchecked",
+        "bearer-token-logged",
+        "ssl-verification-disabled",
+        "webhook-signature-unchecked",
+    ] {
+        assert!(
+            names.contains(&rule),
+            "rule {rule} did not fire on its violation; findings: {names:?}"
+        );
+    }
+}

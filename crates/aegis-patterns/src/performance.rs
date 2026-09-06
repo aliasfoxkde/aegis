@@ -48,7 +48,7 @@ pub fn get() -> Vec<Pattern> {
             tags: vec![
                 "performance".to_string(),
                 "database".to_string(),
-                "n+1".to_string(),
+                "n-plus-one".to_string(),
             ],
             env_var: false,
             binary: false,

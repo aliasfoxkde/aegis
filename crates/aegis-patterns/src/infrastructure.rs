@@ -825,7 +825,7 @@ pub fn get() -> Vec<Pattern> {
             file_extensions: Vec::new(),
         },
         Pattern {
-            name: "cloudformationAWSTemplateFormatVersion".to_string(),
+            name: "cloudformation-template-format-version".to_string(),
             category: "infrastructure".to_string(),
             match_pattern: r#"AWSTemplateFormatVersion:"#.to_string(),
             enabled: true,

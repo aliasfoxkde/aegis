@@ -377,7 +377,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "medium".to_string(),
             min_entropy: None,
             description: "PIPL (China Personal Information Protection Law) reference detected".to_string(),
-            reference: Some("http://www.npc.gov.cn/npc/c30834/202108/a8c4e3672c74491a80b53a172bb753fe.shtml".to_string()),
+            reference: Some("https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm".to_string()),
             tags: vec!["compliance".to_string(), "pipl".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,

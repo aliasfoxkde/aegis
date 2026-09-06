@@ -21,7 +21,7 @@ pub fn get() -> Vec<Pattern> {
             file_extensions: Vec::new(),
         },
         Pattern {
-            name: "IDE-config-leak".to_string(),
+            name: "ide-config-leak".to_string(),
             category: "metadata".to_string(),
             match_pattern: r#"\.(idea|vscode|vscodium|settings\.json|workspace\.json)$"#
                 .to_string(),
@@ -32,7 +32,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Detects IDE configuration files that may contain sensitive settings"
                 .to_string(),
             reference: None,
-            tags: vec!["metadata".to_string(), "IDE".to_string()],
+            tags: vec!["metadata".to_string(), "ide".to_string()],
             env_var: false,
             binary: false,
             exclude: None,
