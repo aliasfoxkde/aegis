@@ -45,6 +45,20 @@ This document outlines research findings and recommendations for enhancing Aegis
 
 ---
 
+## Status: Shipped Since 2026-08-13
+
+The following items from the original recommendation list are now in the
+product; they are kept here so the research rationale stays attached to
+the shipped work:
+
+| Item | Status | Where |
+|------|--------|-------|
+| 8. Baseline scanning system | **Shipped (v0.2.6+)** | `--baseline` flag; engine-level filtering (`aegis-core::scanner::load_baseline_fingerprints`); fingerprints are redacted (SHA-256 of matched text only) so baselines are safe to commit |
+| 9. Inline allowlisting | **Shipped (v0.2.7)** | `aegis:ignore:pattern`, `aegis:ignore-start`/`aegis:ignore-end` ranges (nesting supported), `aegis:ignore-file`, optional `-- reason`; AST findings pass through the same gate; `ScanStats.suppressed_count` reports usage |
+| Entropy gate | **Shipped** | Shannon entropy with per-pattern `min_entropy` (see `aegis-core::entropy`) |
+| Custom rules | **Shipped (post-0.2.7)** | `.aegis.yml` / `.aegis.yaml` at the scan root: user patterns with `match`/`exclude` regex, severity, category, extensions, entropy gate, and `remediation` guidance; fail-loud validation |
+| Pre-commit mode | **Shipped (post-0.2.7)** | `aegis scan . --staged` scans the git index (not the working tree) so pre-commit hooks judge exactly what will be committed |
+
 ## Recommended Enhancements
 
 ### High Priority
@@ -94,18 +108,6 @@ This document outlines research findings and recommendations for enhancing Aegis
 - **References**: detect-secrets gibberish model, PyGuard
 
 ### Lower Priority
-
-#### 8. Baseline Scanning System
-- **What**: Add `.aegis-baseline` for known-finding suppression
-- **Why**: Improves CI/CD UX for existing projects
-- **Effort**: Low (1-2 weeks)
-- **References**: detect-secrets baseline system
-
-#### 9. Inline Allowlisting
-- **What**: `# aegis:allow` style comments
-- **Why**: Developer-friendly suppression
-- **Effort**: Low (1 week)
-- **References**: Gitleaks, detect-secrets inline comments
 
 #### 10. Additional Output Formats
 - **What**: JUnit, CSV, SPDX SBOM output
@@ -165,5 +167,51 @@ This document outlines research findings and recommendations for enhancing Aegis
 
 ---
 
-*Last Updated: 2026-08-13*
+---
+
+## Engineering Quality Backlog
+
+Tracked as standing work alongside features:
+
+- **Coverage gate**: measure with `cargo llvm-cov`, then pin a real
+  threshold in `codecov.yml` instead of an aspirational one
+- **Benchmarks**: criterion suite for the pattern-matching hot path
+  (per-extension scanner dispatch) to catch regressions before release
+- **Fuzzing**: cargo-fuzz targets for the ignore/glob compiler, the
+  `.aegis.yml` pattern compiler, and the YAML/JSON config loaders
+- **Corpus precision/recall harness**: vulnerable + clean fixtures with
+  expected findings, failing CI when precision drops
+- **Crates.io publishing**: `cargo publish` for the library crates in
+  the release workflow (needs an `CARGO_REGISTRY_TOKEN` secret; the
+  workspace version source is already single-sourced for this)
+
+---
+
+## WCAG 2.2 Coverage (accessibility pack)
+
+The accessibility pattern pack encodes 28 patterns covering 21 distinct
+WCAG 2.2 success criteria (Level A and AA, plus 4.1.3): 1.1.1, 1.2.2,
+1.2.3, 1.3.1, 1.3.5, 1.4.2, 1.4.4, 2.1.1, 2.1.4, 2.2.2, 2.3.1, 2.4.1,
+2.4.2, 2.4.4, 2.4.6, 2.4.7, 3.1.1, 3.2.5, 3.3.2, 4.1.2, 4.1.3. Each
+pattern references the W3C "Understanding" page for its criterion via
+`reference` and tags it `wcag-<sc>`. Coverage is intentionally limited
+to criteria detectable by static regex/AST analysis; several Level AAA
+criteria require rendering, interaction, or assistive-technology
+testing and are out of scope by design.
+
+## Distribution
+
+Current channels:
+
+- **GitHub Releases**: signed-off binaries for linux-amd64,
+  linux-arm64, macOS x86_64/arm64, Windows, plus `aegis_wasm.wasm`,
+  published by `.github/workflows/release.yml` on `v*` tags
+- **From source**: `cargo install --path crates/aegis-cli` or the
+  workspace build; MSRV 1.75
+- **MCP / daemon**: `aegis-mcp` and `aegis-daemon` binaries ship in the
+  same release assets for editor and service integrations
+
+---
+
+*Last Updated: 2026-09-06*
 *Maintained by: Aegis Team*
