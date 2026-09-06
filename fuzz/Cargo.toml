@@ -1,0 +1,38 @@
+[package]
+name = "aegis-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.aegis-core]
+path = "../crates/aegis-core"
+
+[dependencies.tempfile]
+version = "3.10"
+
+[[bin]]
+name = "fuzz_suppression_parse"
+path = "fuzz_targets/fuzz_suppression_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ignore_rules_compile"
+path = "fuzz_targets/fuzz_ignore_rules_compile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_baseline_parse"
+path = "fuzz_targets/fuzz_baseline_parse.rs"
+test = false
+doc = false
+bench = false
