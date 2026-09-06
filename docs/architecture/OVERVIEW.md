@@ -140,8 +140,13 @@ JSON-RPC 2.0 interface with tools:
 
 1. `.aegisignore` - Aegis-specific ignore patterns
 2. `.gitignore` - Standard git ignore
-3. `# aegis:ignore` - Line-level suppression
-4. `--baseline` - Baseline file suppression
+3. Inline suppression directives (`//`, `#`, `/* ... */` comments):
+   - `aegis:ignore:pattern-name` - suppress named patterns on that line
+   - `aegis:ignore-start` / `aegis:ignore-end` - suppress a line range
+   - `aegis:ignore-file` - suppress the whole file
+   - optional reason after `--` is recorded with the suppression
+4. `--baseline` - Baseline file suppression (findings from a previous
+   `--format json` scan are filtered; exit codes reflect new findings)
 
 ### Output Formats
 

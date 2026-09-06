@@ -289,6 +289,9 @@ pub struct ScanStats {
     pub bytes_scanned: u64,
     /// Number of findings
     pub finding_count: usize,
+    /// Findings held back by inline `aegis:ignore` directives
+    #[serde(default)]
+    pub suppressed_count: u64,
     /// Number of patterns matched
     pub patterns_matched: usize,
     /// Time spent scanning (milliseconds)
@@ -353,6 +356,7 @@ impl ScanStats {
         self.files_failed += other.files_failed;
         self.bytes_scanned += other.bytes_scanned;
         self.finding_count += other.finding_count;
+        self.suppressed_count += other.suppressed_count;
         self.patterns_matched += other.patterns_matched;
         self.scan_time_ms += other.scan_time_ms;
         self.io_time_ms += other.io_time_ms;
