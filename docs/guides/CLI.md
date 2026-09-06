@@ -24,6 +24,7 @@ aegis scan [path] [options]
 | `--output-file` | Write results to a file instead of stdout | stdout |
 | `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only | none |
 | `--diff` | Scan only the changed lines of a unified diff file | none |
+| `--staged` | Scan the staged (index) content of the git repository instead of files on disk; `<path>` selects the repository | `false` |
 | `--all` | Include disabled patterns | `false` |
 
 **Global flags** (usable before the subcommand): `-f, --format`
@@ -52,6 +53,10 @@ aegis scan --env
 # compare every subsequent scan against it
 aegis -f json scan . --output-file baseline.json
 aegis scan . --baseline baseline.json
+
+# Pre-commit: scan exactly what would be committed (the git index),
+# even if the working tree has since changed
+aegis scan . --staged
 ```
 
 ### aegis list
