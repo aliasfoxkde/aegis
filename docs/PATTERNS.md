@@ -2,135 +2,80 @@
 
 ## Overview
 
-Patterns are the core detection units in Aegis. They are defined in YAML format and bundled into a gzip+JSON archive for efficient loading.
+Patterns are the core detection units in Aegis. Each pattern is a Rust
+struct in `crates/aegis-patterns/src/<category>.rs`; the full corpus is
+serialized into gzip+JSON bundles for distribution and loaded into a
+`PatternRegistry` at scan time.
+
+The generated catalog of every shipped pattern lives in
+[docs/patterns/README.md](./patterns/README.md) (regenerate with
+`cargo run -p aegis-patterns --example generate_docs`; a freshness test
+fails CI when it drifts).
 
 ## Pattern Format
 
-```yaml
-name: pattern-name              # Unique identifier (required)
-category: category-name         # Category directory (required)
-match: "regex-pattern"         # RE2 regex (required)
-enabled: true                  # Default enabled state (default: true)
-severity: high                # critical, high, medium, low (required)
-confidence: high              # high, medium, low (required)
-minEntropy: 3.5               # Minimum entropy for secrets (optional)
-description: "Description"     # Human-readable description (required)
-reference: "https://..."      # Reference URL (optional)
-tags: [tag1, tag2]           # Taxonomy tags (optional)
-envVar: false                 # Only match in env vars (optional)
-binary: false                 # Allow binary file matching (optional)
+```rust
+pub struct Pattern {
+    pub name: String,             // Unique kebab-case identifier
+    pub category: String,         // Kebab-case category, dispatchable via by_category()
+    pub match_pattern: String,    // RE2-syntax regex (serde key: "match")
+    pub exclude: Option<String>,  // Suppress finding when this regex hits the matched span
+    pub file_extensions: Vec<String>, // Scope to extensions; empty = all files
+    pub enabled: bool,
+    pub severity: String,         // critical | high | medium | low
+    pub confidence: String,       // high | medium | low
+    pub min_entropy: Option<f64>, // Shannon entropy floor for secrets
+    pub description: String,
+    pub reference: Option<String>, // Absolute https URL
+    pub tags: Vec<String>,
+    pub env_var: bool,            // true = only scanned by `scan_env`
+    pub binary: bool,             // Allow matching in binary files
+}
 ```
+
+### Regex engine constraints
+
+`match_pattern` and `exclude` use the Rust `regex` crate (RE2 syntax):
+
+- **No lookarounds** — negative checks are expressed with `exclude`
+  instead: the finding is suppressed when the exclude regex matches the
+  matched span (unanchored `is_match`).
+- **`.` does not cross newlines** — use explicit classes such as `[^\n]`
+  for line-bounded wildcards. Beware negated classes (`[^;]`) which DO
+  match newlines and can produce multiline spans.
+- **`\b` treats `_` as a word character** — `\bKEY\b` will not match
+  inside `API_KEY`; drop the boundary when matching keyword substrings.
+- Escape `[` inside character classes (`[<{\[]`) and prefer raw strings
+  of the right depth (`r##"..."##`) when the content contains `"#`.
+
+### Scoping semantics
+
+- `exclude` is checked against the matched text only — it cannot see the
+  rest of the line. Design matches so the span includes the context that
+  should suppress it (e.g. `{0,200}` after a route path).
+- `file_extensions` compares against the lowercase extension of the file
+  name. Files without an extension (`.gitignore`, `Dockerfile`, `README`)
+  have **no** extension and therefore never match a scoped pattern.
+- `env_var: true` removes a pattern from file scanning entirely; only
+  `scan_env` runs it. Category `secrets` patterns additionally run in
+  environment scans regardless of this flag.
 
 ## Categories
 
-### secrets
-API keys, tokens, credentials, private keys.
-- AWS access keys
-- GitHub tokens
-- Database credentials
-- SSH private keys
-- JWT tokens
+Every category is a lowercase kebab-case string dispatched by
+`aegis_patterns::by_category()`. Selecting an unknown category with
+`--categories` or in a config profile is a hard error listing the valid
+names (`PatternRegistry::validate_categories`). Current categories:
+accessibility, ai-detection, ai-safety, api-integration, arm,
+cloud-native, cloudformation, code-quality, compliance, container,
+data-visualization, devops, finance, frameworks, git-hygiene, git-ops,
+graphql, healthcare, infrastructure, kubernetes, llm-guardrails,
+metadata, performance, pii, pwa, secrets, security-hardening,
+shift-left, supply-chain, terraform, typescript, web-development,
+web-security.
 
-### code-quality
-Debug artifacts, dead code, complexity issues.
-- Console.log statements
-- TODO comments
-- Dead code detection
-- High cyclomatic complexity
-- Long functions
-
-### devops
-CI/CD pipelines, deployment markers.
-- CI bypass markers
-- Pipeline secrets
-- Hardcoded IPs
-- Debug endpoints
-
-### ai-detection
-AI-generated code markers, template detection.
-- AI assistant markers
-- Generated code patterns
-- Template artifacts
-
-### security-hardening
-Insecure configurations, weak cryptography.
-- Weak SSL/TLS
-- Insecure headers
-- Dangerous functions
-- Hardcoded passwords
-
-### accessibility
-WCAG compliance, ARIA patterns.
-- Missing alt text
-- Low contrast
-- Missing labels
-
-### web-security
-XSS, SQL injection, CORS issues.
-- Reflected XSS
-- SQL injection
-- CORS misconfiguration
-
-### pii
-Personal identifiable information.
-- Email addresses
-- Phone numbers
-- SSN patterns
-- Credit card numbers
-
-### cloud-native
-Kubernetes, Docker, cloud deployments.
-- Hardcoded cloud credentials
-- Insecure container configs
-- Kubernetes secrets
-
-### performance
-Blocking calls, synchronous patterns.
-- Sync I/O in async
-- N+1 queries
-- Memory leaks
-
-### supply-chain
-Dependency vulnerabilities, malicious packages.
-- Known vulnerable deps
-- Typosquatting
-- Unknown sources
-
-### infrastructure
-IaC, Terraform, Kubernetes manifests.
-- Insecure Terraform
-- Kubernetes misconfigs
-- Exposed services
-
-### compliance
-GDPR, HIPAA, PCI compliance.
-- Data retention issues
-- Missing encryption
-- Audit log gaps
-
-### git-hygiene
-Merge conflicts, fixup commits.
-- Unresolved conflicts
-- Large commits
-- Secret commits
-
-### ai-safety
-Prompt injection, jailbreaks.
-- Prompt injection
-- System prompt leakage
-- Dangerous outputs
-
-### llm-guardrails
-LLM input/output safety.
-- Toxic content
-- Personal data leakage
-- Harmful instructions
-
-### shift-left
-Early detection patterns.
-- Pre-commit hooks
-- PR review patterns
-- Early testing markers
+Per-category descriptions and full pattern tables are in the
+[generated catalog](./patterns/README.md).
 
 ---
 
@@ -153,22 +98,20 @@ Early detection patterns.
 | Medium | 0.7 | May have false positives |
 | Low | 0.4 | Experimental pattern |
 
+Risk score per finding = severity weight × confidence multiplier.
+
 ---
 
 ## Entropy
 
-Shannon entropy is used to detect high-entropy secrets like API keys and tokens.
+Shannon entropy filters low-information matches (e.g. `password = ""`).
 
-```yaml
-minEntropy: 3.5  # Minimum entropy threshold
-```
-
-Entropy formula:
-```
-H = -Σ p(x) * log2(p(x))
+```rust
+min_entropy: Some(3.5) // Minimum entropy threshold
 ```
 
 For a string of length N with character frequencies f(c):
+
 ```
 H = log2(N) - (1/N) * Σ f(c) * log2(f(c))
 ```
@@ -177,31 +120,17 @@ H = log2(N) - (1/N) * Σ f(c) * log2(f(c))
 
 ## Pattern Testing
 
-Patterns should be tested with:
-1. Positive cases (should match)
-2. Negative cases (should not match)
-3. Edge cases (empty, very long, special chars)
+Every pattern pack must satisfy two directions, locked by
+`crates/aegis-cli/tests/pattern_fixtures.rs`:
 
-```rust
-#[cfg(test)]
-mod pattern_tests {
-    use super::*;
+1. **Compliant fixtures** — realistic correct code must produce zero
+   findings from the pack.
+2. **Violation fixtures** — each planted violation must trigger exactly
+   the intended rule.
 
-    #[test]
-    fn test_aws_access_key_positive() {
-        let pattern = Pattern::new("aws-access-key", "secrets",
-            "AKIA[0-9A-Z]{16}", Severity::Critical, Confidence::High);
-        assert!(pattern.matches("AKIAIOSFODNN7EXAMPLE"));
-    }
-
-    #[test]
-    fn test_aws_access_key_negative() {
-        let pattern = Pattern::new("aws-access-key", "secrets",
-            "AKIA[0-9A-Z]{16}", Severity::Critical, Confidence::High);
-        assert!(!pattern.matches("AKIA00000000000000AA")); // Invalid checksum
-    }
-}
-```
+Corpus-wide invariants (compile checks, unique names, kebab-case naming,
+category dispatch round-trip, https references, tag/extension hygiene)
+are enforced by `crates/aegis-patterns/tests/registry_hygiene.rs`.
 
 ---
 
@@ -210,7 +139,7 @@ mod pattern_tests {
 ```json
 {
   "schema_version": 2,
-  "created_at": "2024-01-01T00:00:00Z",
+  "created_at": "2026-01-01T00:00:00Z",
   "patterns": [
     {
       "name": "aws-access-key",
@@ -219,23 +148,41 @@ mod pattern_tests {
       "enabled": true,
       "severity": "critical",
       "confidence": "high",
-      "minEntropy": 4.5,
+      "min_entropy": 4.5,
       "description": "AWS Access Key ID detected",
       "reference": "https://docs.aws.amazon.com/IAM/",
-      "tags": ["aws", "cloud", "credential"]
+      "tags": ["aws", "cloud", "credential"],
+      "exclude": null,
+      "file_extensions": [],
+      "env_var": false,
+      "binary": false
     }
   ]
 }
 ```
 
+Loading is fail-closed: a bundle containing an invalid regex, a duplicate
+pattern name, or a stale `schema_version` aborts the scan rather than
+degrading to a partial pattern set.
+
 ---
 
 ## Validation Rules
 
+Enforced at load time (`PatternRegistry::from_definitions`):
+
 1. `name` must be unique across all patterns
-2. `category` must match a known category
-3. `match` must be valid RE2 regex
-4. `severity` must be one of: critical, high, medium, low
-5. `confidence` must be one of: high, medium, low
-6. `minEntropy` must be between 0.0 and 8.0
-7. At least one of `match` or `astPattern` required
+2. `match` must be a valid RE2 regex (compile check)
+3. `exclude`, when present, must also compile
+
+Enforced by the hygiene test suite (`registry_hygiene.rs`):
+
+4. `name` and `category` must be kebab-case
+5. Every category must round-trip through `by_category()` with no
+   orphaned patterns
+6. `severity` must be one of: critical, high, medium, low
+7. `confidence` must be one of: high, medium, low
+8. `min_entropy` must be between 0.0 and 8.0
+9. `reference`, when present, must be an absolute https URL with a host
+10. Tags must be lowercase (`wcag-<SC>` dotted form allowed); extensions
+    must be lowercase alphanumeric without dots

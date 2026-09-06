@@ -294,6 +294,8 @@ impl AegisRpcImpl {
                         tags: p.tags,
                         env_var: p.env_var,
                         binary: p.binary,
+                        exclude_pattern: p.exclude,
+                        file_extensions: p.file_extensions,
                     })
                     .collect();
                 Bundle::new(patterns)
@@ -357,6 +359,8 @@ fn init_scanner() -> Scanner {
             tags: p.tags,
             env_var: p.env_var,
             binary: p.binary,
+            exclude_pattern: p.exclude,
+            file_extensions: p.file_extensions,
         })
         .collect();
 

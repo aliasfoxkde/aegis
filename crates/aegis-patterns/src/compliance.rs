@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gdpr-article-17".to_string(),
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gdpr-article-25".to_string(),
@@ -46,6 +50,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "gdpr".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gdpr-article-32".to_string(),
@@ -60,6 +66,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "gdpr".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // HIPAA patterns
         Pattern {
@@ -75,6 +83,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "hipaa".to_string(), "healthcare".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hipaa-phi".to_string(),
@@ -89,6 +99,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "hipaa".to_string(), "phi".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hipaa-safeguards".to_string(),
@@ -103,6 +115,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "hipaa".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // SOC 2 patterns
         Pattern {
@@ -118,6 +132,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "soc2".to_string(), "audit".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "soc2-trust-criteria".to_string(),
@@ -132,6 +148,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "soc2".to_string(), "trust-services".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // PCI DSS patterns
         Pattern {
@@ -147,11 +165,13 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "pci-dss".to_string(), "payment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pci-cardholder-data".to_string(),
             category: "compliance".to_string(),
-            match_pattern: r"(?i)cardholder\s*data|pan|primary\s*account\s*number".to_string(),
+            match_pattern: r"(?i)\bcardholder(?:'s)?\s+data\b|\bPAN\b|\bprimary\s+account\s+number\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -161,6 +181,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "pci-dss".to_string(), "card-data".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // ISO 27001 patterns
         Pattern {
@@ -176,6 +198,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "iso27001".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "iso-27002".to_string(),
@@ -190,6 +214,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "iso27002".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // NIST frameworks
         Pattern {
@@ -205,6 +231,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "nist".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "nist-800-53".to_string(),
@@ -219,6 +247,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "nist".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "nist-800-190".to_string(),
@@ -233,6 +263,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "nist".to_string(), "container".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // SOX patterns
         Pattern {
@@ -248,6 +280,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "sox".to_string(), "finance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // FedRAMP
         Pattern {
@@ -263,6 +297,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "fedramp".to_string(), "government".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // CCPA patterns
         Pattern {
@@ -278,6 +314,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "ccpa".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ccpa-consumer-rights".to_string(),
@@ -292,6 +330,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "ccpa".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // LGPD patterns
         Pattern {
@@ -307,6 +347,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "lgpd".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // POPIA patterns
         Pattern {
@@ -322,6 +364,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "popia".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // PIPL (China)
         Pattern {
@@ -333,10 +377,12 @@ pub fn get() -> Vec<Pattern> {
             confidence: "medium".to_string(),
             min_entropy: None,
             description: "PIPL (China Personal Information Protection Law) reference detected".to_string(),
-            reference: Some("http://www.npc.gov.cn/npc/c30834/202108/a8c4e3672c74491a80b53a172bb753fe.shtml".to_string()),
+            reference: Some("https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm".to_string()),
             tags: vec!["compliance".to_string(), "pipl".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // HITRUST
         Pattern {
@@ -352,6 +398,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "hitrust".to_string(), "healthcare".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // COBIT
         Pattern {
@@ -367,6 +415,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "cobit".to_string(), "governance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // COSO
         Pattern {
@@ -382,6 +432,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "coso".to_string(), "governance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // GLBA
         Pattern {
@@ -397,6 +449,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "glba".to_string(), "finance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // FERPA
         Pattern {
@@ -412,6 +466,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "ferpa".to_string(), "education".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // COPPA
         Pattern {
@@ -427,6 +483,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "coppa".to_string(), "children".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // ISO 9001
         Pattern {
@@ -442,6 +500,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "iso9001".to_string(), "quality".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // PCI PA-DSS
         Pattern {
@@ -457,6 +517,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "pa-dss".to_string(), "payment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Data residency
         Pattern {
@@ -472,6 +534,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "data-residency".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Data retention
         Pattern {
@@ -487,6 +551,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["compliance".to_string(), "data-retention".to_string(), "records".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

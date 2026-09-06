@@ -14,9 +14,11 @@ pub fn get() -> Vec<Pattern> {
             min_entropy: None,
             description: "Detects force push commands which can overwrite remote history".to_string(),
             reference: Some("https://git-scm.com/docs/git-push".to_string()),
-            tags: vec!["git_ops".to_string(), "git".to_string(), "force-push".to_string()],
+            tags: vec!["git-ops".to_string(), "git".to_string(), "force-push".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "git-credential-leak".to_string(),
@@ -28,9 +30,11 @@ pub fn get() -> Vec<Pattern> {
             min_entropy: None,
             description: "Detects potential git credential leakage in configuration or URLs".to_string(),
             reference: Some("https://git-scm.com/docs/git-credential".to_string()),
-            tags: vec!["git_ops".to_string(), "git".to_string(), "credentials".to_string(), "leak".to_string()],
+            tags: vec!["git-ops".to_string(), "git".to_string(), "credentials".to_string(), "leak".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "protected-branch-delete".to_string(),
@@ -42,9 +46,11 @@ pub fn get() -> Vec<Pattern> {
             min_entropy: None,
             description: "Detects commands that delete or modify protected branches".to_string(),
             reference: Some("https://git-scm.com/docs/git-push".to_string()),
-            tags: vec!["git_ops".to_string(), "git".to_string(), "protected-branch".to_string(), "destructive".to_string()],
+            tags: vec!["git-ops".to_string(), "git".to_string(), "protected-branch".to_string(), "destructive".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

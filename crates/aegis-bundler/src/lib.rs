@@ -17,7 +17,7 @@ pub struct Pattern {
     pub enabled: bool,
     pub severity: String,
     pub confidence: String,
-    #[serde(default)]
+    #[serde(default, alias = "minEntropy")]
     pub min_entropy: Option<f64>,
     pub description: String,
     #[serde(default)]
@@ -28,6 +28,12 @@ pub struct Pattern {
     pub env_var: bool,
     #[serde(default)]
     pub binary: bool,
+    /// Suppress finding when this regex also matches the matched span
+    #[serde(default)]
+    pub exclude: Option<String>,
+    /// Restrict pattern to these file extensions; empty = all files
+    #[serde(default, alias = "fileExtensions")]
+    pub file_extensions: Vec<String>,
 }
 
 /// Bundle structure
@@ -59,10 +65,15 @@ pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
             .with_context(|| format!("Failed to parse {:?}", path))?;
 
         for yaml_pat in yaml_patterns {
-            // Validate regex
-            if regex::Regex::new(&yaml_pat.match_pattern).is_err() {
-                eprintln!("  Warning: Invalid regex in pattern '{}'", yaml_pat.name);
-                continue;
+            // Fail closed: a pattern whose regex will never compile must
+            // abort the bundle build, not silently shrink coverage.
+            if let Err(err) = regex::Regex::new(&yaml_pat.match_pattern) {
+                anyhow::bail!(
+                    "Invalid regex in pattern '{}' from {:?}: {}",
+                    yaml_pat.name,
+                    path,
+                    err
+                );
             }
 
             patterns.push(yaml_pat);
@@ -129,6 +140,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let json = serde_json::to_string(&pattern).unwrap();
@@ -151,6 +164,8 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                exclude: None,
+                file_extensions: Vec::new(),
             },
             Pattern {
                 name: "test-2".to_string(),
@@ -165,6 +180,8 @@ mod tests {
                 tags: vec![],
                 env_var: false,
                 binary: false,
+                exclude: None,
+                file_extensions: Vec::new(),
             },
         ];
 
@@ -188,6 +205,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         }];
 
         let bundle = create_bundle(patterns);
@@ -245,9 +264,12 @@ mod tests {
 
         std::fs::write(&yaml_file, yaml_content).unwrap();
 
-        // Should not panic, just warn and skip
-        let patterns = read_patterns_from_dir(temp_dir.path()).unwrap();
-        assert_eq!(patterns.len(), 0);
+        // Fail closed: the build must abort and name the offending pattern
+        let err = read_patterns_from_dir(temp_dir.path()).unwrap_err();
+        assert!(
+            err.to_string().contains("bad-pattern"),
+            "error must name the offending pattern: {err}"
+        );
     }
 
     #[test]
@@ -283,6 +305,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         }];
 
         let bundle = create_bundle(patterns);
@@ -345,6 +369,8 @@ mod tests {
             tags: vec!["tag1".to_string(), "tag2".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         // Test serialization
@@ -373,6 +399,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         }];
 
         let bundle = create_bundle(patterns);

@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "secret".to_string(), "cloud".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-exposed".to_string(),
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "security".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Service mesh patterns
         Pattern {
@@ -47,6 +51,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["istio".to_string(), "service-mesh".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "istio-destinationrule".to_string(),
@@ -61,6 +67,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["istio".to_string(), "service-mesh".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "istio-peer-authentication".to_string(),
@@ -75,6 +83,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["istio".to_string(), "mtls".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "linkerd-service-profile".to_string(),
@@ -89,6 +99,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["linkerd".to_string(), "service-mesh".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Serverless patterns
         Pattern {
@@ -104,6 +116,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "lambda".to_string(), "serverless".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "aws-sam-template".to_string(),
@@ -118,6 +132,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "sam".to_string(), "serverless".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "azure-functions".to_string(),
@@ -132,6 +148,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["azure".to_string(), "functions".to_string(), "serverless".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "google-cloud-function".to_string(),
@@ -146,6 +164,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["gcp".to_string(), "functions".to_string(), "serverless".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Container patterns
         Pattern {
@@ -161,6 +181,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "container".to_string(), "health".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "container-readiness-probe".to_string(),
@@ -175,6 +197,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "container".to_string(), "health".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "container-resources".to_string(),
@@ -189,6 +213,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "container".to_string(), "resources".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "container-security-context".to_string(),
@@ -203,6 +229,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "container".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pod-security-policy".to_string(),
@@ -217,6 +245,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "policy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "container-privileged".to_string(),
@@ -231,6 +261,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "container".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "container-capabilities".to_string(),
@@ -245,6 +277,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "capabilities".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Service discovery
         Pattern {
@@ -260,6 +294,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "service".to_string(), "discovery".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-endpoints".to_string(),
@@ -274,6 +310,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "service".to_string(), "endpoints".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "consul-service".to_string(),
@@ -288,6 +326,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["consul".to_string(), "service-discovery".to_string(), "hashicorp".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "etcd-service".to_string(),
@@ -302,6 +342,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["etcd".to_string(), "service-discovery".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Microservices patterns
         Pattern {
@@ -317,6 +359,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["api-gateway".to_string(), "microservices".to_string(), "ingress".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "circuit-breaker".to_string(),
@@ -331,6 +375,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["circuit-breaker".to_string(), "resilience".to_string(), "microservices".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "retry-policy".to_string(),
@@ -345,6 +391,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["retry".to_string(), "resilience".to_string(), "microservices".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "timeout-configuration".to_string(),
@@ -359,6 +407,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["timeout".to_string(), "resilience".to_string(), "configuration".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Observability
         Pattern {
@@ -374,6 +424,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["prometheus".to_string(), "monitoring".to_string(), "metrics".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "grafana-dashboard".to_string(),
@@ -388,6 +440,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["grafana".to_string(), "monitoring".to_string(), "dashboard".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "jaeger-tracing".to_string(),
@@ -402,6 +456,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["tracing".to_string(), "observability".to_string(), "distributed".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "fluentd-config".to_string(),
@@ -416,6 +472,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["logging".to_string(), "fluentd".to_string(), "observability".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "elasticsearch-config".to_string(),
@@ -430,6 +488,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["elasticsearch".to_string(), "logging".to_string(), "observability".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Cloud provider specific
         Pattern {
@@ -445,6 +505,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "ecs".to_string(), "container".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "aws-eks-cluster".to_string(),
@@ -459,6 +521,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "eks".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "azure-aks-cluster".to_string(),
@@ -473,6 +537,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["azure".to_string(), "aks".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gcp-gke-cluster".to_string(),
@@ -487,6 +553,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["gcp".to_string(), "gke".to_string(), "kubernetes".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Network policies
         Pattern {
@@ -502,6 +570,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "network".to_string(), "policy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "network-policy-egress".to_string(),
@@ -516,6 +586,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "network".to_string(), "policy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Helm
         Pattern {
@@ -531,6 +603,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "deployment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "helm-repo".to_string(),
@@ -545,6 +619,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "repository".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

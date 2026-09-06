@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pwa".to_string(), "caching".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "manifest".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pwa".to_string(), "manifest".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "offline-support".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pwa".to_string(), "offline".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "service-worker".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pwa".to_string(), "service-worker".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "shortcuts".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pwa".to_string(), "shortcuts".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

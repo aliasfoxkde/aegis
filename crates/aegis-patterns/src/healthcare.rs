@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "clinical-trial".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "healthcare-code".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "medical-code".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "insurance-number".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "insurance".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "medical-license-number".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "license".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "healthcare-medical-record-number".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "medical-record".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "patient-id".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "patient".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "healthcare-prescription-number".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["healthcare".to_string(), "prescription".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

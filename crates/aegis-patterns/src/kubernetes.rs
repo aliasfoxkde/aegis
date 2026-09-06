@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "k8s-empty-dir-memory-backed".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "resource".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hostnetwork".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hostpid".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "process".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-latest-tag".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "image".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "k8s-missing-capability-drop".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "capabilities".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "k8s-no-network-policy".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "no-resource-limits".to_string(),
@@ -115,6 +129,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "resource".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-privileged-container".to_string(),
@@ -129,6 +145,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "privileged".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "k8s-run-as-non-root".to_string(),
@@ -143,6 +161,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "root".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-in-manifest".to_string(),
@@ -157,6 +177,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "security".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

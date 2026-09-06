@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "infrastructure".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-variable".to_string(),
@@ -32,6 +34,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "variable".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-output".to_string(),
@@ -46,6 +50,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "output".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-backend".to_string(),
@@ -60,6 +66,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "backend".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-sensitive-variable".to_string(),
@@ -74,6 +82,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "sensitive".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-provider-aws".to_string(),
@@ -88,6 +98,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "aws".to_string(), "provider".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-provider-azure".to_string(),
@@ -102,6 +114,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "azure".to_string(), "provider".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-provider-gcp".to_string(),
@@ -116,6 +130,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "gcp".to_string(), "provider".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-module".to_string(),
@@ -130,6 +146,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "module".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-data-source".to_string(),
@@ -144,6 +162,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "data".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-locals".to_string(),
@@ -158,6 +178,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "locals".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-dynamic-block".to_string(),
@@ -172,6 +194,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "dynamic".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-for-each".to_string(),
@@ -186,6 +210,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "for-each".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "terraform-count".to_string(),
@@ -200,6 +226,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "iac".to_string(), "count".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Kubernetes patterns
         Pattern {
@@ -215,6 +243,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "deployment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-service".to_string(),
@@ -229,6 +259,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "service".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-configmap".to_string(),
@@ -243,6 +275,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "configmap".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-secret".to_string(),
@@ -257,6 +291,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "secret".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-ingress".to_string(),
@@ -271,6 +307,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "ingress".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-pod".to_string(),
@@ -285,6 +323,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "pod".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-statefulset".to_string(),
@@ -299,6 +339,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "statefulset".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-daemonset".to_string(),
@@ -313,6 +355,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "daemonset".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-job".to_string(),
@@ -327,6 +371,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "job".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-cronjob".to_string(),
@@ -341,6 +387,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "cronjob".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-persistentvolume".to_string(),
@@ -355,6 +403,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "persistence".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-namespace".to_string(),
@@ -369,6 +419,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "namespace".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-serviceaccount".to_string(),
@@ -383,6 +435,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "serviceaccount".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-role".to_string(),
@@ -397,6 +451,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "rbac".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-clusterrole".to_string(),
@@ -411,6 +467,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "rbac".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-networkpolicy".to_string(),
@@ -425,6 +483,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-resource-quota".to_string(),
@@ -439,6 +499,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "quota".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-limitrange".to_string(),
@@ -453,6 +515,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "limits".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-hpa".to_string(),
@@ -467,6 +531,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "autoscaling".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-pdb".to_string(),
@@ -481,6 +547,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "pdb".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "kubernetes-priorityclass".to_string(),
@@ -495,6 +563,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["kubernetes".to_string(), "k8s".to_string(), "priority".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Docker patterns
         Pattern {
@@ -510,6 +580,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "container".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-run".to_string(),
@@ -524,6 +596,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "run".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-cmd".to_string(),
@@ -538,6 +612,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "cmd".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-expose".to_string(),
@@ -552,6 +628,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "network".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-env".to_string(),
@@ -566,6 +644,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "env".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-add".to_string(),
@@ -580,6 +660,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "add".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-copy".to_string(),
@@ -594,6 +676,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "copy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-workdir".to_string(),
@@ -608,6 +692,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "workdir".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-volume".to_string(),
@@ -622,6 +708,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "volume".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-user".to_string(),
@@ -636,6 +724,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "user".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-healthcheck".to_string(),
@@ -650,6 +740,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["docker".to_string(), "dockerfile".to_string(), "healthcheck".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // CloudFormation patterns
         Pattern {
@@ -665,6 +757,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "infrastructure".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-parameters".to_string(),
@@ -679,6 +773,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "parameters".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-mappings".to_string(),
@@ -693,6 +789,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "mappings".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-outputs".to_string(),
@@ -707,6 +805,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "outputs".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-conditions".to_string(),
@@ -721,9 +821,11 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "conditions".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
-            name: "cloudformationAWSTemplateFormatVersion".to_string(),
+            name: "cloudformation-template-format-version".to_string(),
             category: "infrastructure".to_string(),
             match_pattern: r#"AWSTemplateFormatVersion:"#.to_string(),
             enabled: true,
@@ -735,6 +837,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "version".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         // Helm charts
         Pattern {
@@ -750,6 +854,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "charts".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "helm-values".to_string(),
@@ -764,6 +870,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "values".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "helm-templates".to_string(),
@@ -778,6 +886,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["helm".to_string(), "kubernetes".to_string(), "templates".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

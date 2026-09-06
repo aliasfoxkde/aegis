@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "iam".to_string(), "lambda".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-s3-no-encryption".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "s3".to_string(), "encryption".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "cloudformation-s3-public-access".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["cloudformation".to_string(), "aws".to_string(), "s3".to_string(), "public-access".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

@@ -7,7 +7,7 @@
 
 ## Features
 
-- **[620 Detection Patterns](docs/patterns/README.md)** across 32 categories
+- **[638 Detection Patterns](docs/patterns/README.md)** across 33 categories
 - **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
@@ -77,22 +77,28 @@ More examples in the [Quick Start Guide](docs/guides/QUICK_START.md).
 
 ## Pattern Categories
 
-Aegis includes **620 patterns** across **32 categories**:
+Aegis includes **638 patterns** across **33 categories** (counts generated
+from source; see the full catalog for every rule):
 
 | Category | Patterns | Description |
 |----------|----------|-------------|
-| [secrets](docs/patterns/README.md#secrets--credentials-40-patterns) | 40 | API keys, tokens, credentials |
-| [pii](docs/patterns/README.md#secrets--credentials-40-patterns) | 39 | Personal data detection |
-| [security-hardening](docs/patterns/README.md#security-hardening-33-patterns) | 33 | Security best practices |
-| [web-security](docs/patterns/README.md#web-security-37-patterns) | 37 | XSS, SQLi, CORS, SSRF |
-| [infrastructure](docs/patterns/README.md#infrastructure-as-code-55-patterns) | 55 | Terraform, IaC security |
-| [cloud-native](docs/patterns/README.md#cloud-native-38-patterns) | 38 | Kubernetes, Docker |
-| [ai-safety](docs/patterns/README.md#ai-safety--llm-50-patterns) | 50 | Prompt injection, AI safety |
-| [compliance](docs/patterns/README.md#compliance-33-patterns) | 33 | GDPR, HIPAA, PCI-DSS |
-| [supply-chain](docs/patterns/README.md#supply-chain-35-patterns) | 35 | Dependency vulnerabilities |
-| [frameworks](docs/patterns/README.md#frameworks-31-patterns) | 31 | React, Angular, Next.js |
+| [secrets](docs/patterns/README.md#secrets) | 41 | API keys, tokens, credentials |
+| [pii](docs/patterns/README.md#pii) | 39 | Personal data detection |
+| [security-hardening](docs/patterns/README.md#security-hardening) | 33 | Security best practices |
+| [web-security](docs/patterns/README.md#web-security) | 37 | XSS, SQLi, CORS, SSRF |
+| [infrastructure](docs/patterns/README.md#infrastructure) | 55 | Terraform, IaC security |
+| [cloud-native](docs/patterns/README.md#cloud-native) | 38 | Kubernetes, Docker |
+| [accessibility](docs/patterns/README.md#accessibility) | 28 | WCAG success criteria |
+| [git-hygiene](docs/patterns/README.md#git-hygiene) | 28 | Repo hygiene and artifacts |
+| [ai-safety](docs/patterns/README.md#ai-safety) | 25 | Prompt injection, AI safety |
+| [llm-guardrails](docs/patterns/README.md#llm-guardrails) | 25 | LLM input/output guardrails |
+| [compliance](docs/patterns/README.md#compliance) | 33 | GDPR, HIPAA, PCI-DSS |
+| [supply-chain](docs/patterns/README.md#supply-chain) | 35 | Dependency vulnerabilities |
+| [frameworks](docs/patterns/README.md#frameworks) | 31 | React, Angular, Next.js |
+| [typescript](docs/patterns/README.md#typescript) | 13 | Typed-JavaScript rules |
+| [api-integration](docs/patterns/README.md#api-integration) | 9 | HTTP client, webhook mistakes |
 
-Browse all [620 detection patterns](docs/patterns/README.md).
+Browse all [638 detection patterns](docs/patterns/README.md).
 
 ## Documentation
 
@@ -172,7 +178,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/    # 620 pattern definitions
+│   └── aegis-patterns/    # 638 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation
 ```

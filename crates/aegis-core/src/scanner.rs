@@ -69,10 +69,10 @@ pub struct ScanOptions {
     pub categories: Vec<String>,
     /// Severity threshold
     pub severity_threshold: Option<String>,
-    /// Use gitignore
+    /// Respect .gitignore when walking the scan root
     pub use_gitignore: bool,
-    /// Use atheonignore
-    pub use_atheonignore: bool,
+    /// Respect .aegisignore (or legacy .atheonignore)
+    pub use_aegisignore: bool,
     /// Number of workers
     pub workers: usize,
     /// Baseline file to suppress known findings
@@ -92,7 +92,7 @@ impl Default for ScanOptions {
             categories: Vec::new(),
             severity_threshold: None,
             use_gitignore: true,
-            use_atheonignore: true,
+            use_aegisignore: true,
             workers: num_cpus(),
             baseline: None,
             include_disabled: false,
@@ -116,6 +116,10 @@ pub struct Scanner {
     options: ScanOptions,
     /// Cached category scanners for performance
     category_scanners: RwLock<Option<Vec<crate::pattern::CategoryScanner>>>,
+    /// Per-extension category scanners ("" = sources without an extension);
+    /// values contain only patterns applicable to that extension
+    extension_scanners:
+        RwLock<std::collections::HashMap<String, Vec<crate::pattern::CategoryScanner>>>,
     /// Track last include_disabled setting to invalidate cache
     last_include_disabled: AtomicBool,
 }
@@ -129,6 +133,7 @@ impl Scanner {
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             category_scanners: RwLock::new(None),
+            extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
         }
     }
@@ -142,6 +147,7 @@ impl Scanner {
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             category_scanners: RwLock::new(None),
+            extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
         })
     }
@@ -157,6 +163,7 @@ impl Scanner {
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             category_scanners: RwLock::new(None),
+            extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
         })
     }
@@ -166,6 +173,11 @@ impl Scanner {
         let mut scanner = Self::from_bundle(&config.bundle)?;
 
         if let Some(categories) = &config.enabled_categories {
+            // Only meaningful against a populated registry; an empty bundle
+            // (e.g. Config::default()) has no categories to compare with.
+            if !categories.is_empty() && !scanner.registry.is_empty() {
+                scanner.registry.validate_categories(categories)?;
+            }
             scanner.registry.disable_all();
             for cat in categories {
                 scanner.registry.set_category_enabled(cat, true);
@@ -174,7 +186,7 @@ impl Scanner {
 
         scanner.options.max_file_size = config.max_file_size_mb * 1024 * 1024;
         scanner.options.use_gitignore = config.gitignore_respect;
-        scanner.options.use_atheonignore = config.gitignore_respect;
+        scanner.options.use_aegisignore = config.aegisignore_respect;
 
         Ok(scanner)
     }
@@ -197,6 +209,7 @@ impl Scanner {
             self.last_include_disabled
                 .store(options.include_disabled, Ordering::SeqCst);
         }
+        self.extension_scanners.write().unwrap().clear();
         self.options = options;
         self
     }
@@ -231,6 +244,34 @@ impl Scanner {
         if let Ok(mut cache) = self.category_scanners.write() {
             *cache = Some(scanners.clone());
         }
+
+        scanners
+    }
+
+    /// Get category scanners narrowed to a file extension.
+    ///
+    /// Categories with no applicable patterns are dropped entirely, so a
+    /// TypeScript-only pattern never runs against a Rust file and vice versa.
+    fn get_scanners_for_extension(
+        &self,
+        ext: Option<&str>,
+    ) -> Vec<crate::pattern::CategoryScanner> {
+        let key = ext.unwrap_or("").to_lowercase();
+
+        if let Some(scanners) = self.extension_scanners.read().unwrap().get(&key) {
+            return scanners.clone();
+        }
+
+        let scanners: Vec<crate::pattern::CategoryScanner> = self
+            .get_category_scanners()
+            .iter()
+            .filter_map(|category| category.with_extension_filter(ext))
+            .collect();
+
+        self.extension_scanners
+            .write()
+            .unwrap()
+            .insert(key, scanners.clone());
 
         scanners
     }
@@ -299,10 +340,28 @@ impl Scanner {
         self.scan_string_with_inspection(content, source).0
     }
 
+    /// Lowercased file extension of a source path, if any
+    fn extension_of_source(source: &str) -> Option<String> {
+        Path::new(source)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase())
+    }
+
     fn scan_string_with_inspection(
         &self,
         content: &str,
         source: &str,
+    ) -> (Vec<Finding>, crate::ast::AstInspection) {
+        let ext = Self::extension_of_source(source);
+        self.scan_string_with_inspection_ext(content, source, ext.as_deref())
+    }
+
+    fn scan_string_with_inspection_ext(
+        &self,
+        content: &str,
+        source: &str,
+        ext: Option<&str>,
     ) -> (Vec<Finding>, crate::ast::AstInspection) {
         let start = Instant::now();
 
@@ -313,8 +372,8 @@ impl Scanner {
         // Pre-compute line index for O(log n) line number lookup
         let line_index = LineIndex::new(content);
 
-        // Get cached category scanners
-        let scanners = self.get_category_scanners();
+        // Get category scanners narrowed to this file type
+        let scanners = self.get_scanners_for_extension(ext);
 
         // Use category scanners with combined regex pre-filtering
         let findings: Vec<Finding> = if content.len() > 5000 && scanners.len() > 4 {
@@ -381,6 +440,14 @@ impl Scanner {
         // Filter findings against baseline if configured
         let findings = self.filter_baseline(findings);
 
+        // Safety net against duplicate emission: one finding per
+        // pattern+file+line+content fingerprint
+        let mut seen = HashSet::new();
+        let findings: Vec<Finding> = findings
+            .into_iter()
+            .filter(|finding| seen.insert(finding.fingerprint.clone()))
+            .collect();
+
         let _ = start.elapsed();
         (findings, ast_inspection)
     }
@@ -435,25 +502,25 @@ impl Scanner {
             return findings;
         }
 
-        // Find matches using individual patterns
+        // Find matches using individual patterns; each match carries the
+        // pattern that produced it
         let matches = scanner.find_matches(content);
 
         for m in matches {
-            let patterns = scanner.patterns();
-            // Find which pattern matched by checking the match position
-            let matched_pattern = patterns.iter().find(|p| p.regex_matches(m.matched_text));
+            let pattern = m.pattern;
 
-            let pattern = match matched_pattern {
-                Some(p) => p,
-                None => continue,
-            };
-
-            // Check entropy if required
+            // Entropy gate
             if let Some(min_entropy) = pattern.min_entropy() {
                 let entropy = shannon_entropy(m.matched_text);
                 if entropy < min_entropy {
                     continue;
                 }
+            }
+
+            // Exclude gate: suppress when the matched span also fits the
+            // pattern's exclude regex (e.g. an <img> tag that does have alt)
+            if pattern.is_excluded(m.matched_text) {
+                continue;
             }
 
             let line_num = line_index.get_line_number(m.start) as u32;
@@ -605,8 +672,13 @@ impl Scanner {
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
 
-        // Initialize ignore manager with the root directory
-        if let Err(e) = self.ignore_manager.set_root(root) {
+        // Initialize ignore manager with the root directory, honoring the
+        // configured ignore sources.
+        if let Err(e) = self.ignore_manager.set_root_with(
+            root,
+            self.options.use_gitignore,
+            self.options.use_aegisignore,
+        ) {
             tracing::debug!("Failed to load ignore files: {}", e);
         }
 
@@ -928,6 +1000,8 @@ mod tests {
             name: "test-content".to_string(),
             category: "test".to_string(),
             match_pattern: "content".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             severity: crate::pattern::Severity::Medium,
             confidence: crate::pattern::Confidence::Medium,
             description: "Test pattern".to_string(),
@@ -967,6 +1041,8 @@ mod tests {
             name: "test-secret".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             severity: crate::pattern::Severity::High,
             confidence: crate::pattern::Confidence::High,
             description: "Test pattern".to_string(),
@@ -1173,7 +1249,7 @@ mod tests {
         assert!(options.categories.is_empty());
         assert!(options.severity_threshold.is_none());
         assert!(options.use_gitignore);
-        assert!(options.use_atheonignore);
+        assert!(options.use_aegisignore);
     }
 
     #[test]
@@ -1185,7 +1261,7 @@ mod tests {
             categories: vec!["secrets".to_string()],
             severity_threshold: Some("high".to_string()),
             use_gitignore: false,
-            use_atheonignore: false,
+            use_aegisignore: false,
             workers: 8,
             baseline: Some(PathBuf::from("/baseline.json")),
             include_disabled: true,
@@ -1198,7 +1274,7 @@ mod tests {
         assert_eq!(options.categories, vec!["secrets"]);
         assert_eq!(options.severity_threshold.as_deref(), Some("high"));
         assert!(!options.use_gitignore);
-        assert!(!options.use_atheonignore);
+        assert!(!options.use_aegisignore);
         assert_eq!(options.workers, 8);
     }
 
@@ -1228,6 +1304,8 @@ mod tests {
                 name: "selected-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "selected-value".to_string(),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 severity: crate::pattern::Severity::High,
                 confidence: crate::pattern::Confidence::High,
                 description: "Selected category fixture".to_string(),
@@ -1242,6 +1320,8 @@ mod tests {
                 name: "excluded-pattern".to_string(),
                 category: "excluded".to_string(),
                 match_pattern: "excluded-value".to_string(),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 severity: crate::pattern::Severity::Critical,
                 confidence: crate::pattern::Confidence::High,
                 description: "Excluded category fixture".to_string(),
@@ -1276,6 +1356,8 @@ mod tests {
                 name: "high-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "high-value".to_string(),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 severity: crate::pattern::Severity::High,
                 confidence: crate::pattern::Confidence::High,
                 description: "High severity fixture".to_string(),
@@ -1290,6 +1372,8 @@ mod tests {
                 name: "low-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "low-value".to_string(),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 severity: crate::pattern::Severity::Low,
                 confidence: crate::pattern::Confidence::High,
                 description: "Low severity fixture".to_string(),
@@ -1355,6 +1439,8 @@ mod tests {
             name: "test-secret".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             severity: crate::pattern::Severity::High,
             confidence: crate::pattern::Confidence::High,
             description: "Test pattern".to_string(),
@@ -1408,6 +1494,27 @@ mod tests {
     }
 
     #[test]
+    fn test_scanner_from_config_rejects_unknown_categories() {
+        // A phantom category would otherwise disable every pattern and
+        // report a clean scan; from_config must fail loudly instead.
+        // The bundle must be populated so the registry knows the valid set.
+        let config = Config {
+            enabled_categories: Some(vec!["secrets".to_string(), "security".to_string()]),
+            bundle: Bundle::new(vec![def("known-pattern", "secrets", "secret")]),
+            ..Default::default()
+        };
+        let err = match Scanner::from_config(&config) {
+            Err(err) => err,
+            Ok(_) => panic!("phantom category must fail config validation"),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Unknown categories") && msg.contains("security"),
+            "error must name the unknown category: {msg}"
+        );
+    }
+
+    #[test]
     fn test_scanner_init_ignore_root() {
         let temp_dir = TempDir::new().unwrap();
         let scanner = Scanner::new();
@@ -1424,6 +1531,8 @@ mod tests {
                 name: format!("pattern-{}", i),
                 category: "test".to_string(),
                 match_pattern: format!("secret{}", i),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 enabled: true,
                 severity: crate::Severity::Low,
                 confidence: crate::Confidence::Low,
@@ -1491,6 +1600,8 @@ mod tests {
             name: "secrets-aws-access-key".to_string(),
             category: "secrets".to_string(),
             match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: crate::Severity::Critical,
             confidence: crate::Confidence::High,
@@ -1542,6 +1653,126 @@ mod tests {
         assert!(
             filtered_findings.is_empty(),
             "Baseline should filter known findings"
+        );
+    }
+
+    fn def(name: &str, category: &str, regex: &str) -> PatternDefinition {
+        PatternDefinition {
+            name: name.to_string(),
+            category: category.to_string(),
+            match_pattern: regex.to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+            enabled: true,
+            severity: Severity::Medium,
+            confidence: crate::Confidence::High,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }
+    }
+
+    #[test]
+    fn test_overlapping_patterns_emit_one_finding_each() {
+        // Both patterns match the same span; the old re-attribution heuristic
+        // collapsed this into duplicates under one pattern's name.
+        let scanner = Scanner::from_definitions(vec![
+            def("broad", "testcat", r"password\w+"),
+            def("specific", "testcat", r"password\d{6}"),
+        ])
+        .unwrap();
+
+        let findings = scanner.scan_string("password123456", "a.js");
+        let mut names: Vec<&str> = findings.iter().map(|f| f.pattern.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["broad", "specific"]);
+    }
+
+    #[test]
+    fn test_no_duplicate_fingerprints_across_categories() {
+        // A pattern in each category matching the same text must not produce
+        // two findings sharing one fingerprint.
+        let scanner = Scanner::from_definitions(vec![
+            def("cat-a-hit", "testcat-a", r"leak"),
+            def("cat-b-hit", "testcat-b", r"leak\w*"),
+        ])
+        .unwrap();
+
+        let findings = scanner.scan_string("leakage", "a.txt");
+        let fingerprints: HashSet<_> = findings.iter().map(|f| f.fingerprint.clone()).collect();
+        assert_eq!(findings.len(), 2);
+        assert_eq!(fingerprints.len(), findings.len());
+    }
+
+    #[test]
+    fn test_exclude_pattern_suppresses_finding() {
+        let mut d = def("placeholder-secret", "testcat", r"val\s*=\s*'[^']+'");
+        d.exclude_pattern = Some(r"placeholder".to_string());
+        let scanner = Scanner::from_definitions(vec![d]).unwrap();
+
+        let findings = scanner.scan_string("val = 'example_placeholder_key'", "a.js");
+        assert!(
+            findings.is_empty(),
+            "excluded spans must not be reported: {:?}",
+            findings
+        );
+
+        let findings = scanner.scan_string("val = 'hunter2'", "a.js");
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn test_file_extensions_scope_dispatch() {
+        let mut d = def("html-only", "testcat", r"<img\b");
+        d.file_extensions = vec!["html".to_string()];
+        let scanner = Scanner::from_definitions(vec![d]).unwrap();
+
+        assert!(
+            !scanner.scan_string("<img src=x>", "page.html").is_empty(),
+            "scoped pattern applies to its extension"
+        );
+        assert!(
+            scanner.scan_string("<img src=x>", "app.rs").is_empty(),
+            "scoped pattern must not apply to other extensions"
+        );
+        assert!(
+            scanner.scan_string("<img src=x>", "README").is_empty(),
+            "scoped pattern must not apply to extension-less files"
+        );
+    }
+
+    #[test]
+    fn test_extension_of_source() {
+        assert_eq!(
+            Scanner::extension_of_source("src/app.ts"),
+            Some("ts".into())
+        );
+        assert_eq!(
+            Scanner::extension_of_source("PAGE.HTML"),
+            Some("html".into())
+        );
+        // std Path semantics: a leading-dot file is all stem, no extension
+        assert_eq!(Scanner::extension_of_source(".gitignore"), None);
+        assert_eq!(Scanner::extension_of_source("Makefile"), None);
+        assert_eq!(
+            Scanner::extension_of_source("archive.tar.gz"),
+            Some("gz".into())
+        );
+    }
+
+    #[test]
+    fn test_extension_scanner_cache_populated() {
+        let scanner = Scanner::from_definitions(vec![def("hit", "testcat", "needle")]).unwrap();
+        assert_eq!(scanner.scan_string("needle", "a.rs").len(), 1);
+        // Second scan exercises the cached per-extension scanners
+        assert_eq!(scanner.scan_string("needle", "b.rs").len(), 1);
+        assert_eq!(
+            scanner.extension_scanners.read().unwrap().len(),
+            1,
+            "same extension across files must reuse one cache entry"
         );
     }
 }

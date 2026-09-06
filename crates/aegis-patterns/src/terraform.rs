@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "database".to_string(), "aws".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "tf-ecs-no-secrets".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "ecs".to_string(), "aws".to_string(), "secrets".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "tf-ecs-privileged".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "ecs".to_string(), "aws".to_string(), "privilege".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-tf-secrets".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "secrets".to_string(), "aws".to_string(), "hardcoded".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "s3-public-access".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "s3".to_string(), "aws".to_string(), "public-access".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "tf-s3-unencrypted".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "s3".to_string(), "aws".to_string(), "encryption".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "unencrypted-storage".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "storage".to_string(), "aws".to_string(), "encryption".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

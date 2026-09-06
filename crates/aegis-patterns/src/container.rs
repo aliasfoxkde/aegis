@@ -22,6 +22,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-exposed-socket".to_string(),
@@ -42,6 +44,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-privileged-mode".to_string(),
@@ -62,6 +66,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dockerfile-running-as-root".to_string(),
@@ -81,6 +87,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

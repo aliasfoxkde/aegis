@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "cloud".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-aws-secret-key".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["aws".to_string(), "cloud".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-github-token".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "token".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "gitlab-token".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["gitlab".to_string(), "token".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-slack-token".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["slack".to_string(), "token".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-stripe-api-key".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["stripe".to_string(), "payment".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-stripe-publishable-key".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["stripe".to_string(), "payment".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-sendgrid-api-key".to_string(),
@@ -115,6 +129,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["sendgrid".to_string(), "email".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "secrets-twilio-api-key".to_string(),
@@ -129,6 +145,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["twilio".to_string(), "sms".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ssh-private-key".to_string(),
@@ -143,6 +161,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ssh".to_string(), "private-key".to_string(), "credential".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "pgp-private-key".to_string(),
@@ -158,6 +178,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["pgp".to_string(), "gpg".to_string(), "private-key".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "jwt-token".to_string(),
@@ -172,6 +194,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["jwt".to_string(), "token".to_string(), "auth".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "google-api-key".to_string(),
@@ -186,6 +210,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["google".to_string(), "cloud".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "google-oauth-token".to_string(),
@@ -200,6 +226,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["google".to_string(), "oauth".to_string(), "token".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "azure-api-key".to_string(),
@@ -214,6 +242,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["azure".to_string(), "cloud".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "mailchimp-api-key".to_string(),
@@ -228,6 +258,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["mailchimp".to_string(), "email".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "twitter-api-key".to_string(),
@@ -242,6 +274,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["twitter".to_string(), "api".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "discord-api-key".to_string(),
@@ -256,6 +290,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["discord".to_string(), "api".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "dropbox-api-key".to_string(),
@@ -270,6 +306,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["dropbox".to_string(), "api".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "heroku-api-key".to_string(),
@@ -284,6 +322,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["heroku".to_string(), "cloud".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "npm-token".to_string(),
@@ -298,6 +338,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["npm".to_string(), "registry".to_string(), "token".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "private-key-encrypted".to_string(),
@@ -312,6 +354,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ssh".to_string(), "private-key".to_string(), "encrypted".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-password".to_string(),
@@ -326,6 +370,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["password".to_string(), "hardcoded".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hardcoded-username".to_string(),
@@ -340,6 +386,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["username".to_string(), "hardcoded".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "database-connection-string".to_string(),
@@ -354,6 +402,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["database".to_string(), "connection-string".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "connection-string-with-password".to_string(),
@@ -368,6 +418,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["connection-string".to_string(), "password".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "api-key-in-url".to_string(),
@@ -382,6 +434,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["api-key".to_string(), "url".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "bearer-token".to_string(),
@@ -396,6 +450,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["bearer".to_string(), "token".to_string(), "auth".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "basic-auth-credentials".to_string(),
@@ -410,6 +466,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["basic-auth".to_string(), "credential".to_string(), "auth".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "facebook-access-token".to_string(),
@@ -424,6 +482,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["facebook".to_string(), "token".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "firebase-api-key".to_string(),
@@ -438,6 +498,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["firebase".to_string(), "google".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "openai-api-key".to_string(),
@@ -452,6 +514,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["openai".to_string(), "ai".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "anthropic-api-key".to_string(),
@@ -466,6 +530,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["anthropic".to_string(), "ai".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "huggingface-api-key".to_string(),
@@ -480,6 +546,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["huggingface".to_string(), "ai".to_string(), "api-key".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rsa-private-key".to_string(),
@@ -494,6 +562,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rsa".to_string(), "private-key".to_string(), "credential".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ec-private-key".to_string(),
@@ -508,6 +578,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ec".to_string(), "private-key".to_string(), "credential".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "github-ssh-key".to_string(),
@@ -522,6 +594,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ssh".to_string(), "private-key".to_string(), "github".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "generic-api-key".to_string(),
@@ -536,6 +610,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["api-key".to_string(), "generic".to_string(), "credential".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "generic-secret".to_string(),
@@ -550,6 +626,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["secret".to_string(), "token".to_string(), "generic".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "github-oauth-token".to_string(),
@@ -564,6 +642,29 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["github".to_string(), "oauth".to_string(), "token".to_string()],
             env_var: true,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        // Unquoted credential-style assignments (.env, YAML, shell):
+        // AWS_SECRET_KEY=... — entropy gate rejects placeholders and numbers
+        Pattern {
+            name: "env-credential-assignment".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: r#"(?i)\b[A-Z][A-Z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD|CREDENTIAL)[A-Z0-9_]*\s*[:=]\s*['"]?[A-Za-z0-9+/=_-]{8,}['"]?"#.to_string(),
+            enabled: true,
+            severity: "high".to_string(),
+            confidence: "medium".to_string(),
+            min_entropy: Some(3.0),
+            description: "Credential-like variable assigned a literal value".to_string(),
+            reference: None,
+            tags: vec!["secrets".to_string(), "env".to_string(), "assignment".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: Some(
+                r#"(?i)\b(?:os\.environ|process\.env|std::env::var|getenv)\b|placeholder|example|changeme|your[-_]|<[^>]*>|\$\{"#
+                    .to_string(),
+            ),
+            file_extensions: Vec::new(),
         },
     ]
 }

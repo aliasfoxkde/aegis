@@ -17,6 +17,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "prompt-injection".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "system-prompt-leak".to_string(),
@@ -31,6 +33,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "prompt".to_string(), "security".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "unsafe-model-output".to_string(),
@@ -45,6 +49,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "output".to_string(), "content".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "hallucination-risk".to_string(),
@@ -59,6 +65,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "hallucination".to_string(), "accuracy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "bias-in-training".to_string(),
@@ -73,6 +81,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "bias".to_string(), "training".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "reward-hacking-risk".to_string(),
@@ -87,6 +97,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "alignment".to_string(), "reward".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "mesa-optimization".to_string(),
@@ -101,6 +113,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "mesa-optimization".to_string(), "alignment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "model-card-missing".to_string(),
@@ -115,6 +129,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "transparency".to_string(), "documentation".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ai-bias-report".to_string(),
@@ -129,6 +145,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "bias".to_string(), "fairness".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "model-version-tracking".to_string(),
@@ -143,6 +161,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "versioning".to_string(), "reproducibility".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "evaluation-benchmark".to_string(),
@@ -157,6 +177,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "evaluation".to_string(), "benchmark".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "adversarial-testing".to_string(),
@@ -171,6 +193,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "adversarial".to_string(), "testing".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "interpretability-tool".to_string(),
@@ -185,6 +209,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "interpretability".to_string(), "explainability".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "attention-visualization".to_string(),
@@ -199,6 +225,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "visualization".to_string(), "interpretability".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "training-data-audit".to_string(),
@@ -213,6 +241,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "data-governance".to_string(), "training".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "consent-for-training".to_string(),
@@ -227,6 +257,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "consent".to_string(), "privacy".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "data-augmentation".to_string(),
@@ -241,6 +273,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "robustness".to_string(), "training".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "noise-injection".to_string(),
@@ -255,6 +289,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "robustness".to_string(), "fuzzing".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "human-in-the-loop".to_string(),
@@ -269,6 +305,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "human-oversight".to_string(), "control".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "human-approval-required".to_string(),
@@ -283,6 +321,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "human-approval".to_string(), "control".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rlhf-reference".to_string(),
@@ -297,6 +337,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "rlhf".to_string(), "alignment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "rlhf-reward-model".to_string(),
@@ -311,6 +353,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "reward-model".to_string(), "alignment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "constitutional-ai".to_string(),
@@ -325,6 +369,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "constitutional-ai".to_string(), "alignment".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "ai-incident-response".to_string(),
@@ -339,6 +385,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "incident-response".to_string(), "safety".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "model-rollback".to_string(),
@@ -353,6 +401,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["ai-safety".to_string(), "rollback".to_string(), "operations".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

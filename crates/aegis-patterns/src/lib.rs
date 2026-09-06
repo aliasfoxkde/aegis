@@ -24,6 +24,15 @@ pub struct Pattern {
     pub env_var: bool,
     #[serde(default)]
     pub binary: bool,
+    /// Regex checked against each candidate match span: when it also matches,
+    /// the finding is suppressed. This is how "element without attribute X"
+    /// rules are expressed without lookarounds (the `regex` crate has none).
+    #[serde(default)]
+    pub exclude: Option<String>,
+    /// File extensions (without dot) this pattern applies to. Empty means the
+    /// pattern runs against every text file.
+    #[serde(default)]
+    pub file_extensions: Vec<String>,
 }
 
 pub mod accessibility;
@@ -38,6 +47,7 @@ pub mod compliance;
 pub mod container;
 pub mod data_visualization;
 pub mod devops;
+pub mod docs;
 pub mod finance;
 pub mod frameworks;
 pub mod git_hygiene;
@@ -56,6 +66,7 @@ pub mod security_hardening;
 pub mod shift_left;
 pub mod supply_chain;
 pub mod terraform;
+pub mod typescript;
 pub mod web_development;
 pub mod web_security;
 
@@ -94,6 +105,7 @@ pub fn all_patterns() -> Vec<Pattern> {
     patterns.extend(metadata::get());
     patterns.extend(pwa::get());
     patterns.extend(web_development::get());
+    patterns.extend(typescript::get());
     patterns
 }
 
@@ -132,6 +144,7 @@ pub fn by_category(category: &str) -> Vec<Pattern> {
         "metadata" => metadata::get(),
         "pwa" => pwa::get(),
         "web-development" => web_development::get(),
+        "typescript" => typescript::get(),
         _ => Vec::new(),
     }
 }
@@ -199,6 +212,8 @@ mod tests {
             tags: vec!["test".to_string()],
             env_var: false,
             binary: true,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let json = serde_json::to_string(&pattern).unwrap();
@@ -222,6 +237,8 @@ mod tests {
             tags: vec![],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         };
 
         let json = serde_json::to_string(&pattern).unwrap();

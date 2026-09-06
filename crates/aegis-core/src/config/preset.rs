@@ -43,9 +43,9 @@ pub struct Preset {
     /// Use gitignore
     #[serde(default = "default_true")]
     pub gitignore_respect: bool,
-    /// Use atheonignore
-    #[serde(default = "default_true")]
-    pub gitignore_atheon_respect: bool,
+    /// Respect .aegisignore (or legacy .atheonignore)
+    #[serde(default = "default_true", alias = "gitignore_atheon_respect")]
+    pub aegisignore_respect: bool,
     /// Output formats to use
     #[serde(default)]
     pub output_formats: Vec<OutputFormatConfig>,
@@ -231,7 +231,7 @@ impl Preset {
         merged.follow_symlinks = other.follow_symlinks;
         merged.scan_binary = other.scan_binary;
         merged.gitignore_respect = other.gitignore_respect;
-        merged.gitignore_atheon_respect = other.gitignore_atheon_respect;
+        merged.aegisignore_respect = other.aegisignore_respect;
 
         // Merge collections
         merged.output_formats.extend(other.output_formats.clone());
@@ -262,6 +262,7 @@ impl Preset {
 
         config.max_file_size_mb = self.max_file_size_mb;
         config.gitignore_respect = self.gitignore_respect;
+        config.aegisignore_respect = self.aegisignore_respect;
         config.severity_threshold = self.severity_threshold.clone();
 
         config
@@ -378,14 +379,14 @@ max_file_size_mb: 10
 name: extended
 enabled_categories:
   - pii
-  - security
+  - web-security
 max_file_size_mb: 20
 "#;
         let base: Preset = Preset::from_str(yaml1).unwrap();
         let extended: Preset = Preset::from_str(yaml2).unwrap();
         let merged = base.merge(&extended);
 
-        assert_eq!(merged.enabled_categories, vec!["pii", "security"]);
+        assert_eq!(merged.enabled_categories, vec!["pii", "web-security"]);
         assert_eq!(merged.max_file_size_mb, 20);
     }
 

@@ -1,0 +1,21 @@
+# Aegis ignore rules for this repository.
+#
+# Everything listed here is documentation or community material containing
+# intentional detection examples (sample keys, traversal strings, payloads).
+# Scanning prose produces dashboard noise, not security signal.
+#
+# Syntax: gitignore-style globs, `!` to re-include, last match wins.
+# `.atheonignore` remains supported as a legacy alias for this file.
+
+# Project documentation with deliberate detection examples
+docs/
+
+# GitHub wiki mirror (same example content)
+.github/wiki/
+
+# Community program descriptions
+community/
+
+# All markdown is prose with intentional examples (README, CHANGELOG,
+# integration guides) — never executable code
+*.md

@@ -1,6 +1,15 @@
 {
   "name": "pipeline",
-  "enabled_categories": ["secrets", "pii", "security", "security-hardening", "code-quality", "devops", "ai-detection", "supply-chain"],
+  "enabled_categories": [
+    "secrets",
+    "pii",
+    "security-hardening",
+    "web-security",
+    "code-quality",
+    "devops",
+    "ai-detection",
+    "supply-chain"
+  ],
   "strict_mode": "standard",
   "performance_mode": "optimized",
   "exit_on_findings": true,

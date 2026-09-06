@@ -18,6 +18,8 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["arm".to_string(), "azure".to_string(), "sql".to_string()],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
         Pattern {
             name: "arm-azure-storage-enable-https".to_string(),
@@ -37,6 +39,8 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
         },
     ]
 }

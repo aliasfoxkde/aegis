@@ -129,6 +129,7 @@ pub struct PatternDefinition {
     /// Category name
     pub category: String,
     /// Regex pattern to match
+    #[serde(alias = "match")]
     pub match_pattern: String,
     /// Whether the pattern is enabled by default
     pub enabled: bool,
@@ -153,6 +154,34 @@ pub struct PatternDefinition {
     /// Allow matching in binary files
     #[serde(default)]
     pub binary: bool,
+    /// Regex checked against each candidate match span: when it also matches,
+    /// the finding is suppressed. Enables "element without attribute" rules.
+    #[serde(default, alias = "exclude")]
+    pub exclude_pattern: Option<String>,
+    /// File extensions (without dot) this pattern applies to; empty = all files
+    #[serde(default)]
+    pub file_extensions: Vec<String>,
+}
+
+impl Default for PatternDefinition {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            category: String::new(),
+            match_pattern: String::new(),
+            enabled: true,
+            severity: Severity::Low,
+            confidence: Confidence::Low,
+            min_entropy: None,
+            description: String::new(),
+            reference: None,
+            tags: Vec::new(),
+            env_var: false,
+            binary: false,
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+        }
+    }
 }
 
 lazy_static! {
@@ -160,7 +189,6 @@ lazy_static! {
     pub static ref DEFAULT_CATEGORIES: HashMap<String, Category> = {
         let mut m = HashMap::new();
         m.insert("secrets".to_string(), Category::new("secrets", "API keys, tokens, credentials", 1.5));
-        m.insert("security".to_string(), Category::new("security", "Security vulnerabilities", 1.4));
         m.insert("security-hardening".to_string(), Category::new("security-hardening", "Security hardening", 1.4));
         m.insert("code-quality".to_string(), Category::new("code-quality", "Code quality issues", 0.8));
         m.insert("devops".to_string(), Category::new("devops", "CI/CD and DevOps", 1.2));
@@ -187,9 +215,19 @@ pub struct Pattern {
     inner: Arc<PatternInner>,
 }
 
+impl fmt::Debug for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Pattern")
+            .field("name", &self.inner.definition.name)
+            .field("category", &self.inner.definition.category)
+            .finish()
+    }
+}
+
 struct PatternInner {
     definition: PatternDefinition,
     regex: Regex,
+    exclude_regex: Option<Regex>,
 }
 
 impl Pattern {
@@ -198,8 +236,19 @@ impl Pattern {
         let regex = Regex::new(&definition.match_pattern)
             .map_err(|e| PatternError::InvalidRegex(e.to_string()))?;
 
+        let exclude_regex = match &definition.exclude_pattern {
+            Some(exclude) => {
+                Some(Regex::new(exclude).map_err(|e| PatternError::InvalidRegex(e.to_string()))?)
+            }
+            None => None,
+        };
+
         Ok(Self {
-            inner: Arc::new(PatternInner { definition, regex }),
+            inner: Arc::new(PatternInner {
+                definition,
+                regex,
+                exclude_regex,
+            }),
         })
     }
 
@@ -225,6 +274,8 @@ impl Pattern {
             tags: Vec::new(),
             env_var: false,
             binary: false,
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
         };
         Self::new(definition)
     }
@@ -282,6 +333,34 @@ impl Pattern {
     /// Check if binary files are allowed
     pub fn allows_binary(&self) -> bool {
         self.inner.definition.binary
+    }
+
+    /// Check whether a candidate match span should be suppressed because it
+    /// also matches this pattern's exclude regex
+    pub fn is_excluded(&self, matched_text: &str) -> bool {
+        self.inner
+            .exclude_regex
+            .as_ref()
+            .is_some_and(|re| re.is_match(matched_text))
+    }
+
+    /// Check whether this pattern applies to a file extension
+    ///
+    /// `None` means the source has no recognizable extension (stdin, env scan,
+    /// in-memory snippets without a filename). Extension-scoped patterns do not
+    /// run there; universal patterns (empty `file_extensions`) always do.
+    pub fn matches_extension(&self, ext: Option<&str>) -> bool {
+        let extensions = &self.inner.definition.file_extensions;
+        if extensions.is_empty() {
+            return true;
+        }
+        let Some(ext) = ext else {
+            return false;
+        };
+        let ext = ext.trim_start_matches('.');
+        extensions
+            .iter()
+            .any(|candidate| candidate.trim_start_matches('.').eq_ignore_ascii_case(ext))
     }
 
     /// Match against a string
@@ -398,9 +477,14 @@ impl CategoryScanner {
         &self.patterns
     }
 
-    /// Find matches using the combined regex first, then individual patterns
-    /// This is the optimized path: skip individual pattern checks if combined doesn't match
-    pub fn find_matches<'a>(&'a self, content: &'a str) -> Vec<PatternMatch<'a>> {
+    /// Find matches using the combined regex as a pre-filter, then run each
+    /// pattern individually.
+    ///
+    /// Every match is attributed to the pattern that produced it. Earlier
+    /// versions re-matched each hit against the pattern list and attributed it
+    /// to the first pattern whose regex fit, which double-reported overlapping
+    /// patterns and misattributed findings.
+    pub fn find_matches<'a>(&'a self, content: &'a str) -> Vec<AttributedMatch<'a>> {
         // Fast path: if combined regex doesn't match, skip all patterns in this category
         if !self.combined.is_match(content) {
             return Vec::new();
@@ -408,7 +492,7 @@ impl CategoryScanner {
 
         // Slow path: check each pattern individually
         let mut matches = Vec::new();
-        for pattern in &self.patterns {
+        for (pattern_index, pattern) in self.patterns.iter().enumerate() {
             // Skip if not enabled
             if !pattern.is_enabled() {
                 continue;
@@ -416,7 +500,9 @@ impl CategoryScanner {
 
             for cap in pattern.inner.regex.captures_iter(content) {
                 let m = cap.get(0).unwrap();
-                matches.push(PatternMatch {
+                matches.push(AttributedMatch {
+                    pattern_index,
+                    pattern,
                     start: m.start(),
                     end: m.end(),
                     matched_text: m.as_str(),
@@ -426,11 +512,42 @@ impl CategoryScanner {
         }
         matches
     }
+
+    /// Filter this scanner down to patterns applicable to a file extension.
+    ///
+    /// Returns `None` when no pattern applies, allowing callers to skip the
+    /// category entirely for that file type.
+    pub fn with_extension_filter(&self, ext: Option<&str>) -> Option<CategoryScanner> {
+        if self.patterns.iter().all(|p| !p.matches_extension(ext)) {
+            return None;
+        }
+
+        let filtered: Vec<Pattern> = self
+            .patterns
+            .iter()
+            .filter(|p| p.matches_extension(ext))
+            .cloned()
+            .collect();
+
+        CategoryScanner::new(&self.category.clone(), filtered).ok()
+    }
 }
 
 /// A single pattern match
 #[derive(Debug, Clone)]
 pub struct PatternMatch<'a> {
+    pub start: usize,
+    pub end: usize,
+    pub matched_text: &'a str,
+    pub groups: Vec<Option<&'a str>>,
+}
+
+/// A pattern match together with the pattern that produced it
+#[derive(Debug)]
+pub struct AttributedMatch<'a> {
+    /// Index into the category scanner's pattern list
+    pub pattern_index: usize,
+    pub pattern: &'a Pattern,
     pub start: usize,
     pub end: usize,
     pub matched_text: &'a str,
@@ -446,6 +563,15 @@ pub enum PatternError {
     NotFound(String),
     #[error("Duplicate pattern: {0}")]
     Duplicate(String),
+    #[error(
+        "Unknown categories: {}. Valid categories: {}",
+        unknown.join(", "),
+        valid.join(", ")
+    )]
+    UnknownCategories {
+        unknown: Vec<String>,
+        valid: Vec<String>,
+    },
 }
 
 /// Pattern registry for managing all patterns
@@ -540,6 +666,25 @@ impl PatternRegistry {
         categories.sort();
         categories.dedup();
         categories
+    }
+
+    /// Validate a list of requested categories against the registry.
+    ///
+    /// An unknown category would silently match nothing if it reached the
+    /// scanner filter, so callers gate on this before scanning and fail
+    /// loudly instead of reporting a clean pass.
+    pub fn validate_categories(&self, requested: &[String]) -> Result<(), PatternError> {
+        let valid = self.categories();
+        let unknown: Vec<String> = requested
+            .iter()
+            .filter(|c| !valid.contains(c))
+            .cloned()
+            .collect();
+        if unknown.is_empty() {
+            Ok(())
+        } else {
+            Err(PatternError::UnknownCategories { unknown, valid })
+        }
     }
 
     /// Enable a pattern
@@ -712,6 +857,8 @@ mod tests {
             name: "test".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::High,
@@ -744,6 +891,8 @@ mod tests {
                 name: format!("pattern-{}", i),
                 category: "test".to_string(),
                 match_pattern: format!("test{}", i),
+                exclude_pattern: None,
+                file_extensions: Vec::new(),
                 enabled: true,
                 severity: Severity::Low,
                 confidence: Confidence::High,
@@ -772,6 +921,8 @@ mod tests {
             name: "duplicate".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::High,
@@ -826,6 +977,8 @@ mod tests {
             name: "test".to_string(),
             category: "test".to_string(),
             match_pattern: "test\\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Medium,
             confidence: Confidence::Medium,
@@ -849,6 +1002,8 @@ mod tests {
             name: "def-test".to_string(),
             category: "test".to_string(),
             match_pattern: "pattern".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -874,6 +1029,8 @@ mod tests {
             name: "secret-1".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret1".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::High,
             confidence: Confidence::High,
@@ -889,6 +1046,8 @@ mod tests {
             name: "secret-2".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret2".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::High,
             confidence: Confidence::High,
@@ -904,6 +1063,8 @@ mod tests {
             name: "pii-1".to_string(),
             category: "pii".to_string(),
             match_pattern: "pii1".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Medium,
             confidence: Confidence::Medium,
@@ -939,6 +1100,8 @@ mod tests {
             name: "test".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -963,6 +1126,8 @@ mod tests {
             name: "unique-name".to_string(),
             category: "test".to_string(),
             match_pattern: "pattern".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -988,6 +1153,8 @@ mod tests {
             name: "get-test".to_string(),
             category: "test".to_string(),
             match_pattern: "pattern".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1016,6 +1183,8 @@ mod tests {
             name: "test1".to_string(),
             category: "cat1".to_string(),
             match_pattern: "test1".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1031,6 +1200,8 @@ mod tests {
             name: "test2".to_string(),
             category: "cat2".to_string(),
             match_pattern: "test2".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1066,6 +1237,8 @@ mod tests {
             name: "env-only".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::High,
             confidence: Confidence::High,
@@ -1087,6 +1260,8 @@ mod tests {
             name: "binary-allowed".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1102,6 +1277,8 @@ mod tests {
             name: "binary-not-allowed".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1144,6 +1321,8 @@ mod tests {
             name: "serial-test".to_string(),
             category: "test".to_string(),
             match_pattern: "pattern".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Medium,
             confidence: Confidence::Medium,
@@ -1167,6 +1346,8 @@ mod tests {
             name: "find-test".to_string(),
             category: "test".to_string(),
             match_pattern: "\\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1205,6 +1386,8 @@ mod tests {
             name: "enabled-test".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1225,6 +1408,8 @@ mod tests {
             name: "entropy-test".to_string(),
             category: "test".to_string(),
             match_pattern: "\\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1246,6 +1431,8 @@ mod tests {
             name: "entropy-test".to_string(),
             category: "test".to_string(),
             match_pattern: "\\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::High,
             confidence: Confidence::High,
@@ -1272,6 +1459,8 @@ mod tests {
             name: "find-entropy-test".to_string(),
             category: "test".to_string(),
             match_pattern: "\\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::High,
             confidence: Confidence::High,
@@ -1299,6 +1488,8 @@ mod tests {
             name: "str-test".to_string(),
             category: "test".to_string(),
             match_pattern: r"\d+".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1335,6 +1526,8 @@ mod tests {
             name: "cat-test1".to_string(),
             category: "test-cat".to_string(),
             match_pattern: "test1".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1350,6 +1543,8 @@ mod tests {
             name: "cat-test2".to_string(),
             category: "test-cat".to_string(),
             match_pattern: "test2".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1388,6 +1583,8 @@ mod tests {
             name: "debug-test".to_string(),
             category: "test".to_string(),
             match_pattern: "test".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
             enabled: true,
             severity: Severity::Low,
             confidence: Confidence::Low,
@@ -1409,5 +1606,174 @@ mod tests {
         let registry: PatternRegistry = Default::default();
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
+    }
+
+    fn definition(name: &str, category: &str, regex: &str) -> PatternDefinition {
+        PatternDefinition {
+            name: name.to_string(),
+            category: category.to_string(),
+            match_pattern: regex.to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+            enabled: true,
+            severity: Severity::Medium,
+            confidence: Confidence::High,
+            min_entropy: None,
+            description: "Test".to_string(),
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+        }
+    }
+
+    #[test]
+    fn test_validate_categories_accepts_known_categories() {
+        let registry = PatternRegistry::from_definitions(vec![
+            definition("a", "secrets", "x"),
+            definition("b", "pii", "y"),
+        ])
+        .unwrap();
+
+        let requested = vec!["secrets".to_string(), "pii".to_string()];
+        assert!(registry.validate_categories(&requested).is_ok());
+        // Empty request = no filter, always valid
+        assert!(registry.validate_categories(&[]).is_ok());
+    }
+
+    #[test]
+    fn test_validate_categories_rejects_unknown_with_valid_list() {
+        let registry = PatternRegistry::from_definitions(vec![
+            definition("a", "secrets", "x"),
+            definition("b", "security-hardening", "y"),
+        ])
+        .unwrap();
+
+        let requested = vec!["secrets".to_string(), "security".to_string()];
+        let err = registry.validate_categories(&requested).unwrap_err();
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("security"),
+            "error must name the unknown category: {msg}"
+        );
+        assert!(
+            msg.contains("security-hardening"),
+            "error must list the valid categories: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_find_matches_attributes_to_producing_pattern() {
+        // Two patterns whose matches overlap in text. Each hit must be
+        // attributed to the pattern that produced it, exactly once.
+        let scanner = CategoryScanner::new(
+            "test",
+            vec![
+                Pattern::new(definition("secret-token", "test", r"token\s*=\s*'[^']+'")).unwrap(),
+                Pattern::new(definition("secret-prefix", "test", r"secret\s*=\s*'[^']+'")).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let content = "token = 'abc';\nsecret = 'xyz';\n";
+        let matches = scanner.find_matches(content);
+
+        assert_eq!(matches.len(), 2);
+        let mut names: Vec<&str> = matches.iter().map(|m| m.pattern.name()).collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["secret-prefix", "secret-token"]);
+        // Each hit keeps the text of the pattern that matched it
+        let token_hit = matches
+            .iter()
+            .find(|m| m.pattern.name() == "secret-token")
+            .unwrap();
+        assert_eq!(token_hit.matched_text, "token = 'abc'");
+    }
+
+    #[test]
+    fn test_find_matches_reports_overlapping_patterns_once_each() {
+        // "password123456" matches both patterns; the old re-match heuristic
+        // reported it twice under whichever pattern was checked first.
+        let scanner = CategoryScanner::new(
+            "test",
+            vec![
+                Pattern::new(definition("broad", "test", r"password\w+")).unwrap(),
+                Pattern::new(definition("specific", "test", r"password\d{6}")).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let matches = scanner.find_matches("password123456");
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].pattern.name(), "broad");
+        assert_eq!(matches[1].pattern.name(), "specific");
+        assert_eq!(matches[0].start, matches[1].start);
+    }
+
+    #[test]
+    fn test_exclude_pattern_suppresses_match() {
+        let mut def = definition("generic-secret", "test", r#"secret\s*=\s*['"][^'"]+['"]"#);
+        def.exclude_pattern = Some(r"placeholder|example".to_string());
+
+        let pattern = Pattern::new(def).unwrap();
+        assert!(pattern.matches("secret = 'hunter2'"));
+        assert!(pattern.is_excluded("secret = 'example_key'"));
+        assert!(!pattern.is_excluded("secret = 'hunter2'"));
+    }
+
+    #[test]
+    fn test_matches_extension_scoping() {
+        let mut def = definition("html-img-alt", "test", r"<img\b[^>]*>");
+        def.file_extensions = vec!["html".to_string(), "htm".to_string()];
+
+        let pattern = Pattern::new(def).unwrap();
+        assert!(pattern.matches_extension(Some("html")));
+        assert!(pattern.matches_extension(Some(".HTM")));
+        assert!(!pattern.matches_extension(Some("js")));
+        // Extension-less content cannot satisfy a scoped pattern
+        assert!(!pattern.matches_extension(None));
+    }
+
+    #[test]
+    fn test_matches_extension_unscoped_matches_everything() {
+        let pattern = Pattern::new(definition("any-file", "test", "needle")).unwrap();
+        assert!(pattern.matches_extension(Some("rs")));
+        assert!(pattern.matches_extension(None));
+    }
+
+    #[test]
+    fn test_category_scanner_extension_filter() {
+        let scanner = CategoryScanner::new(
+            "test",
+            vec![
+                {
+                    let mut d = definition("html-only", "test", "<img");
+                    d.file_extensions = vec!["html".to_string()];
+                    Pattern::new(d).unwrap()
+                },
+                Pattern::new(definition("everywhere", "test", "needle")).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let html = scanner.with_extension_filter(Some("html")).unwrap();
+        assert_eq!(html.len(), 2);
+
+        let rs = scanner.with_extension_filter(Some("rs")).unwrap();
+        assert_eq!(rs.len(), 1);
+        assert_eq!(rs.patterns()[0].name(), "everywhere");
+
+        // A scanner whose patterns are all scoped elsewhere disappears
+        let scoped_away = CategoryScanner::new(
+            "test",
+            vec![{
+                let mut d = definition("html-only", "test", "<img");
+                d.file_extensions = vec!["html".to_string()];
+                Pattern::new(d).unwrap()
+            }],
+        )
+        .unwrap();
+        assert!(scoped_away.with_extension_filter(Some("rs")).is_none());
     }
 }

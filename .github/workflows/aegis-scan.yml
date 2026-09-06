@@ -68,7 +68,7 @@ jobs:
         run: |
           set +e
           ./target/release/aegis --format sarif scan . \
-            --categories secrets,security,security-hardening,web-security \
+            --categories secrets,security-hardening,web-security \
             --severity-threshold "$SCAN_SEVERITY" \
             --output-file aegis-results.sarif
           scan_exit=$?
