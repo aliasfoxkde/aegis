@@ -1,257 +1,196 @@
 # Pattern Development Guide
 
-Aegis patterns are simple YAML files. No Rust required!
+Aegis patterns ship as Rust structs in
+[`crates/aegis-patterns/src/`](https://github.com/aliasfoxkde/aegis/tree/main/crates/aegis-patterns/src)
+and are compiled into every surface. Two more paths exist for extending
+detections without touching the compiled corpus:
 
-## Creating Your First Pattern
+1. **Rust** — core patterns, reviewed and shipped with the binary
+2. **YAML** — contributions bundled into a pattern pack with `aegis-bundler`
+3. **`.aegis.yml`** — per-project custom patterns merged in at scan time
 
-### 1. Choose a Category
+## Writing a Good Pattern
 
-Patterns go in `community/<category>/` directories:
+A pattern is a regex plus metadata. The regex uses the Rust `regex`
+crate (RE2 syntax): **no lookarounds**, `.` does not cross newlines,
+and nested quantifiers cannot backtrack (keep repetitions bounded
+anyway).
 
-- **secrets/** - API keys, tokens, credentials
-- **pii/** - Personal information (SSN, credit cards)
-- **web-security/** - XSS, SQLi, injection
-- **code-quality/** - Debug statements, TODOs
-- **ai-detection/** - AI-generated code markers
-- **devops/** - CI/CD, Docker, Kubernetes
+### Best Practices
 
-Or create a new category directory.
+**1. Use word boundaries**
 
-### 2. Create the Pattern File
+```regex
+# BAD - matches substrings
+sk-[A-Za-z0-9]{32}
 
-```yaml
-# community/secrets/my-service-api-key.yaml
-name: my-service-api-key
-match: '\bmsvc_[A-Za-z0-9]{32}\b'
-severity: high
-confidence: high
-minEntropy: 3.5
-description: 'Detects MyService API keys'
-tags:
-  - secrets
-  - api-key
+# GOOD - whole tokens only
+\bsk-[A-Za-z0-9]{32}\b
 ```
 
-### 3. Test Your Pattern
+**2. Be specific**
+
+```regex
+# TOO GENERIC - many false positives
+[A-Z]{2}-[A-Z]{5}
+
+# SPECIFIC - identifiable prefix + assignment context
+\bapi[_-]?token["\s]*[:=]["\s]*[A-Za-z0-9]{32,}
+```
+
+**3. Set an entropy floor for secrets** — low-entropy matches
+(`password123`) are usually placeholders:
+
+```text
+min_entropy: Some(3.5)
+```
+
+**4. Suppress safe idioms with `exclude`** — when the exclude regex also
+matches the candidate span, the finding is suppressed. Use it to exempt
+documentation examples and placeholders. The exclude only sees the
+matched span, not the rest of the line.
+
+**5. Never use nested quantifiers that can explode** — the RE2 engine
+will not hang, but unbounded nesting still wastes cycles:
+
+```regex
+# BAD
+(a+)+$
+
+# GOOD
+\ba{8,32}\b
+```
+
+## Rust Format (core patterns)
+
+Add a `Pattern` to the appropriate module in
+`crates/aegis-patterns/src/<category>.rs`:
+
+```rust
+Pattern {
+    name: "my-service-key".to_string(),
+    category: "secrets".to_string(),
+    match_pattern: r#"(?i)myservice[_-]?key\s*[:=]\s*['"][A-Za-z0-9]{16,}"#.to_string(),
+    enabled: true,
+    severity: "high".to_string(),      // critical | high | medium | low
+    confidence: "high".to_string(),    // high | medium | low
+    min_entropy: Some(3.5),
+    description: "Detects hardcoded MyService keys".to_string(),
+    reference: Some("https://docs.example.com/security".to_string()),
+    tags: vec!["secrets".to_string(), "api-key".to_string()],
+    env_var: false,   // true = only runs during `aegis scan --env`
+    binary: false,    // true = may match inside binary files
+    exclude: Some(r#"(?i)example|placeholder|your[-_]key"#.to_string()),
+    file_extensions: Vec::new(), // empty = every text file
+}
+```
+
+Then:
+
+1. Add the pattern to `crates/aegis-patterns/src/lib.rs` dispatch if it
+   opens a new category.
+2. Run `cargo run -p aegis-patterns --example generate_docs` — the
+   generated catalog must stay fresh; a CI test fails otherwise.
+3. Add positive/negative fixtures to
+   `crates/aegis-cli/tests/pattern_fixtures.rs`.
+4. `scripts/generate_examples.py` backfills the liveness example — every
+   shipped pattern must have a provably firing example
+   (`pattern_liveness.rs` fails CI without one).
+
+Naming rules: pattern names and categories are **kebab-case**
+(`my-service-key`); the hygiene tests reject anything else. Categories
+must already exist in `aegis_patterns::by_category()`.
+
+## YAML Format (aegis-bundler)
+
+YAML contributions skip the recompile step. Each pattern is a document
+in a YAML list (field names mirror the Rust struct):
+
+```yaml
+- name: my-service-key
+  category: secrets
+  match: '(?i)myservice[_-]?key\s*[:=]\s*["''][A-Za-z0-9]{16,}'
+  severity: high
+  confidence: high
+  min_entropy: 3.5
+  description: Detects hardcoded MyService keys
+  enabled: true
+```
+
+Bundle it and load it into a running MCP server:
 
 ```bash
-# Build the project
-cargo build --workspace
-
-# List your pattern
-cargo run --bin aegis-cli -- list --search my-service
-
-# Test scan
-echo "msvc_12345678901234567890123456789012" | cargo run --bin aegis-cli -- scan
+cargo build --release -p aegis-bundler
+./target/release/aegis-bundler ./patterns-dir ./my-patterns.bundle
+# then: MCP method update_bundle with params ["./my-patterns.bundle", true]
 ```
 
-## Pattern Format
+## Per-Project Custom Patterns (.aegis.yml)
 
-### Required Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Unique pattern name (snake_case) |
-| `match` | string | Valid regex pattern |
-| `severity` | string | `critical`, `high`, `medium`, or `low` |
-| `confidence` | string | `high`, `medium`, or `low` |
-| `description` | string | Human-readable description |
-
-### Optional Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `minEntropy` | float | Minimum entropy threshold (0.0-8.0) |
-| `reference` | string | Documentation URL |
-| `tags` | list | Additional categorization tags |
-
-## Pattern Best Practices
-
-### 1. Use Word Boundaries
-
-```yaml
-# ❌ BAD - matches substrings
-match: 'sk-[A-Za-z0-9]{32}'
-
-# ✅ GOOD - whole tokens only
-match: '\bsk-[A-Za-z0-9]{32}\b'
-```
-
-### 2. Be Specific
-
-```yaml
-# ❌ TOO GENERIC - many false positives
-match: '[A-Z]{2}-[A-Z]{5}'
-
-# ✅ SPECIFIC - with identifiable prefix
-match: '\bMSVC_[A-Za-z0-9]{32}\b'
-```
-
-### 3. Consider False Positives
-
-```yaml
-# ❌ MANY FALSE POSITIVES
-match: 'token[A-Z]*'
-
-# ✅ CONTEXT AWARE
-match: '\bapi[_-]?token["\s]*[:=]["\s]*[A-Za-z0-9]{32,}'
-```
-
-### 4. Set Appropriate Entropy
-
-```yaml
-# High-entropy strings are more likely to be secrets
-minEntropy: 4.0  # Reject low-entropy matches
-```
-
-## Pattern Examples
-
-### API Keys
-
-```yaml
-# AWS Access Key
-name: aws-access-key
-match: '\b(?:AKIA|ASIA)[0-9A-Z]{16}\b'
-severity: critical
-confidence: high
-minEntropy: 3.5
-description: 'AWS access key ID detected'
-tags:
-  - secrets
-  - aws
-
-# GitHub Token
-name: github-token
-match: '\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b'
-severity: critical
-confidence: high
-minEntropy: 5.0
-description: 'GitHub personal access token'
-tags:
-  - secrets
-  - github
-
-# Stripe API Key
-name: stripe-api-key
-match: '\b(?:sk|pk)_(?:live|test)_[0-9a-z]{24,}\b'
-severity: critical
-confidence: high
-minEntropy: 4.5
-description: 'Stripe API key detected'
-tags:
-  - secrets
-  - payment
-```
-
-### Code Quality
-
-```yaml
-# TODO comments
-name: todo-comment
-match: '(?i)TODO[^\n]*:'
-severity: low
-confidence: medium
-description: 'TODO comment detected'
-tags:
-  - code-quality
-  - maintenance
-
-# Debug print
-name: debug-print
-match: '(?i)(console\.log|fmt\.Print|log\.Print)\s*\('
-severity: medium
-confidence: high
-description: 'Debug print statement detected'
-tags:
-  - code-quality
-  - debugging
-```
-
-### AI Detection
-
-```yaml
-# AI-generated marker
-name: ai-generated-marker
-match: '(?i)(generated\s+by|ai[-\s]generated|created\s+by\s+chatgpt)'
-severity: low
-confidence: medium
-description: 'AI generation marker detected'
-tags:
-  - ai-detection
-  - metadata
-```
+A scan root may contain a `.aegis.yml` (or `.aegis.yaml`) file whose
+patterns are merged into the registry before the walk — useful for
+project-specific rules without shipping them globally. See the
+[CLI guide](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CLI.md).
 
 ## Testing Your Pattern
 
-### Manual Testing
+Every pattern in the corpus is covered by three CI-enforced suites —
+mirror them for new rules:
+
+- **Liveness** (`pattern_liveness.rs`): the pattern fires on its stored
+  example, generated by `scripts/generate_examples.py`.
+- **Hygiene** (`registry_hygiene.rs`): regexes compile, names and
+  categories are kebab-case, severities/confidences are enumerated
+  values, references are real HTTPS URLs, entropy floors sit in the
+  Shannon range, and the generated docs are fresh.
+- **Precision/recall** (`corpus_precision_recall.rs`): fixtures in
+  `crates/aegis-core/tests/corpus/` keep false positives at or below a
+  measured gate.
+
+Manual check:
 
 ```bash
-# Test with sample content
-echo "AKIAIOSFODNN7EXAMPLE" | cargo run --bin aegis-cli -- scan --category secrets
-
-# Test specific pattern
-cargo run --bin aegis-cli -- list --search aws-access-key
-```
-
-### Automated Testing
-
-Add test cases in `crates/aegis-patterns/tests/`:
-
-```rust
-#[test]
-fn test_aws_access_key() {
-    let scanner = Scanner::new();
-    let findings = scanner.scan_string(
-        "AKIAIOSFODNN7EXAMPLE",
-        Some("secrets")
-    );
-    assert!(!findings.is_empty());
-    assert_eq!(findings[0].pattern.name, "aws-access-key");
-}
+cargo run -p aegis-cli -- scan --stdin <<< 'myservice_key = "AbCdEf1234567890AbCdEf1234567890"'
 ```
 
 ## Submitting Patterns
 
-1. Fork the repository
-2. Add your pattern to `community/<category>/`
-3. Test thoroughly
+1. Fork the repository and create a branch
+2. Add the pattern (Rust or YAML) with fixtures and an example
+3. Run the gates: `cargo fmt --all`, `cargo clippy --workspace
+   --all-targets -- -D warnings`, `cargo test --workspace`
 4. Submit a pull request
 
-See [CONTRIBUTING](../.github/CONTRIBUTING.md) for full guidelines.
+See [CONTRIBUTING](https://github.com/aliasfoxkde/aegis/blob/main/.github/CONTRIBUTING.md)
+for full guidelines.
 
 ## Pattern Quality Checklist
 
-- ✅ **Specificity** - Uses word boundaries `\b` where appropriate
-- ✅ **Accuracy** - Minimal false positives on real code
-- ✅ **Clarity** - Pattern name clearly describes what it detects
-- ✅ **Testing** - Tested with real examples and edge cases
-- ✅ **Entropy** - Appropriate `minEntropy` for secrets
-- ✅ **Metadata** - Description explains what pattern detects
+- ✅ **Specificity** — uses word boundaries `\b` where appropriate
+- ✅ **Accuracy** — minimal false positives on real code
+- ✅ **Clarity** — name clearly describes what it detects (kebab-case)
+- ✅ **Testing** — liveness example + precision fixtures pass
+- ✅ **Entropy** — appropriate `min_entropy` for secret-shaped rules
+- ✅ **Metadata** — description, tags, and a reference URL
+- ✅ **Docs** — generated catalog regenerated and committed
 
 ## Common Mistakes
 
-### ❌ Overly Generic
+### Overly Generic
 
-```yaml
-match: '[0-9]{32}'  # Matches ANY 32-digit number
+```regex
+[0-9]{32}   # matches ANY 32-digit number
 ```
 
-### ❌ Missing Word Boundaries
+### Missing Word Boundaries
 
-```yaml
-match: 'password'  # Matches "password" anywhere
+```regex
+password    # matches "password" anywhere, including prose
 ```
 
-### ❌ Catastrophic Backtracking
+### Wrong Engine Assumptions
 
-```yaml
-# ❌ DANGEROUS - can hang on certain inputs
-match: '(a+)+$'
-
-# ✅ SAFE - no nested quantifiers
-match: '\ba{8,32}\b'
+```regex
+(?<=prefix)token   # lookarounds do not exist in RE2 — express "prefix
+                   # without capturing it" via the exclude field instead
 ```
-
----
-
-**Need inspiration?** Browse existing patterns in `community/` directory.

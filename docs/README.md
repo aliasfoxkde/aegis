@@ -16,7 +16,8 @@ Comprehensive security scanning tool for DevOps, CI/CD pipelines, and AI systems
 
 ## Patterns
 
-- [Detection Patterns](patterns/README.md) - 633 patterns across 33 categories
+- [Detection Patterns](patterns/README.md) - Index of 633 patterns across 33 categories
+- [Category pages](patterns/categories/) - Per-category detail: regex, scoping, and verified examples for every pattern
 - [Pattern Specification](PATTERNS.md) - How patterns work
 - [Adding Patterns](guides/ADDING_PATTERNS.md) - Contribute new patterns
 

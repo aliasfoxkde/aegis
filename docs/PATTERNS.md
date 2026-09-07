@@ -9,10 +9,11 @@ corpus via `aegis_patterns::all_patterns()`. The same corpus can be
 serialized into a gzip+JSON bundle, which the MCP `update_bundle` method
 loads and installs in place of the built-in set.
 
-The generated catalog of every shipped pattern lives in
-[docs/patterns/README.md](./patterns/README.md) (regenerate with
+The generated catalog of every shipped pattern lives under
+[docs/patterns/](./patterns/README.md) — a high-level index plus one
+detail page per category in `patterns/categories/` (regenerate with
 `cargo run -p aegis-patterns --example generate_docs`; a freshness test
-fails CI when it drifts).
+fails CI when they drift).
 
 ## Pattern Format
 
@@ -84,8 +85,11 @@ metadata, performance, pii, pwa, secrets, security-hardening,
 shift-left, supply-chain, terraform, typescript, web-development,
 web-security.
 
-Per-category descriptions and full pattern tables are in the
-[generated catalog](./patterns/README.md).
+The [generated catalog](./patterns/README.md) is the entry point: it
+links one detail page per category under
+[patterns/categories/](./patterns/categories/), and every pattern's page
+carries its regex, scoping, tags, reference link, and a verified example
+input.
 
 ---
 

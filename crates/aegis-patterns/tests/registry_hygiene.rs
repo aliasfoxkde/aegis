@@ -242,27 +242,55 @@ fn exclude_patterns_exclude_something_related() {
 #[test]
 fn pattern_docs_are_fresh() {
     let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let readme = manifest
+    let docs_dir = manifest
         .parent()
         .and_then(|p| p.parent())
-        .map(|root| root.join("docs").join("patterns").join("README.md"))
+        .map(|root| root.join("docs").join("patterns"))
         .expect("crate must live inside the repository");
-
-    let committed = std::fs::read_to_string(&readme).unwrap_or_else(|e| {
-        panic!(
-            "cannot read {}: {e}; run cargo run -p aegis-patterns --example generate_docs",
-            readme.display()
-        )
-    });
+    let categories_dir = docs_dir.join("categories");
 
     // Windows runners check out with CRLF while the generator emits LF, so
     // compare newline-insensitively — the freshness guarantee is about
     // content, not checkout line endings.
     let normalize = |s: &str| s.replace('\r', "");
+    let regenerate = "run cargo run -p aegis-patterns --example generate_docs";
+
+    let index_committed = std::fs::read_to_string(docs_dir.join("README.md"))
+        .unwrap_or_else(|e| panic!("cannot read docs/patterns/README.md: {e}; {regenerate}"));
     assert_eq!(
-        normalize(&committed),
-        normalize(&aegis_patterns::docs::generate_pattern_docs()),
-        "docs/patterns/README.md is stale; run cargo run -p aegis-patterns --example generate_docs"
+        normalize(&index_committed),
+        normalize(&aegis_patterns::docs::generate_pattern_index()),
+        "docs/patterns/README.md is stale; {regenerate}"
+    );
+
+    let generated = aegis_patterns::docs::generate_category_docs();
+    for (category, document) in &generated {
+        let path = categories_dir.join(format!("{category}.md"));
+        let committed = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}; {regenerate}", path.display()));
+        assert_eq!(
+            normalize(&committed),
+            normalize(document),
+            "docs/patterns/categories/{category}.md is stale; {regenerate}"
+        );
+    }
+
+    let stale: Vec<String> = std::fs::read_dir(&categories_dir)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", categories_dir.display()))
+        .map(|entry| entry.expect("readable directory entry").path())
+        .filter(|path| {
+            path.extension().is_some_and(|ext| ext == "md")
+                && !generated.contains_key(
+                    path.file_stem()
+                        .and_then(|stem| stem.to_str())
+                        .unwrap_or_default(),
+                )
+        })
+        .map(|path| path.display().to_string())
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "stale category pages without a shipped category: {stale:?}; {regenerate}"
     );
 }
 

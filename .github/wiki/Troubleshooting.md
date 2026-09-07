@@ -12,14 +12,14 @@ aegis --version
 # Check PATH
 echo $PATH | grep -E '(usr|local|bin)'
 
-# Reinstall if needed
-curl -sSL https://get.aegis.dev | sh
+# Reinstall from the latest release assets
+# https://github.com/aliasfoxkde/aegis/releases/latest
 ```
 
 ### Build failures
 
 ```bash
-# Ensure Rust 1.70+ is installed
+# Ensure Rust 1.75+ (the MSRV) is installed
 rustc --version
 
 # Update Rust
@@ -44,22 +44,27 @@ sudo chmod +x /usr/local/bin/aegis
 
 ### "No findings" but expected results
 
-**Check pattern status:**
+**Check the rule exists and what it scopes to:**
 
 ```bash
 # List all patterns
 aegis list
 
-# Search for specific pattern
-aegis list --search aws
-
 # List by category
 aegis list --category secrets
+
+# Every pattern's regex, scoping, and a verified example lives in the
+# generated catalog:
+# https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md
 ```
 
-**Verify pattern is enabled:**
+**Mind the scoping rules:**
 
-Patterns may be disabled by default. Enable with profile or individual pattern settings.
+- Patterns with `file_extensions` set only run on matching files; a file
+  without an extension (`Dockerfile`, `README`) never matches a scoped
+  pattern.
+- `scope: environment` patterns only run during `aegis scan --env`.
+- All shipped patterns are enabled by default.
 
 **Try with lower threshold:**
 
@@ -70,39 +75,29 @@ aegis scan . --severity-threshold low
 
 ### Slow scanning on large projects
 
-**Use severity filtering:**
+**Use severity and category filtering:**
 
 ```bash
 # Scan only high+ severity
 aegis scan . --severity-threshold high
 
-# Use pipeline profile (optimized for speed)
-aegis scan . --profile pipeline
+# Scan only specific categories
+aegis scan . --categories secrets,web-security
+
+# Use the CI-optimized preset
+aegis -c pipeline scan .
 ```
 
-**Increase workers:**
-
-```bash
-# Use more workers for parallel processing
-aegis scan . --workers 8
-```
-
-**Memory issues:**
-
-```bash
-# Check available memory
-free -h  # Linux
-vm_stat   # macOS
-```
+Worker threads scale with the machine automatically. Scanning is
+streaming, so file size is bounded by the 10 MB default limit
+(configurable per profile).
 
 ### False positives
 
-**Add ignore rules:**
+**Skip files with `.aegisignore`** (gitignore syntax, in the scan root):
 
-```bash
-# Create .aegisignore
-cat > .aegisignore << EOF
-# Ignore test files
+```text
+# Ignore test fixtures
 test/
 **/*_test.go
 *.test.ts
@@ -110,64 +105,57 @@ test/
 # Ignore generated files
 *.generated.*
 .env.example
-
-# Specific pattern suppression
-ignore: aws-access-key
-EOF
 ```
 
-**Inline ignore:**
+**Suppress a finding inline** — the directive must be on the same line
+as the finding and name the pattern (a bare `aegis:ignore` suppresses
+nothing):
 
 ```bash
-# Add ignore directive to line
-DEBUG_KEY=fake_key_for_testing  # aegis:ignore
+DEBUG_KEY=fake_key_for_testing  # aegis:ignore:generic-secret -- test fixture
 ```
+
+Ranges (`aegis:ignore-start` / `aegis:ignore-end`) and whole-file
+(`aegis:ignore-file`) directives are also supported. Prefer an upstream
+fix: patterns carry an `exclude` regex for safe idioms, so a repeat
+false positive is worth a contribution to
+[the pattern source](https://github.com/aliasfoxkde/aegis/tree/main/crates/aegis-patterns/src).
 
 ## Pattern Issues
 
 ### Pattern not matching
 
-**Test regex pattern:**
+1. Open the pattern's page in the
+   [generated catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md)
+   — it documents the exact regex, scoping, entropy floor, and a
+   **verified example input** that provably fires.
+2. Check `file_extensions`: your file must have a listed extension.
+3. Check `exclude`: your match span may be hitting a suppression rule.
+4. Check inline directives in the file (`aegis:ignore:` on the same line).
+
+### Pattern pack not loading
 
 ```bash
-# List pattern details
-aegis list --search <pattern-name> --json | jq '.'
+# Validate a YAML pattern list by bundling it
+cargo build --release -p aegis-bundler
+./target/release/aegis-bundler ./patterns-dir ./test.bundle
 
-# Verify pattern exists
-aegis list --category <category>
-```
+# Install a bundle into a running MCP server
+# JSON-RPC: {"method": "update_bundle", "params": ["./my-patterns.bundle", true]}
 
-**Check pattern syntax:**
-
-```bash
-# View pattern details in JSON
-aegis list --json | jq '.[] | select(.name == "pattern-name")'
-```
-
-### Pattern not loading
-
-```bash
-# Update pattern bundle
+# Refresh the CLI's cached bundle
 aegis update
-
-# Check for errors
-aegis update --verbose
 ```
 
 ## CI/CD Issues
 
 ### GitHub Actions not working
 
-**Verify workflow syntax:**
-
-```yaml
-# Correct format
-- name: Security Scan
-  uses: aliasfoxkde/aegis-action@v1
-  with:
-    severity-threshold: high
-    format: sarif
-```
+There is no external action; copy the repository's own scanning
+workflow into your project:
+[.github/workflows/aegis-scan.yml](https://github.com/aliasfoxkde/aegis/blob/main/.github/workflows/aegis-scan.yml).
+It runs the scan on push/pull_request, uploads SARIF to code scanning,
+and fails on secrets, security-hardening, and web-security findings.
 
 **Check artifact upload:**
 
@@ -192,56 +180,42 @@ chmod +x .git/hooks/pre-commit
 .git/hooks/pre-commit
 ```
 
+A better pre-commit hook scans the staged content rather than the
+working tree:
+
+```bash
+aegis scan . --staged
+```
+
 ### Exit code issues
 
 ```bash
-# Check exit codes:
-# 0 = success, 1 = findings, 2 = error, 3 = invalid args
+# Exit codes:
+# 0 = success (or no NEW findings when --baseline is used)
+# 1 = findings reported (also: a scan itself failed)
+# 2 = invalid usage
 
 # Debug with verbose
-aegis scan . --verbose
-
-# Fail on findings (for CI)
-aegis scan . --severity-threshold medium || exit 1
+aegis scan . -v
 ```
+
+With `--baseline`, exit 1 means findings that are not recorded in the
+baseline — a clean CI gate over new work.
 
 ## MCP Integration Issues
 
 ### MCP server not starting
 
-**Build verification:**
+`aegis-mcp` speaks JSON-RPC 2.0 on **stdio** — it has no network port.
+Test it by piping a request:
 
 ```bash
-# Verify binary exists
-ls -la $(which aegis-mcp)
-
-# Test directly
-aegis-mcp --help
+echo '{"jsonrpc":"2.0","id":1,"method":"list_categories"}' | aegis-mcp
 ```
 
-**Port conflicts:**
-
-```bash
-# Use custom port
-aegis-mcp --port 8765
-
-# Update AI assistant config
-{
-  "mcpServers": {
-    "aegis": {
-      "command": "aegis-mcp",
-      "args": ["--port", "8765"]
-    }
-  }
-}
-```
-
-### AI assistant not using Aegis
-
-**Configuration check:**
+**Client configuration:**
 
 ```json
-// In claude_desktop_config.json
 {
   "mcpServers": {
     "aegis": {
@@ -251,9 +225,7 @@ aegis-mcp --port 8765
 }
 ```
 
-**Restart AI assistant:**
-
-After configuration changes, restart the AI assistant completely.
+Restart the AI assistant completely after configuration changes.
 
 ## Performance Issues
 
@@ -261,7 +233,7 @@ After configuration changes, restart the AI assistant completely.
 
 ```bash
 # Use category filtering
-aegis scan . --category secrets,pii
+aegis scan . --categories secrets,pii
 
 # Use severity filter
 aegis scan . --severity-threshold high
@@ -269,43 +241,41 @@ aegis scan . --severity-threshold high
 
 ### High memory usage
 
-```bash
-# Reduce workers
-aegis scan . --workers 2
-
-# Use streaming (automatic for large files)
-```
+Scanning is streaming and per-file size is capped (10 MB by default);
+the largest consumers are worker threads, which scale with CPU count.
+Narrow the scan with `--categories`/`--severity-threshold` rather than
+tuning workers.
 
 ## Configuration Issues
 
 ### Profile not loading
 
 ```bash
-# List available profiles
-ls config/profiles/
+# Built-in presets
+aegis -c production scan .
+aegis -c pipeline scan .
+aegis -c development scan .
+aegis -c mcp-integration scan .
 
-# Use explicit path
-aegis scan . --profile ./config/profiles/production.json
+# Or an explicit profile file
+aegis -c ./config/profiles/production.json scan .
 ```
+
+A profile supplies defaults for flags you did not set explicitly
+(output format, categories, severity threshold); explicit flags always
+win. An unknown preset fails with the list of valid names.
 
 ### Settings not persisting
 
-```bash
-# Check config locations (first found wins)
-cat ./.aegis.toml
-cat ~/.aegis/config.toml
-cat /etc/aegis/config.toml
-
-# Use command line flags for testing
-aegis scan . --profile production --severity-threshold high
-```
+There is no global config file; configuration is per-invocation via
+flags and `-c/--config`. Use command-line flags for one-off overrides.
 
 ## Getting Help
 
 ### Documentation
 - [Getting Started](Getting-Started)
-- [Configuration](../docs/guides/CONFIGURATION.md)
-- [CLI Reference](../docs/guides/CLI.md)
+- [Configuration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CONFIGURATION.md)
+- [CLI Reference](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CLI.md)
 
 ### Community Support
 - [GitHub Issues](https://github.com/aliasfoxkde/aegis/issues)
@@ -315,7 +285,7 @@ aegis scan . --profile production --severity-threshold high
 
 ```bash
 # Enable verbose output
-RUST_LOG=debug aegis scan .
+aegis scan . -v
 
 # Run with backtrace
 RUST_BACKTRACE=1 aegis scan .
@@ -325,19 +295,20 @@ RUST_BACKTRACE=1 aegis scan .
 
 ### "bundle load failed"
 
-```bash
-# Delete local bundle
-rm -rf ~/.aegis/
+The cached bundle is corrupt. Remove the cache and refresh:
 
-# Update patterns
+```bash
+# Linux: ~/.local/share/aegis/patterns.bundle
+rm ~/.local/share/aegis/patterns.bundle
 aegis update
 ```
 
 ### "pattern validation failed"
 
 - Check YAML syntax
-- Verify regex is valid
-- Ensure required fields present
+- Verify the regex compiles (RE2 syntax: no lookarounds)
+- Ensure required fields are present: `name`, `match`, `severity`,
+  `confidence`, `description`
 
 ### "permission denied"
 
