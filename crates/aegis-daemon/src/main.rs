@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn setup_socket_refuses_non_socket_entries() {
-        let path = test_socket_path("regular");
+        let path = test_socket_path("refuse-regular");
         fs::write(&path, b"do not remove").expect("create sentinel");
         let error = setup_socket(&path).expect_err("regular file must be refused");
         assert_eq!(error.kind(), ErrorKind::AlreadyExists);
@@ -358,5 +358,117 @@ mod tests {
         }
 
         server_task.await.expect("server task join");
+    }
+
+    /// Drive the line protocol through every branch of `handle_client`:
+    /// blank lines are skipped silently, malformed JSON earns a parse-error
+    /// response, a valid request earns a normal response, and EOF ends the
+    /// connection cleanly.
+    #[tokio::test]
+    async fn handle_client_protocol_skips_blank_and_answers_malformed_lines() {
+        let (client, server) = UnixStream::pair().expect("UnixStream pair");
+        let peer_uid = server.peer_cred().expect("peer credentials").uid();
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        let policy = Arc::new(DaemonPeerPolicy::owner_only(peer_uid));
+        let server_task = tokio::spawn(handle_client(server, state, policy));
+
+        let (read_half, mut write_half) = client.into_split();
+        write_half
+            .write_all(b"\n   \n")
+            .await
+            .expect("write blank lines");
+        write_half
+            .write_all(br#"{definitely not json"#)
+            .await
+            .expect("write malformed line");
+        write_half.write_all(b"\n").await.expect("write delimiter");
+        write_half
+            .write_all(br#"{"method":"ping","params":[],"id":7}"#)
+            .await
+            .expect("write valid line");
+        write_half.write_all(b"\n").await.expect("write delimiter");
+        write_half.shutdown().await.expect("half-close for EOF");
+
+        let mut reader = BufReader::new(read_half);
+        let mut parse_error = String::new();
+        reader
+            .read_line(&mut parse_error)
+            .await
+            .expect("read parse-error response");
+        assert!(
+            parse_error.contains("Parse error"),
+            "malformed line must earn a parse error, got: {parse_error}"
+        );
+
+        let mut ping = String::new();
+        reader
+            .read_line(&mut ping)
+            .await
+            .expect("read ping response");
+        assert!(ping.contains("\"success\":true"), "got: {ping}");
+
+        // EOF after the responses: the handler must exit cleanly.
+        server_task
+            .await
+            .expect("server task join")
+            .expect("clean client exit");
+    }
+
+    #[tokio::test]
+    async fn setup_socket_replaces_a_stale_socket_file() {
+        let path = test_socket_path("stale");
+        drop(setup_socket(&path).expect("first bind"));
+        assert!(path.exists(), "socket file outlives its listener");
+
+        // The stale entry is a socket, so the second bind may replace it.
+        let listener = setup_socket(&path).expect("rebind over stale socket");
+        drop(listener);
+        remove_socket_if_present(&path);
+    }
+
+    #[test]
+    fn configured_path_reads_overrides_and_rejects_empty_values() {
+        // Env vars are process-global; both names are exercised in this one
+        // serialized test so parallel tests cannot race the mutation.
+        std::env::remove_var(SOCKET_PATH_ENV);
+        assert_eq!(
+            configured_path(SOCKET_PATH_ENV, "/tmp/default.sock").expect("unset falls back"),
+            PathBuf::from("/tmp/default.sock")
+        );
+
+        std::env::set_var(SOCKET_PATH_ENV, "/tmp/override.sock");
+        assert_eq!(
+            configured_path(SOCKET_PATH_ENV, "/tmp/default.sock").expect("override wins"),
+            PathBuf::from("/tmp/override.sock")
+        );
+
+        std::env::set_var(SOCKET_PATH_ENV, "");
+        let error = configured_path(SOCKET_PATH_ENV, "/tmp/default.sock")
+            .expect_err("empty override must be rejected");
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains(SOCKET_PATH_ENV));
+
+        std::env::remove_var(SOCKET_PATH_ENV);
+    }
+
+    #[tokio::test]
+    async fn remove_socket_if_present_only_removes_sockets() {
+        let missing = test_socket_path("missing");
+        remove_socket_if_present(&missing);
+        assert!(!missing.exists());
+
+        let regular = test_socket_path("cleanup-regular");
+        fs::write(&regular, b"keep me").expect("create sentinel");
+        remove_socket_if_present(&regular);
+        assert_eq!(
+            fs::read(&regular).expect("regular files survive cleanup"),
+            b"keep me"
+        );
+        fs::remove_file(&regular).expect("remove sentinel");
+
+        let socket = test_socket_path("socket");
+        drop(tokio::net::UnixListener::bind(&socket).expect("bind socket"));
+        remove_socket_if_present(&socket);
+        assert!(!socket.exists(), "stale sockets are cleaned up");
     }
 }

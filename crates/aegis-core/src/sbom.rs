@@ -254,7 +254,10 @@ impl SbomGenerator {
 
     /// Add a Python dependency
     pub fn add_python_dep(&mut self, name: &str, version: &str, license: &str) {
-        let purl = Self::create_purl(name, Some(version));
+        // `create_purl` produces cargo-type purls; Python dependencies must
+        // carry the pypi type or downstream SBOM consumers resolve the
+        // package against the wrong ecosystem.
+        let purl = format!("pkg:pypi/{name}@{version}");
 
         self.components.push(SbomComponent {
             name: name.to_string(),
@@ -636,5 +639,91 @@ mod tests {
 
         let purl_no_ver = SbomGenerator::create_purl("tokio", None);
         assert_eq!(purl_no_ver, "pkg:cargo/tokio");
+    }
+
+    #[test]
+    fn add_dependency_defaults_to_noassertion_license() {
+        let mut sbom = SbomGenerator::new("root", None);
+        sbom.add_dependency("left-pad", Some("1.3.0".to_string()));
+        assert_eq!(sbom.components.len(), 1);
+        let component = &sbom.components[0];
+        assert_eq!(component.name, "left-pad");
+        assert_eq!(component.purl.as_deref(), Some("pkg:cargo/left-pad@1.3.0"));
+        assert_eq!(component.license_info.declared, vec!["NOASSERTION"]);
+        assert_eq!(component.download_location.as_deref(), Some("NOASSERTION"));
+    }
+
+    #[test]
+    fn add_python_dep_uses_pypi_purl() {
+        let mut sbom = SbomGenerator::new("root", None);
+        sbom.add_python_dep("requests", "2.31.0", "Apache-2.0");
+        assert_eq!(
+            sbom.components[0].purl.as_deref(),
+            Some("pkg:pypi/requests@2.31.0")
+        );
+        assert_eq!(sbom.components[0].license_info.declared, vec!["Apache-2.0"]);
+    }
+
+    #[test]
+    fn container_dep_without_digest_falls_back_to_latest() {
+        let mut sbom = SbomGenerator::new("root", None);
+        sbom.add_container_dep("alpine", None);
+        let component = &sbom.components[0];
+        assert_eq!(component.name, "alpine");
+        assert_eq!(component.version.as_deref(), Some("latest"));
+        assert!(component.hashes.is_empty());
+        assert_eq!(component.primary_purpose.as_deref(), Some("container"));
+    }
+
+    #[test]
+    fn container_dep_with_digest_hashes_and_external_ref() {
+        let mut sbom = SbomGenerator::new("root", None);
+        sbom.add_container_dep("nginx:1.25", Some("feed73"));
+        let component = &sbom.components[0];
+        assert_eq!(component.version.as_deref(), Some("1.25"));
+        assert_eq!(component.hashes.len(), 1);
+        assert_eq!(component.hashes[0].value, "feed73");
+        assert!(component
+            .external_refs
+            .iter()
+            .any(|r| r.reference_locator.contains("@sha256:feed73")));
+    }
+
+    #[test]
+    fn file_hash_is_cached_and_missing_files_return_none() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("payload.txt");
+        std::fs::write(&file, b"aegis sbom").expect("write payload");
+
+        let mut sbom = SbomGenerator::new("root", None);
+        let first = sbom.add_file_hash(&file).expect("hash present");
+        let second = sbom.add_file_hash(&file).expect("hash cached");
+        assert_eq!(first.value, second.value);
+        assert_eq!(first.value.len(), 64, "sha256 hex digest length");
+
+        assert!(sbom.add_file_hash(&dir.path().join("absent.txt")).is_none());
+    }
+
+    #[test]
+    fn generate_dispatches_to_every_format() {
+        let mut sbom = SbomGenerator::new("root", Some("2.0".to_string()));
+        sbom.add_rust_dep("serde", "1.0.0", "MIT");
+
+        assert!(sbom.generate(SbomFormat::SpdxTv).contains("SPDXVersion:"));
+        assert!(sbom.generate(SbomFormat::Spdx).contains("\"spdxVersion\""));
+        assert!(sbom
+            .generate(SbomFormat::CycloneDx)
+            .contains("\"bomFormat\": \"CycloneDX\""));
+    }
+
+    #[test]
+    fn cyclonedx_output_is_structurally_valid_json() {
+        let mut sbom = SbomGenerator::new("root", None);
+        sbom.add_rust_dep("serde", "1.0.0", "MIT");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&sbom.generate_cyclonedx_json()).expect("valid CycloneDX JSON");
+        assert_eq!(parsed["bomFormat"], "CycloneDX");
+        assert_eq!(parsed["metadata"]["component"]["name"], "root");
+        assert_eq!(parsed["components"][0]["name"], "serde");
     }
 }

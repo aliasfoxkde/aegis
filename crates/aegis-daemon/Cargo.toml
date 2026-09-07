@@ -27,3 +27,6 @@ nix = "0.31"
 [[bin]]
 name = "aegis-daemon"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = { workspace = true }

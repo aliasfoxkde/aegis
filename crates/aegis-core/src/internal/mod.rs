@@ -124,10 +124,50 @@ mod tests {
         // Rust/Go/JavaScript style
         assert!(is_comment_line("// comment", "rust"));
         assert!(is_comment_line("/* comment */", "rust"));
+        assert!(is_comment_line(" * continued", "java"));
         assert!(!is_comment_line("let x = 1;", "rust"));
 
         // Python style
         assert!(is_comment_line("# comment", "python"));
         assert!(is_comment_line("\"\"\" docstring \"\"\"", "python"));
+        assert!(!is_comment_line("x = 1", "ruby"));
+
+        // Unknown languages fall back to shell-style detection
+        assert!(is_comment_line("# shell", "fortran"));
+        assert!(is_comment_line("// c++ is recognized too", "cpp"));
+        assert!(!is_comment_line("plain", "fortran"));
+    }
+
+    #[test]
+    fn test_check_file_size_limit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let small = dir.path().join("small.bin");
+        std::fs::write(&small, vec![0u8; 64]).expect("write small file");
+        assert!(check_file_size_limit(&small, 64));
+        assert!(check_file_size_limit(&small, 1024));
+        assert!(!check_file_size_limit(&small, 63));
+
+        // Unreadable metadata means the file is skipped
+        assert!(!check_file_size_limit(&dir.path().join("absent"), 1024));
+    }
+
+    #[test]
+    fn test_simple_hash_is_stable_and_content_sensitive() {
+        assert_eq!(simple_hash(b"aegis"), simple_hash(b"aegis"));
+        assert_ne!(simple_hash(b"aegis"), simple_hash(b"atheon"));
+    }
+
+    #[test]
+    fn test_looks_like_secret() {
+        assert!(!looks_like_secret("short"));
+        assert!(!looks_like_secret("plain english sentence here"));
+        let blob = "aZ39kmw0Slqmz8XbWq2hLpQdDfJnRvYt";
+        assert!(looks_like_secret(blob));
+    }
+
+    #[test]
+    fn test_format_bytes_gigabytes() {
+        assert_eq!(format_bytes(3 * 1024 * 1024 * 1024), "3.00 GB");
+        assert_eq!(format_bytes(0), "0 B");
     }
 }

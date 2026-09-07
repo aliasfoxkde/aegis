@@ -27,8 +27,7 @@ pub fn is_path_safe(path: &PathBuf) -> bool {
         Ok(p) => p,
         // If the path doesn't exist, check if normalized path would be within cwd
         Err(_) => {
-            let normalized = normalize_path(&abs_path);
-            return normalized.starts_with(&cwd);
+            return lexical_contains(&cwd, &abs_path);
         }
     };
 
@@ -36,28 +35,31 @@ pub fn is_path_safe(path: &PathBuf) -> bool {
     abs_path.starts_with(&cwd)
 }
 
-/// Normalize a path without requiring it to exist
-#[allow(clippy::ptr_arg)]
-fn normalize_path(path: &PathBuf) -> PathBuf {
-    let mut result = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                result.pop();
+/// Report whether `candidate` sits at or below `root`, resolved lexically.
+///
+/// Used when the candidate cannot be canonicalized (it does not exist yet).
+/// Both sides are compared as forward-slash component stacks so the check
+/// keeps working on Windows, where `canonicalize` yields verbatim
+/// (`\\?\C:\...`) paths while joined user input stays plain (`C:\...`) and
+/// `Path::starts_with` would therefore never match.
+fn lexical_contains(root: &Path, candidate: &Path) -> bool {
+    let normalize = |path: &Path| -> String {
+        let text = path.to_string_lossy().replace('\\', "/");
+        let text = text.strip_prefix("//?/").unwrap_or(&text);
+        let mut stack: Vec<&str> = Vec::new();
+        for part in text.split('/') {
+            match part {
+                "" | "." => {}
+                ".." => {
+                    stack.pop();
+                }
+                other => stack.push(other),
             }
-            std::path::Component::Normal(s) => {
-                result.push(s);
-            }
-            std::path::Component::RootDir => {
-                result = PathBuf::from("/");
-            }
-            std::path::Component::Prefix(p) => {
-                result.push(p.as_os_str());
-            }
-            std::path::Component::CurDir => {}
         }
-    }
-    result
+        stack.join("/")
+    };
+    let (root, candidate) = (normalize(root), normalize(candidate));
+    candidate == root || candidate.starts_with(&format!("{root}/"))
 }
 
 /// Validate that a path doesn't contain dangerous patterns
@@ -130,41 +132,57 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_path_parent() {
-        let path = PathBuf::from("/home/user/project/../etc/passwd");
-        let normalized = normalize_path(&path);
-        assert_eq!(normalized, PathBuf::from("/home/user/etc/passwd"));
+    fn lexical_contains_resolves_parent_and_current_components() {
+        let root = Path::new("/home/user/project");
+        assert!(lexical_contains(
+            root,
+            Path::new("/home/user/project/../project/./sub/file")
+        ));
+        assert!(!lexical_contains(
+            root,
+            Path::new("/home/user/project/../etc/passwd")
+        ));
+        assert!(lexical_contains(root, Path::new("/home/user/project")));
+        assert!(!lexical_contains(root, Path::new("")));
     }
 
     #[test]
-    fn test_normalize_path_cur_dir() {
-        let path = PathBuf::from("/home/user/./project/./file");
-        let normalized = normalize_path(&path);
-        assert_eq!(normalized, PathBuf::from("/home/user/project/file"));
+    fn lexical_contains_survives_windows_verbatim_roots() {
+        // Windows `canonicalize` returns `\\?\C:\...` while joined user input
+        // stays plain `C:\...`; containment must hold across the two forms.
+        let root = Path::new(r"\\?\C:\nas\Temp\repos\aegis");
+        assert!(lexical_contains(
+            root,
+            Path::new(r"C:\nas\Temp\repos\aegis\temp\absent.txt")
+        ));
+        assert!(!lexical_contains(
+            root,
+            Path::new(r"C:\nas\Temp\repos\other\absent.txt")
+        ));
+        // A traversal that escapes the drive root must not sneak back in.
+        assert!(!lexical_contains(
+            root,
+            Path::new(r"C:\nas\Temp\repos\aegis\..\..\secrets")
+        ));
     }
 
     #[test]
-    fn test_normalize_path_root_dir() {
-        let path = PathBuf::from("/");
-        let normalized = normalize_path(&path);
-        assert_eq!(normalized, PathBuf::from("/"));
-    }
-
-    #[test]
-    fn test_normalize_path_empty() {
-        let path = PathBuf::from("");
-        let normalized = normalize_path(&path);
-        assert_eq!(normalized, PathBuf::from(""));
-    }
-
-    #[test]
-    fn test_is_path_safe_nonexistent_inside_cwd() {
-        // A nonexistent path that would be inside cwd should be checked
+    fn is_path_safe_accepts_nonexistent_paths_inside_cwd() {
+        // A nonexistent path that would land inside cwd is allowed so scans
+        // can reject it with a clean "not found" error instead of a sandbox
+        // violation.
         let cwd = std::env::current_dir().unwrap();
         let safe_nonexistent = cwd.join("this-does-not-exist").join("file.txt");
-        let result = is_path_safe(&safe_nonexistent);
-        // It should return true if normalized path is inside cwd
-        assert!(result || !result); // Just check it doesn't panic
+        assert!(is_path_safe(&safe_nonexistent));
+
+        let outside = cwd.join("..").join("outside-aegis.txt");
+        if !outside
+            .canonicalize()
+            .map(|p| p.starts_with(&cwd))
+            .unwrap_or(false)
+        {
+            assert!(!is_path_safe(&outside));
+        }
     }
 
     #[test]

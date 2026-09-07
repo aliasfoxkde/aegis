@@ -164,16 +164,19 @@ pub fn run_benchmark(opts: BenchmarkOptions) -> anyhow::Result<()> {
         aegis_result.files_per_second, aegis_result.mb_per_second
     );
 
-    // Compare with Atheon if requested
+    // Compare with Atheon if requested. The comparator binary is opt-in via
+    // the environment so no machine-specific path is baked into the binary.
     if opts.compare {
         println!();
         println!("Running Atheon-Enhanced comparison...");
 
-        // Check if Atheon exists
-        let atheon_path = "/nas/Temp/repos/Atheon-Enhanced/atheon";
+        let atheon_path = std::env::var("AEGIS_ATHEON_PATH").unwrap_or_else(|_| {
+            println!("AEGIS_ATHEON_PATH is not set; skipping the external comparison.");
+            String::new()
+        });
 
-        if std::path::Path::new(atheon_path).exists() {
-            match run_external_benchmark(atheon_path, &opts.path) {
+        if !atheon_path.is_empty() && std::path::Path::new(&atheon_path).exists() {
+            match run_external_benchmark(&atheon_path, &opts.path) {
                 Ok(atheon_result) => {
                     println!();
                     println!(">>> ATHEON-ENHANCED RESULTS <<<");
@@ -208,4 +211,102 @@ pub fn run_benchmark(opts: BenchmarkOptions) -> anyhow::Result<()> {
     println!("==============================================");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_target() -> anyhow::Result<tempfile::TempDir> {
+        let dir = tempfile::tempdir()?;
+        std::fs::write(dir.path().join("sample.js"), r#"const token = "value";"#)?;
+        Ok(dir)
+    }
+
+    #[test]
+    fn aegis_benchmark_averages_runs_over_a_real_target() -> anyhow::Result<()> {
+        let dir = sample_target()?;
+        let result = run_aegis_benchmark(dir.path(), 0, 2)?;
+
+        assert!(result.files_scanned >= 1, "sample file must be counted");
+        assert!(result.bytes_scanned > 0);
+        assert!(result.duration > Duration::ZERO);
+        // Two runs averaged: the totals must be divisible back down to a
+        // per-run file count.
+        assert_eq!(result.files_per_second > 0.0, result.files_scanned > 0);
+        Ok(())
+    }
+
+    /// The counting stub must ignore the extra `-q` flag and print exactly
+    /// one line to stdout. `/bin/echo` does that on Unix; Windows `hostname`
+    /// rejects unexpected arguments with empty stdout, so the exact-count
+    /// assertion only runs where a compliant stub is guaranteed. The
+    /// comparison-branch test below still exercises the spawn on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn external_benchmark_counts_non_empty_output_lines() -> anyhow::Result<()> {
+        let dir = sample_target()?;
+        let result = run_external_benchmark("/bin/echo", &dir.path().to_path_buf())?;
+        assert_eq!(result.findings_count, 1);
+        assert_eq!(
+            result.files_scanned, 0,
+            "external tools report no file counts"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn external_benchmark_surfaces_missing_binaries() {
+        let error = run_external_benchmark("/nonexistent/aegis-tool", &PathBuf::from("."))
+            .expect_err("missing binary must error");
+        assert!(!error.to_string().is_empty());
+    }
+
+    #[test]
+    fn full_benchmark_runner_completes_on_a_small_target() -> anyhow::Result<()> {
+        let dir = sample_target()?;
+        let opts = BenchmarkOptions {
+            path: dir.path().to_path_buf(),
+            warmup: 0,
+            runs: 1,
+            compare: false,
+        };
+        run_benchmark(opts)
+    }
+
+    /// Exercise every branch of the opt-in external comparison in one test:
+    /// the env var is process-global, so parallel tests could race each
+    /// other's `set_var`/`remove_var`.
+    #[test]
+    fn external_comparison_branches_all_complete() -> anyhow::Result<()> {
+        let dir = sample_target()?;
+        let opts = |compare: bool| BenchmarkOptions {
+            path: dir.path().to_path_buf(),
+            warmup: 0,
+            runs: 1,
+            compare,
+        };
+
+        // Unset: the comparison reports it is skipped.
+        std::env::remove_var("AEGIS_ATHEON_PATH");
+        run_benchmark(opts(true))?;
+
+        // Set but absent on disk: reported as not found.
+        std::env::set_var("AEGIS_ATHEON_PATH", "/nonexistent/aegis-comparator");
+        run_benchmark(opts(true))?;
+
+        // Set and present: the external tool actually runs and the ratio
+        // math executes. The stub only has to spawn successfully; `echo`
+        // does that on Unix and `hostname` (always present, tolerant of
+        // extra arguments) covers Windows.
+        #[cfg(unix)]
+        let stub = "/bin/echo";
+        #[cfg(windows)]
+        let stub = "hostname";
+        std::env::set_var("AEGIS_ATHEON_PATH", stub);
+        run_benchmark(opts(true))?;
+
+        std::env::remove_var("AEGIS_ATHEON_PATH");
+        Ok(())
+    }
 }

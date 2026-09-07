@@ -99,7 +99,7 @@ pub struct YamlOutputFormatConfig {
     pub append: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlOutputFormatType {
     Human,
@@ -122,7 +122,7 @@ pub struct YamlWebhookConfig {
     pub timeout_secs: u64,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlWebhookType {
     Http,
@@ -143,7 +143,7 @@ pub struct YamlDatabaseOutputConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlDatabaseType {
     Sqlite,
@@ -524,5 +524,203 @@ max_file_size_mb: 15
     #[test]
     fn test_strict_mode_default() {
         assert_eq!(StrictMode::default(), StrictMode::Permissive);
+    }
+
+    #[test]
+    fn yaml_preset_defaults_fill_in_from_minimal_document() {
+        let preset: YamlPreset = "name: minimal".parse().expect("minimal preset");
+        assert_eq!(preset.version, "1.0");
+        assert_eq!(preset.max_file_size_mb, 10);
+        assert!(preset.gitignore_respect && preset.aegisignore_respect);
+        assert!(!preset.scan_binary && !preset.follow_symlinks);
+        assert!(preset.enabled_categories.is_empty());
+        assert!(preset.output_formats.is_empty());
+        assert!(preset.webhooks.is_empty());
+        assert!(preset.database_outputs.is_empty());
+    }
+
+    #[test]
+    fn invalid_yaml_is_rejected_as_invalid_data() {
+        let error = "name: [unclosed".parse::<YamlPreset>().unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn yaml_preset_file_round_trip_preserves_fields() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("preset.yaml");
+        let yaml = r#"
+name: full
+enabled_categories: [secrets, pii]
+webhooks:
+  - name: alert
+    type: slack
+    url: https://hooks.example.com/T000/B000/XXXXXXXX
+    retries: 5
+database_outputs:
+  - name: ledger
+    type: postgresql
+    connection: postgresql://localhost/aegis
+output_formats:
+  - format: sarif
+    path: out.sarif
+"#;
+        let preset: YamlPreset = yaml.parse().expect("parse preset");
+        preset.to_file(&path).expect("write preset");
+
+        let loaded = YamlPreset::from_file(&path).expect("read preset");
+        assert_eq!(loaded.name, "full");
+        assert_eq!(loaded.webhooks.len(), 1);
+        assert_eq!(loaded.webhooks[0].webhook_type, YamlWebhookType::Slack);
+        assert_eq!(loaded.webhooks[0].retries, 5);
+        assert!(loaded.webhooks[0].enabled);
+        assert_eq!(
+            loaded.database_outputs[0].database_type,
+            YamlDatabaseType::PostgreSql
+        );
+        assert_eq!(loaded.database_outputs[0].table_name, "aegis_findings");
+        assert_eq!(loaded.output_formats[0].format, YamlOutputFormatType::Sarif);
+    }
+
+    #[test]
+    fn to_config_propagates_scanner_relevant_fields() {
+        let preset: YamlPreset = r#"
+name: propagated
+enabled_categories: [secrets]
+gitignore_respect: false
+aegisignore_respect: false
+severity_threshold: high
+"#
+        .parse()
+        .expect("parse preset");
+        let config = preset.to_config();
+        assert_eq!(config.name, "propagated");
+        assert_eq!(config.enabled_categories, Some(vec!["secrets".to_string()]));
+        assert!(!config.gitignore_respect);
+        assert!(!config.aegisignore_respect);
+        assert_eq!(config.severity_threshold.as_deref(), Some("high"));
+    }
+
+    #[test]
+    fn to_config_with_no_categories_leaves_selection_open() {
+        let preset: YamlPreset = "name: open".parse().expect("parse preset");
+        assert!(preset.to_config().enabled_categories.is_none());
+    }
+
+    #[test]
+    fn registry_registers_gets_and_overwrites_by_name() {
+        let mut registry = YamlPresetRegistry::new();
+        let first: YamlPreset = "name: dup".parse().expect("first");
+        let second: YamlPreset = "name: dup\nmax_file_size_mb: 3".parse().expect("second");
+        registry.register(first);
+        registry.register(second);
+        assert_eq!(registry.get("dup").expect("registered").max_file_size_mb, 3);
+        assert!(registry.get("missing").is_none());
+        assert_eq!(registry.list(), vec!["dup".to_string()]);
+    }
+
+    #[test]
+    fn registry_load_directory_reads_yaml_and_yml_only() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("alpha.yaml"), "name: alpha").expect("write yaml");
+        std::fs::write(dir.path().join("beta.yml"), "name: beta").expect("write yml");
+        std::fs::write(dir.path().join("gamma.json"), "name: gamma").expect("write json");
+        std::fs::write(dir.path().join("broken.yaml"), "name: [oops").expect("write broken");
+
+        let mut registry = YamlPresetRegistry::new();
+        registry.load_directory(dir.path()).expect("load directory");
+        let mut names = registry.list();
+        names.sort();
+        assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn registry_load_directory_rejects_non_directories() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("file");
+        std::fs::write(&file, b"x").expect("write file");
+        let mut registry = YamlPresetRegistry::new();
+        let error = registry.load_directory(&file).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::Other);
+    }
+
+    #[test]
+    fn every_listed_preset_resolves() {
+        for name in Config::list_presets() {
+            assert!(
+                Config::preset(name).is_some(),
+                "listed preset {name} must resolve"
+            );
+        }
+        assert!(Config::preset("no-such-preset").is_none());
+    }
+
+    #[test]
+    fn config_save_and_load_round_trips() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("config.json");
+        let config = Config::preset("production").expect("production preset");
+        config.save(&path).expect("save config");
+        let loaded = Config::load(&path).expect("load config");
+        assert_eq!(loaded.name, "production");
+        assert_eq!(loaded.strict_mode, StrictMode::Strict);
+        assert_eq!(loaded.output_format, OutputFormat::Sarif);
+        assert_eq!(loaded.max_file_size_mb, 5);
+    }
+
+    #[test]
+    fn config_load_missing_file_is_io_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let error = Config::load(&dir.path().join("absent.json")).unwrap_err();
+        assert!(matches!(error, ConfigError::IoError(_)));
+    }
+
+    #[test]
+    fn config_load_malformed_json_is_parse_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("broken.json");
+        std::fs::write(&path, "{not json").expect("write broken json");
+        let error = Config::load(&path).unwrap_err();
+        assert!(matches!(error, ConfigError::ParseError(_)));
+    }
+
+    #[test]
+    fn default_config_and_default_impl_agree() {
+        assert_eq!(Config::default_config().name, "default");
+        let (default, manual) = (Config::default(), Config::default_config());
+        assert_eq!(default.strict_mode, manual.strict_mode);
+        assert_eq!(default.max_file_size_mb, manual.max_file_size_mb);
+        assert_eq!(default.timeout_seconds, manual.timeout_seconds);
+        assert!(!default.exit_on_findings);
+    }
+
+    #[test]
+    fn serde_defaults_apply_for_sparse_documents() {
+        let config: Config = serde_json::from_str("{}").expect("sparse config");
+        assert_eq!(config.timeout_seconds, 300);
+        assert_eq!(config.max_file_size_mb, 10);
+        assert!(config.exit_on_findings);
+        assert_eq!(config.output_format, OutputFormat::Human);
+    }
+
+    #[test]
+    fn output_format_serde_round_trip() {
+        for (text, expected) in [
+            ("human", OutputFormat::Human),
+            ("json", OutputFormat::Json),
+            ("sarif", OutputFormat::Sarif),
+        ] {
+            let parsed: OutputFormat = serde_json::from_value(serde_json::json!(text))
+                .unwrap_or_else(|e| panic!("{text}: {e}"));
+            assert_eq!(parsed, expected);
+            assert_eq!(expected.to_string(), text);
+        }
+    }
+
+    #[test]
+    fn aegisignore_alias_still_deserializes() {
+        let config: Config =
+            serde_json::from_str(r#"{ "gitignore_atheon_respect": false }"#).expect("aliased");
+        assert!(!config.aegisignore_respect);
     }
 }
