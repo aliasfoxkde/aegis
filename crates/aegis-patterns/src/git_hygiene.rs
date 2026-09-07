@@ -194,7 +194,17 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: None,
-            file_extensions: Vec::new(),
+            // Prose formats only: in documentation a bare 40-hex SHA is
+            // unactionable (use a tag or permalink). In code and CI a full
+            // SHA is usually deliberate supply-chain pinning
+            // (`uses: action@<sha>`) — flagging that would punish the
+            // recommended hardening.
+            file_extensions: vec![
+                "md".to_string(),
+                "rst".to_string(),
+                "adoc".to_string(),
+                "txt".to_string(),
+            ],
         },
         Pattern {
             name: "merge-commit".to_string(),

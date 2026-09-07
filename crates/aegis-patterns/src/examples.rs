@@ -135,7 +135,7 @@ pub fn example_for(name: &str) -> Option<&'static str> {
         "credit-card-mastercard" => Some(concat!("5198-2653", "-6979 7674")),
         "credit-card-number-generic" => Some(concat!("42877729", "99878343")),
         "credit-card-visa" => Some(concat!("4427-8497", "-3935 8469")),
-        "csrf-missing-token" => Some(concat!("POST (ubQA", "qzpGSbcbbp)")),
+        "csrf-missing-token" => Some(concat!("app . post (u", "bQAqzpGSbcbbp)")),
         "csrf-token-header" => Some("X-CSRF-Token"),
         "cvv" => Some("cvv = 5592"),
         "data-augmentation" => Some("augment"),
