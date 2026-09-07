@@ -28,7 +28,7 @@ pub struct Pattern {
     pub description: String,
     pub reference: Option<String>, // Absolute https URL
     pub tags: Vec<String>,
-    pub env_var: bool,            // true = only scanned by `scan_env`
+    pub env_var: bool,            // true = env-scan-only (excluded from file scans)
     pub binary: bool,             // Allow matching in binary files
 }
 ```
@@ -56,9 +56,17 @@ pub struct Pattern {
 - `file_extensions` compares against the lowercase extension of the file
   name. Files without an extension (`.gitignore`, `Dockerfile`, `README`)
   have **no** extension and therefore never match a scoped pattern.
-- `env_var: true` removes a pattern from file scanning entirely; only
-  `scan_env` runs it. Category `secrets` patterns additionally run in
-  environment scans regardless of this flag.
+- `env_var: true` marks a pattern as **env-scan-only**: it is removed
+  from file scanning entirely and only `scan_env` runs it, matching the
+  environment variable *value*. Reserve the flag for shapes that are
+  only precise with an env-var key name for context (bare
+  `[A-Za-z0-9]{25,}` blobs, base64 spans, UUIDs, crypto addresses) —
+  vendor-prefixed credentials (`glpat-`, `sk-ant-`, `npm_`, ...) must
+  stay file-active so leaks in source files are caught. Every `secrets`
+  category pattern runs in environment scans regardless of this flag.
+  The env-scan-only set is pinned by
+  `crates/aegis-core/tests/env_var_semantics.rs`; extending it is a
+  deliberate, test-visible decision.
 
 ## Categories
 

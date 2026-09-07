@@ -1,4 +1,13 @@
 //! Secret patterns - API keys, tokens, credentials
+//!
+//! `env_var: true` marks a rule as env-scan-only: it never runs against
+//! file contents. Reserve it for shapes that are only precise with an
+//! environment-variable key name for context (bare `[A-Za-z0-9]{25,}`
+//! blobs, UUIDs, crypto addresses). Vendor-prefixed credentials
+//! (`glpat-`, `sk-ant-`, `npm_`, ...) are precise in source files too and
+//! stay file-active. `scan_env` matches every rule in this category
+//! regardless of the flag, so clearing the flag never weakens env
+//! coverage.
 
 use crate::Pattern;
 
@@ -65,7 +74,7 @@ pub fn get() -> Vec<Pattern> {
             description: "GitLab Personal Access Token detected".to_string(),
             reference: Some("https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html".to_string()),
             tags: vec!["gitlab".to_string(), "token".to_string(), "credential".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -197,7 +206,7 @@ pub fn get() -> Vec<Pattern> {
             description: "JWT Token detected".to_string(),
             reference: Some("https://datatracker.ietf.org/doc/html/rfc7519".to_string()),
             tags: vec!["jwt".to_string(), "token".to_string(), "auth".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -213,7 +222,10 @@ pub fn get() -> Vec<Pattern> {
             description: "Google API Key detected".to_string(),
             reference: Some("https://cloud.google.com/docs/authentication/api-keys".to_string()),
             tags: vec!["google".to_string(), "cloud".to_string(), "api-key".to_string()],
-            env_var: true,
+            // File-active here rather than on `firebase-api-key`: both
+            // share the AIza format and one file-active rule avoids
+            // duplicate findings on the same span.
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -229,7 +241,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Google OAuth Token detected".to_string(),
             reference: Some("https://developers.google.com/identity/protocols/oauth2".to_string()),
             tags: vec!["google".to_string(), "oauth".to_string(), "token".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -261,7 +273,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Mailchimp API Key detected".to_string(),
             reference: Some("https://mailchimp.com/help/about-api-keys/".to_string()),
             tags: vec!["mailchimp".to_string(), "email".to_string(), "api-key".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -293,7 +305,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Discord API Key detected".to_string(),
             reference: Some("https://discord.com/developers/docs/reference".to_string()),
             tags: vec!["discord".to_string(), "api".to_string(), "credential".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -341,7 +353,7 @@ pub fn get() -> Vec<Pattern> {
             description: "NPM Access Token detected".to_string(),
             reference: Some("https://docs.npmjs.com/about-access-tokens".to_string()),
             tags: vec!["npm".to_string(), "registry".to_string(), "token".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -421,7 +433,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Connection string with password detected".to_string(),
             reference: Some("https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure".to_string()),
             tags: vec!["connection-string".to_string(), "password".to_string(), "credential".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -469,7 +481,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Basic Authentication credentials detected".to_string(),
             reference: Some("https://datatracker.ietf.org/doc/html/rfc7617".to_string()),
             tags: vec!["basic-auth".to_string(), "credential".to_string(), "auth".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -485,7 +497,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Facebook Access Token detected".to_string(),
             reference: Some("https://developers.facebook.com/docs/facebook-login/guides/access-tokens".to_string()),
             tags: vec!["facebook".to_string(), "token".to_string(), "credential".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -517,7 +529,7 @@ pub fn get() -> Vec<Pattern> {
             description: "OpenAI API Key detected".to_string(),
             reference: Some("https://platform.openai.com/docs/api-keys".to_string()),
             tags: vec!["openai".to_string(), "ai".to_string(), "api-key".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -533,7 +545,7 @@ pub fn get() -> Vec<Pattern> {
             description: "Anthropic API Key detected".to_string(),
             reference: Some("https://docs.anthropic.com/en/api".to_string()),
             tags: vec!["anthropic".to_string(), "ai".to_string(), "api-key".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
@@ -549,7 +561,7 @@ pub fn get() -> Vec<Pattern> {
             description: "HuggingFace API Key detected".to_string(),
             reference: Some("https://huggingface.co/docs/api-keys".to_string()),
             tags: vec!["huggingface".to_string(), "ai".to_string(), "api-key".to_string()],
-            env_var: true,
+            env_var: false,
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),

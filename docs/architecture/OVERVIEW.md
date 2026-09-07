@@ -159,6 +159,39 @@ into the registry alongside the bundled rules. Findings from custom
 patterns flow through the same suppression, baseline, and output
 pipeline as any other rule.
 
+### File vs. Environment Scan Scope
+
+Pattern definitions carry an `env_var` flag with a deliberate meaning:
+`env_var: true` marks a rule as **env-scan-only**. Such rules never run
+against file contents; `scan_env` matches them against environment
+variable *values*, where the variable name (visible as `KEY=value` in
+the reported line) supplies context that a bare match in a file lacks.
+
+Design decision (Phase 5 audit, 2026-09):
+
+- The flag is reserved for shapes that are only precise in an
+  environment context — bare `[A-Za-z0-9]{25,}` blobs (`twitter-api-key`),
+  base64 spans (`azure-api-key`), UUIDs (`heroku-api-key`), and data that
+  is not secret at all but is sensitive when paired with an env-var name
+  (crypto addresses, Stripe publishable keys).
+- Vendor-prefixed credentials (`glpat-`, `sk-ant-`, `npm_`, `AIza…`,
+  JWTs, Discord bot tokens, …) are precise in source files too and are
+  file-active. The Phase 5 measurement found 13 such families that were
+  env-scan-only and therefore invisible to file scans; they were
+  flipped, with zero new findings on Aegis's own tree and no change to
+  corpus precision/recall.
+- Every rule in the `secrets` category runs in environment scans
+  regardless of the flag, so clearing the flag never weakens env
+  coverage.
+- The set of env-scan-only rules is pinned by the
+  `env_scan_only_rules_are_exactly_the_documented_set` test
+  (`crates/aegis-core/tests/env_var_semantics.rs`), and the file-mode
+  capability for each vendor prefix is pinned alongside it. Changing
+  either requires a deliberate test update.
+- Files with no extension (`.env`, `.npmrc`) still get generic
+  credential-assignment coverage from `env-credential-assignment` and
+  the other extension-less secrets rules.
+
 ### Output Formats
 
 - **Human** - Pretty-printed with colors
