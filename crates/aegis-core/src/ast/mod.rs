@@ -279,9 +279,12 @@ impl AstAnalyzer {
                 }
             }
 
-            // Check for eval usage
-            if trimmed.contains("eval(") {
-                // aegis:ignore:eval-usage
+            // Check for eval usage. This detection string names the very
+            // rule it implements, so the suppression directive must share
+            // the line the scanner flags (rustfmt keeps `let`-line trailing
+            // comments in place; a comment after `{` moves into the block).
+            let flags_eval = trimmed.contains("eval("); // aegis:ignore:eval-usage
+            if flags_eval {
                 findings.push(AstFinding {
                     pattern: "dangerous-execution".to_string(),
                     file: source.to_string(),
@@ -396,9 +399,12 @@ impl AstAnalyzer {
                 continue;
             }
 
-            // Check for eval usage
-            if trimmed.contains("eval(") {
-                // aegis:ignore:eval-usage
+            // Check for eval usage. This detection string names the very
+            // rule it implements, so the suppression directive must share
+            // the line the scanner flags (rustfmt keeps `let`-line trailing
+            // comments in place; a comment after `{` moves into the block).
+            let flags_eval = trimmed.contains("eval("); // aegis:ignore:eval-usage
+            if flags_eval {
                 findings.push(AstFinding {
                     pattern: "dangerous-execution".to_string(),
                     file: source.to_string(),

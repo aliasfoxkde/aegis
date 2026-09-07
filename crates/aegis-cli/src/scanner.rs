@@ -1111,7 +1111,8 @@ mod tests {
         let path = scan_fixture_path();
         std::fs::write(
             path.join("fixture.env"),
-            "aws_key: AKIAIOSFODNN7EXAMPLE\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n",
+            // AWS docs example key; directive shares the flagged line.
+            "aws_key: AKIAIOSFODNN7EXAMPLE\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n", // aegis:ignore:aws-access-key
         )
         .expect("write baseline fixture");
         path
@@ -1240,7 +1241,7 @@ mod tests {
 
         std::fs::write(
             fixture.join("fixture.env"),
-            "# the key moved down\n# with the edit\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n",
+            "# the key moved down\n# with the edit\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n", // aegis:ignore:aws-access-key
         )
         .expect("rewrite fixture with key moved down");
 
@@ -1321,7 +1322,7 @@ mod tests {
         }
     }
 
-    const STAGED_SECRET: &str = "aws_key: AKIAIOSFODNN7EXAMPLE\n";
+    const STAGED_SECRET: &str = "aws_key: AKIAIOSFODNN7EXAMPLE\n"; // aegis:ignore:aws-access-key
 
     #[test]
     fn test_staged_scan_reports_staged_secret() {

@@ -680,7 +680,8 @@ mod tests {
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc
-            .scan_string("AKIAIOSFODNN7EXAMPLE".to_string(), "test.txt".to_string())
+            // AWS docs example key; directive shares the flagged line.
+            .scan_string("AKIAIOSFODNN7EXAMPLE".to_string(), "test.txt".to_string()) // aegis:ignore:aws-access-key
             .await;
         assert!(result.is_ok());
         let response = result.unwrap();

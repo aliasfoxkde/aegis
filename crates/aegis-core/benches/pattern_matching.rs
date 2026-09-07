@@ -20,13 +20,16 @@ fn synthetic_source(lines: usize) -> String {
         "    logger.debug(\"processing request\");",
         "}",
         "return Ok(Response::json(payload));",
-        "# TODO: extract to config",
+        // Bench filler names its own TODO marker; directive must share the line.
+        "# TODO: extract to config", // aegis:ignore:todo-comment,todo-still-present
         "const DEFAULT_TIMEOUT_MS: u64 = 5_000;",
         "self.entries.retain(|e| e.active);",
     ];
     let hot = [
-        "let aws_key = \"AKIAIOSFODNN7EXAMPLE\";",
-        "eval(user_input);",
+        // The `hot` lines are detection payloads by construction; each names
+        // the rule it exercises so results stay attributable.
+        "let aws_key = \"AKIAIOSFODNN7EXAMPLE\";", // aegis:ignore:aws-access-key
+        "eval(user_input);",                       // aegis:ignore:eval-usage
         "<img src=\"chart.png\">",
         "password = \"hunter2hunter2\";",
     ];
@@ -47,7 +50,8 @@ fn bundled_scanner() -> Scanner {
         .into_iter()
         .map(convert)
         .collect();
-    Scanner::from_definitions(definitions).expect("bundled patterns must compile")
+    // Bench setup may expect; the directive must share the flagged line.
+    Scanner::from_definitions(definitions).expect("patterns compile") // aegis:ignore:rust-expect-usage
 }
 
 fn convert(p: Pattern) -> PatternDefinition {
