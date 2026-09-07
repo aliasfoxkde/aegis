@@ -833,6 +833,18 @@ impl Scanner {
             WalkDir::new(root).follow_links(false)
         };
 
+        // The baseline artifact records findings verbatim, so scanning it
+        // would re-flag every secret it documented and keep the exit code
+        // red forever. Skip it when it lives inside the scan root. The
+        // baseline must already exist (it is loaded and parsed before the
+        // walk), so canonicalization is expected to succeed; raw equality
+        // remains as a fallback for exotic filesystems.
+        let baseline_path = self
+            .options
+            .baseline
+            .as_ref()
+            .map(|path| path.canonicalize().unwrap_or_else(|_| path.clone()));
+
         // Preserve walker failures as required failed units. Silently
         // dropping a WalkDir error can make an incomplete directory look
         // clean, especially when the inaccessible subtree contains secrets.
@@ -840,7 +852,21 @@ impl Scanner {
         let mut merged_stats = ScanStats::default();
         for (index, result) in walker.into_iter().enumerate() {
             match result {
-                Ok(entry) if entry.file_type().is_file() => entries.push(entry),
+                Ok(entry) if entry.file_type().is_file() => {
+                    if baseline_path.as_ref().is_some_and(|baseline| {
+                        entry
+                            .path()
+                            .canonicalize()
+                            .map_or_else(|_| entry.path() == baseline, |path| &path == baseline)
+                    }) {
+                        tracing::debug!(
+                            "skipping baseline file {} from its own scan",
+                            entry.path().display()
+                        );
+                        continue;
+                    }
+                    entries.push(entry);
+                }
                 Ok(_) => {}
                 Err(error) => {
                     let unit_id = error.path().map_or_else(
@@ -1826,6 +1852,69 @@ mod tests {
         assert!(
             filtered_findings.is_empty(),
             "Baseline should filter known findings"
+        );
+    }
+
+    #[test]
+    fn test_scan_dir_skips_the_baseline_file_itself() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let baseline_file = temp_dir.path().join("baseline.json");
+
+        let def = PatternDefinition {
+            name: "secrets-aws-access-key".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+            enabled: true,
+            severity: Severity::Critical,
+            confidence: crate::Confidence::High,
+            min_entropy: None,
+            description: "AWS Access Key ID detected".to_string(),
+            reference: None,
+            tags: vec!["aws".to_string()],
+            env_var: false,
+            binary: false,
+            remediation: None,
+        };
+        let scanner = Scanner::from_definitions(vec![def]).unwrap();
+
+        // The baseline artifact records the finding verbatim; a rescan that
+        // includes the artifact would re-flag the documented secret and the
+        // exit code could never go green again.
+        std::fs::write(
+            &baseline_file,
+            r#"[{"fingerprint":"x"},{"fingerprint":"y"}]"#,
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("app.rs"),
+            "key = \"AKIAIOSFODNN7EXAMPLE\"",
+        )
+        .unwrap();
+
+        let options = ScanOptions {
+            baseline: Some(baseline_file.clone()),
+            ..Default::default()
+        };
+        let scanner = scanner.with_options(options);
+        let (findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
+
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.location.file != baseline_file.to_string_lossy()),
+            "baseline artifact must not be scanned: {findings:?}"
+        );
+        assert!(
+            stats
+                .inspection_ledger
+                .units
+                .iter()
+                .all(|unit| unit.unit_id != baseline_file.to_string_lossy()),
+            "baseline artifact must stay out of the inspection ledger"
         );
     }
 

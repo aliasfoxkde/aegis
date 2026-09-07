@@ -17,12 +17,12 @@ aegis scan [path] [options]
 | `path` | Path to scan | `.` |
 | `-f, --file` | Treat the path as a single file | `false` |
 | `-e, --env` | Scan environment variables | `false` |
-| `--stdin` | Accepted, but currently scans an empty string rather than reading stdin; pipe content to a file and use `--file` or `--diff` instead | `false` |
+| `--stdin` | Read the payload to scan from stdin; findings carry the source label `stdin` | `false` |
 | `--follow-symlinks` | Follow symbolic links | `false` |
 | `--categories` | Comma-separated category list to include | all |
 | `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` | all |
 | `--output-file` | Also write results to this file, rendered in the selected `--format`; stdout output is unaffected | none |
-| `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only | none |
+| `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only. The baseline file itself is excluded from the scan, so it can live inside the scanned tree | none |
 | `--diff` | Scan only the changed lines of a unified diff file | none |
 | `--staged` | Scan the staged (index) content of the git repository instead of files on disk; `<path>` selects the repository | `false` |
 | `--all` | Include disabled patterns | `false` |
@@ -32,11 +32,13 @@ aegis scan [path] [options]
 subcommand (`aegis --format json scan .`). `-q, --quiet` and
 `-v, --verbose` are marked global and work anywhere.
 
-`--config` is accepted and resolves a preset name (`production`,
-`pipeline`, `development`, `mcp`) or a JSON profile path, but profile
-loading is not wired into the scan path yet: the flag has no effect on
-the run, and `--format` and the scan-level flags remain authoritative.
-See [Configuration](CONFIGURATION.md) for the profile schema.
+`--config` resolves a built-in preset name (`production`, `pipeline`,
+`development`, `mcp-integration`) or a path to a JSON profile file, and
+supplies defaults for anything you did not set explicitly: the profile's
+`enabled_categories` become the `--categories` allowlist, its
+`output_format` becomes the render, and its `severity_threshold` the
+threshold. Flags given on the command line always win over profile
+values. See [Configuration](CONFIGURATION.md) for the profile schema.
 
 **Examples:**
 
@@ -57,7 +59,8 @@ aegis -f sarif scan . --output-file results.sarif
 aegis scan --env
 
 # CI gate over new findings only: record a baseline once, then
-# compare every subsequent scan against it
+# compare every subsequent scan against it. The baseline file itself
+# is skipped during rescans, so it can live inside the scanned tree.
 aegis -f json scan . --output-file baseline.json
 aegis scan . --baseline baseline.json
 

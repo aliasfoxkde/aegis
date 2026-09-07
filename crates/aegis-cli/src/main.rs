@@ -21,11 +21,13 @@ struct Cli {
     verbose: bool,
 
     /// Output format
-    #[arg(short, long, value_enum, default_value = "human")]
-    format: OutputFormat,
+    #[arg(short, long, value_enum)]
+    format: Option<OutputFormat>,
 
-    /// Configuration profile
-    #[arg(short, long)]
+    /// Configuration profile: a built-in preset name (production, pipeline,
+    /// development, mcp-integration) or a path to a JSON profile file.
+    /// Flags given explicitly on the command line win over profile values.
+    #[arg(short, long, global = true)]
     config: Option<String>,
 
     /// Suppress output except findings
@@ -176,6 +178,33 @@ async fn main() -> Result<()> {
             diff,
             staged,
         } => {
+            // A `-c/--config` profile supplies defaults for flags the
+            // operator did not set; explicit flags always win.
+            let profile = cli
+                .config
+                .as_deref()
+                .map(config::resolve_profile)
+                .transpose()?;
+            let format = cli
+                .format
+                .or_else(|| {
+                    profile
+                        .as_ref()
+                        .map(|profile| OutputFormat::from(profile.output_format))
+                })
+                .unwrap_or(OutputFormat::Human);
+            let categories = categories.or_else(|| {
+                profile
+                    .as_ref()
+                    .and_then(|profile| profile.enabled_categories.as_ref())
+                    .filter(|enabled| !enabled.is_empty())
+                    .map(|enabled| enabled.join(","))
+            });
+            let severity_threshold = severity_threshold.or_else(|| {
+                profile
+                    .as_ref()
+                    .and_then(|profile| profile.severity_threshold.clone())
+            });
             scanner::run_scan(scanner::ScanOptions {
                 path,
                 scan_file: file,
@@ -189,7 +218,7 @@ async fn main() -> Result<()> {
                 all,
                 diff,
                 staged,
-                format: cli.format,
+                format,
                 quiet: cli.quiet,
             })
             .await?;

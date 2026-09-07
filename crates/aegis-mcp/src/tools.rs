@@ -368,16 +368,21 @@ mod tests {
 
         let fixture_dir = PathBuf::from("temp/mcp-dir-fixture");
         std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
+        // The console.log line gives the test a finding to assert on; the
+        // credential line is a synthetic fixture, suppressed on its own line.
         std::fs::write(
             fixture_dir.join("creds.txt"),
-            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n",
+            "console.log(\"debug\");\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures
         )
-        .expect("write fixture"); // aegis:ignore:aws-secret-key
+        .expect("write fixture");
 
         let result = AegisTools::scan_dir(&state, "temp/mcp-dir-fixture".to_string()).await;
         let _removed = std::fs::remove_dir_all(&fixture_dir);
 
         let response = result.expect("scan_dir inside cwd must succeed");
-        assert!(response.finding_count > 0, "nested leak must be found");
+        assert!(
+            response.finding_count > 0,
+            "finding in nested fixture must be reported"
+        );
     }
 }

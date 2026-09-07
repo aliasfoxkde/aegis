@@ -105,6 +105,15 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     Ok(scanner)
 }
 
+/// Fold findings into the coverage counters so reports, receipts, and the
+/// JSON `stats` block agree with the `findings` list they accompany.
+fn stats_with_findings(mut stats: ScanStats, findings: &[Finding]) -> ScanStats {
+    for finding in findings {
+        stats.add_finding(finding);
+    }
+    stats
+}
+
 /// Perform scan based on options (testable)
 ///
 /// # Errors
@@ -117,14 +126,20 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
         // Scan only changed lines from a diff file
         let diff_content = std::fs::read_to_string(diff_path)?;
         let findings = scanner.scan_diff(&diff_content, "diff");
-        (findings, ScanStats::default())
+        let stats = stats_with_findings(
+            ScanStats::for_content(format!("diff:{}", diff_path.display()), diff_content.len()),
+            &findings,
+        );
+        (findings, stats)
     } else if opts.scan_env {
         let findings = scanner.scan_env();
-        (findings, ScanStats::default())
+        let stats = stats_with_findings(ScanStats::for_environment(), &findings);
+        (findings, stats)
     } else if opts.scan_stdin {
         // Note: stdin read must happen in async context
         let findings = scanner.scan_string("", "stdin");
-        (findings, ScanStats::default())
+        let stats = stats_with_findings(ScanStats::for_content("string:stdin", 0), &findings);
+        (findings, stats)
     } else if opts.scan_file {
         let path = &opts.path;
         if path.is_dir() {
@@ -137,6 +152,8 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
     } else if opts.staged {
         scan_staged(scanner, opts)?
     } else {
+        // `scan_file`/`scan_dir` already fold their findings into the
+        // returned stats inside aegis-core.
         scanner
             .scan_dir(&opts.path)
             .map_err(|e| anyhow::anyhow!("{e}"))?
@@ -226,7 +243,7 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
         findings.extend(file_findings);
     }
 
-    stats.finding_count = findings.len();
+    let stats = stats_with_findings(stats, &findings);
     Ok((findings, stats))
 }
 
@@ -321,7 +338,10 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
 
     let findings = scanner.scan_string(stdin_content, "stdin");
     let has_findings = !findings.is_empty();
-    let stats = ScanStats::for_content("string:stdin", stdin_content.len());
+    let stats = stats_with_findings(
+        ScanStats::for_content("string:stdin", stdin_content.len()),
+        &findings,
+    );
     let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
@@ -769,6 +789,44 @@ mod tests {
         let (findings, _stats) = result.unwrap();
         // When scan_stdin is true, empty string is passed to scan_string
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn stdin_scan_stats_agree_with_the_findings_list() {
+        // Regression: the JSON `stats` block used to report finding_count 0
+        // while the findings array carried matches.
+        let opts = ScanOptions {
+            path: PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: true,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+            staged: false,
+        };
+
+        let result = execute_scan_with_stdin(&opts, "console.log(\"debug\");\n")
+            .expect("stdin scan must succeed");
+        assert!(
+            !result.findings.is_empty(),
+            "fixture must produce a finding"
+        );
+        assert_eq!(result.stats.finding_count, result.findings.len());
+        assert_eq!(
+            result.stats.findings_by_severity.values().sum::<usize>(),
+            result.stats.finding_count
+        );
+        assert_eq!(
+            result.stats.findings_by_category.values().sum::<usize>(),
+            result.stats.finding_count
+        );
     }
 
     #[test]

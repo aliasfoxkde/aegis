@@ -10,7 +10,7 @@ pub mod scanner;
 pub use benchmark::{run_benchmark, BenchmarkOptions};
 pub use config::{
     disable_pattern, disable_pattern_message, enable_pattern, enable_pattern_message, load_config,
-    save_config,
+    resolve_profile, save_config,
 };
 pub use output::Output;
 pub use scanner::{
@@ -31,4 +31,15 @@ pub enum OutputFormat {
     /// SARIF 2.1.0 run for code-scanning platforms, carrying the inspection
     /// ledger as run properties.
     Sarif,
+}
+
+/// Adopt a profile's output format; both enums name the same three renders.
+impl From<aegis_core::config::OutputFormat> for OutputFormat {
+    fn from(format: aegis_core::config::OutputFormat) -> Self {
+        match format {
+            aegis_core::config::OutputFormat::Human => Self::Human,
+            aegis_core::config::OutputFormat::Json => Self::Json,
+            aegis_core::config::OutputFormat::Sarif => Self::Sarif,
+        }
+    }
 }

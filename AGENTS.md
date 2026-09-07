@@ -56,7 +56,7 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
     --categories secrets,security-hardening,web-security --severity-threshold high
   ```
 
-  This currently reports **2 known findings** and exits 1 (exit 1 means "findings", not "tool failure"). Both are `env-credential-assignment` hits on the AWS documentation example key inside `#[cfg(test)]` fixtures — `crates/aegis-mcp/src/tools.rs:373` and `crates/aegis-daemon/src/lib.rs:900`. Each already carries an `aegis:ignore:aws-secret-key` directive, but it sits on the `.expect(...)` line rather than the flagged line, so it does not take effect. Check this list before assuming a new finding is yours, and put any new directive on the same line as the finding.
+  This currently reports **0 findings**. It exits 1 when it reports findings (exit 1 means "findings", not "tool failure"). Synthetic test credentials (the AWS documentation example key) appear in a few `#[cfg(test)]` fixtures and are suppressed with a same-line `aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures` directive — the directive must sit on the **same line as the finding**, or it does not take effect. Check this list before assuming a new finding is yours.
 
 ## Branch and Commit Policy
 

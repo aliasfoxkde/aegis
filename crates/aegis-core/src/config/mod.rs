@@ -441,7 +441,7 @@ impl Config {
                     "pii".to_string(),
                     "security-hardening".to_string(),
                     "web-security".to_string(),
-                    "code-quality".to_string(),
+                    "compliance".to_string(),
                 ]),
                 strict_mode: StrictMode::Strict,
                 performance_mode: PerformanceMode::Optimized,
@@ -464,6 +464,8 @@ impl Config {
                     "web-security".to_string(),
                     "code-quality".to_string(),
                     "devops".to_string(),
+                    "ai-detection".to_string(),
+                    "supply-chain".to_string(),
                 ]),
                 strict_mode: StrictMode::Standard,
                 performance_mode: PerformanceMode::Optimized,
@@ -492,8 +494,8 @@ impl Config {
                 severity_threshold: None,
                 bundle: Bundle::new(vec![]),
             }),
-            "mcp" => Some(Self {
-                name: "mcp".to_string(),
+            "mcp-integration" => Some(Self {
+                name: "mcp-integration".to_string(),
                 enabled_categories: None,
                 strict_mode: StrictMode::Standard,
                 performance_mode: PerformanceMode::Optimized,
@@ -514,7 +516,7 @@ impl Config {
     /// List available presets
     #[must_use]
     pub fn list_presets() -> Vec<&'static str> {
-        vec!["production", "pipeline", "development", "mcp"]
+        vec!["production", "pipeline", "development", "mcp-integration"]
     }
 
     /// Create a default configuration
@@ -562,6 +564,56 @@ pub enum ConfigError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_builtin_presets_match_shipped_profile_files() {
+        // config/profiles/*.json is the user-facing copy of the built-in
+        // presets; the two must not drift. The files omit only `#[serde(skip)]`
+        // and defaulted fields, so compare the fields they actually carry.
+        for name in Config::list_presets() {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../config/profiles")
+                .join(format!("{name}.json"));
+            let from_file = Config::load(&path)
+                .unwrap_or_else(|e| panic!("shipped profile {name}.json must parse: {e}"));
+            let preset = Config::preset(name)
+                .unwrap_or_else(|| panic!("preset {name} must exist in list_presets"));
+            assert_eq!(from_file.name, preset.name, "preset {name}");
+            assert_eq!(
+                from_file.enabled_categories, preset.enabled_categories,
+                "preset {name}"
+            );
+            assert_eq!(from_file.strict_mode, preset.strict_mode, "preset {name}");
+            assert_eq!(
+                from_file.performance_mode, preset.performance_mode,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.exit_on_findings, preset.exit_on_findings,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.max_file_size_mb, preset.max_file_size_mb,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.binary_file_detection, preset.binary_file_detection,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.output_format, preset.output_format,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.timeout_seconds, preset.timeout_seconds,
+                "preset {name}"
+            );
+            assert_eq!(
+                from_file.severity_threshold, preset.severity_threshold,
+                "preset {name}"
+            );
+        }
+    }
 
     #[test]
     fn test_preset_parse_yaml() {

@@ -895,12 +895,13 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let nested = dir.path().join("nested");
         fs::create_dir(&nested).expect("mkdir");
+        // The console.log line gives the test a finding to assert on; the
+        // credential line is a synthetic fixture, suppressed on its own line.
         fs::write(
             nested.join("leak.txt"),
-            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n",
+            "console.log(\"debug\");\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures
         )
         .expect("write");
-        // aegis:ignore:aws-secret-key
 
         let state = Arc::new(DaemonState::with_scan_root(
             PathBuf::from("/tmp/test.sock"),
@@ -910,7 +911,10 @@ mod tests {
 
         let response = handle_request(&request, &state).await;
         assert!(response.success, "scan_dir: {:?}", response.error);
-        assert!(response.finding_count > 0, "nested leak must be found");
+        assert!(
+            response.finding_count > 0,
+            "finding in nested fixture must be reported"
+        );
     }
 
     #[tokio::test]
