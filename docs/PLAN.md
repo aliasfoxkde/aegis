@@ -119,19 +119,37 @@ Ubuntu only.
 - **Exit criteria:** workflows least-privilege, deduplicated, cached; test
   matrix green on three OSes.
 
-### Phase 5 — `env_var` semantics decision
+### Phase 5 — `env_var` semantics decision — DELIVERED
 
 Dozens of flagship rules (JWT, AWS secret key, the `secrets-*` family)
 carry `env_var: true` and are excluded from file scanning; this is visible
 only in a struct field comment.
 
 - Measure what file-mode coverage the generic rules provide for the same
-  secrets (corpus + self-scan evidence).
+  secrets (corpus + self-scan evidence). — Measured with a payload sweep:
+  realistic leaked credentials from every env-only rule scanned against
+  the file-active registry. 7 of 34 families were covered by
+  security-hardening/pii counterparts; **13 vendor-prefixed families were
+  undetectable in files** (`glpat-`, JWTs, `AIza`, `ya29.`, `npm_`,
+  `sk-`, `sk-ant-`, `hf_`, `EAAC`, Discord tokens, Mailchimp
+  `32hex-usNN`, `Server=…;Password=…`, `Basic <b64>`).
 - Decide: document the env-only scope and/or add file-active rules where
   coverage is genuinely missing. Any flag flip shows its precision impact
-  first.
-- **Exit criteria:** user-facing docs state the semantics; the decision is
-  recorded in `docs/architecture/OVERVIEW.md`.
+  first. — Decision: flip the 13 prefixed families to file-active
+  (`secrets.rs` header now states the policy); keep the 21 genuinely
+  context-dependent shapes env-only and document them. Zero-loss for env
+  scanning because `scan_env` matches the whole `secrets` category
+  regardless of the flag. Precision evidence: corpus precision/recall
+  unchanged (thresholds still pass), CI-parity self-scan findings
+  unchanged (3, all residue fixed in the Phase 3 PR). Also fixed
+  `aws-secret-key` (security-hardening), which missed the canonical
+  `aws_secret_access_key` spelling.
+- Both sides of the decision are pinned by
+  `crates/aegis-core/tests/env_var_semantics.rs` (exact env-only set;
+  per-family file-mode payloads; env-only rules never fire in files).
+- **Exit criteria:** user-facing docs state the semantics
+  (`docs/PATTERNS.md` scoping section); the decision is recorded in
+  `docs/architecture/OVERVIEW.md` ("File vs. Environment Scan Scope"). ✅
 
 ### Phase 6 — Coverage push
 

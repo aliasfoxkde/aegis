@@ -261,7 +261,9 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "aws-secret-key".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)aws_secret(access_key|key)\s*[:=]\s*['\"][A-Za-z0-9/+=]{40}"#.to_string(),
+            // The canonical env-var spelling is `AWS_SECRET_ACCESS_KEY`,
+            // so the separator before `access_key` is optional.
+            match_pattern: r#"(?i)aws_secret_?(access_key|key)\s*[:=]\s*['\"][A-Za-z0-9/+=]{40}"#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
