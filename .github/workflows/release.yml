@@ -8,6 +8,14 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Read-only by default; only `create-release` elevates to contents: write.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # Test before building
   test:
