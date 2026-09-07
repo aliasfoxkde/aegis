@@ -67,15 +67,32 @@ Remaining for follow-up phases: hand-polish generator output realism
 
 - **Exit criteria:** liveness test runs in CI; zero unprovable rules. ✅
 
-### Phase 2 — Lazy per-extension compilation
+### Phase 2 — Lazy per-extension compilation — DELIVERED
 
-The full registry compiles synchronously at startup (~633 patterns) — what
-blew the MCP 30-second deadline. Per-extension compilation is already
-cached; make it lazy.
+The full registry compiled synchronously at startup (~633 patterns) — what
+blew the MCP 30-second deadline. Shipped in this phase:
 
-- Build category scanners on first use per extension instead of eagerly.
+- `PatternRegistry::build_category_scanners_for_extension` narrows patterns
+  by `matches_extension` (and skips env-var-only rules) *before* grouping
+  and compiling, so an extension never compiles a regex it can never fire.
+  The old eager build + post-hoc `with_extension_filter` is gone.
+- `Scanner` compiles a given extension's scanners on first use and caches
+  them per normalized extension key; the eager all-pattern build and its
+  invalidation paths are removed.
+- MCP and daemon servers construct a bare scanner at startup and fill it in
+  on the first request via `tokio::sync::OnceCell` +
+  `spawn_blocking` (regex compilation is CPU-bound and must not run on the
+  reactor thread). Bundle swaps mark the cell done, so a replaced registry
+  is re-initialized exactly once.
+
+Measured with the new `scanner_init` criterion bench (release,
+this machine): registry from bundled definitions 164.6 ms; first scan of a
+new extension 73.7 ms (was ~216 ms when every pattern compiled); cached
+rescan 2.5 ms. Findings are byte-identical to the eager build across the
+workspace suite (651 tests).
+
 - **Exit criteria:** criterion bench steady state unchanged; startup and
-  MCP handshake compile only what they need.
+  MCP handshake compile only what they need. ✅
 
 ### Phase 3 — Noise audit round two
 

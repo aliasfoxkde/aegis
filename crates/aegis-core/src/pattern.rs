@@ -522,25 +522,6 @@ impl CategoryScanner {
         }
         matches
     }
-
-    /// Filter this scanner down to patterns applicable to a file extension.
-    ///
-    /// Returns `None` when no pattern applies, allowing callers to skip the
-    /// category entirely for that file type.
-    pub fn with_extension_filter(&self, ext: Option<&str>) -> Option<CategoryScanner> {
-        if self.patterns.iter().all(|p| !p.matches_extension(ext)) {
-            return None;
-        }
-
-        let filtered: Vec<Pattern> = self
-            .patterns
-            .iter()
-            .filter(|p| p.matches_extension(ext))
-            .cloned()
-            .collect();
-
-        CategoryScanner::new(&self.category.clone(), filtered).ok()
-    }
 }
 
 /// A single pattern match
@@ -761,10 +742,18 @@ impl PatternRegistry {
         self.patterns.read().is_empty()
     }
 
-    /// Build category scanners with combined regex pre-filtering
-    /// Groups patterns by category and creates a combined regex gate per category
-    /// This allows skipping all patterns in a category if the combined regex doesn't match
-    pub fn build_category_scanners(&self, include_disabled: bool) -> Vec<CategoryScanner> {
+    /// Build category scanners with combined regex pre-filtering, narrowed
+    /// to a file extension before any regex is compiled.
+    ///
+    /// Groups the applicable patterns by category and creates one combined
+    /// regex gate per category, so a whole category is skipped when its
+    /// combined regex does not match. `ext = None` keeps only universal
+    /// patterns (extension-scoped ones never run on extension-less sources).
+    pub fn build_category_scanners_for_extension(
+        &self,
+        ext: Option<&str>,
+        include_disabled: bool,
+    ) -> Vec<CategoryScanner> {
         let patterns = if include_disabled {
             self.all()
         } else {
@@ -774,7 +763,7 @@ impl PatternRegistry {
             std::collections::HashMap::new();
 
         for p in patterns {
-            if p.is_env_var_only() {
+            if p.is_env_var_only() || !p.matches_extension(ext) {
                 continue;
             }
             by_category
@@ -1781,36 +1770,25 @@ mod tests {
 
     #[test]
     fn test_category_scanner_extension_filter() {
-        let scanner = CategoryScanner::new(
-            "test",
-            vec![
-                {
-                    let mut d = definition("html-only", "test", "<img");
-                    d.file_extensions = vec!["html".to_string()];
-                    Pattern::new(d).unwrap()
-                },
-                Pattern::new(definition("everywhere", "test", "needle")).unwrap(),
-            ],
-        )
-        .unwrap();
+        let registry = PatternRegistry::new();
+        let mut html_only = definition("html-only", "test", "<img");
+        html_only.file_extensions = vec!["html".to_string()];
+        registry.register(html_only).unwrap();
+        registry
+            .register(definition("everywhere", "test", "needle"))
+            .unwrap();
 
-        let html = scanner.with_extension_filter(Some("html")).unwrap();
-        assert_eq!(html.len(), 2);
+        let html = registry.build_category_scanners_for_extension(Some("html"), false);
+        assert_eq!(html.len(), 1);
+        assert_eq!(html[0].len(), 2);
 
-        let rs = scanner.with_extension_filter(Some("rs")).unwrap();
+        let rs = registry.build_category_scanners_for_extension(Some("rs"), false);
         assert_eq!(rs.len(), 1);
-        assert_eq!(rs.patterns()[0].name(), "everywhere");
+        assert_eq!(rs[0].patterns()[0].name(), "everywhere");
 
-        // A scanner whose patterns are all scoped elsewhere disappears
-        let scoped_away = CategoryScanner::new(
-            "test",
-            vec![{
-                let mut d = definition("html-only", "test", "<img");
-                d.file_extensions = vec!["html".to_string()];
-                Pattern::new(d).unwrap()
-            }],
-        )
-        .unwrap();
-        assert!(scoped_away.with_extension_filter(Some("rs")).is_none());
+        // Extension-less sources keep only universal patterns
+        let any = registry.build_category_scanners_for_extension(None, false);
+        assert_eq!(any.len(), 1);
+        assert_eq!(any[0].patterns()[0].name(), "everywhere");
     }
 }
