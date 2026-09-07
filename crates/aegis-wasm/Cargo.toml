@@ -13,11 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 aegis-core = { path = "../aegis-core", default-features = false }
+aegis-patterns = { path = "../aegis-patterns" }
 wasm-bindgen = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 console_error_panic_hook = "0.1"
-
-[profile.release]
-opt-level = "s"
-lto = true

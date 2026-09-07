@@ -10,6 +10,7 @@ description = "Pattern definitions for Aegis"
 categories = ["data", "development-tools"]
 
 [dependencies]
+aegis-core = { path = "../aegis-core", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
