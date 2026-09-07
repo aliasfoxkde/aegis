@@ -29,7 +29,9 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
 
       - name: Install cargo-fuzz
-        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # cargo-fuzz
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          tool: cargo-fuzz
 
       - name: Fuzz suppression parser
         run: cargo fuzz run fuzz_suppression_parse -- -max_total_time=${{ github.event.inputs.seconds_per_target || '120' }}

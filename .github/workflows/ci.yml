@@ -106,7 +106,9 @@ jobs:
           toolchain: stable
           components: llvm-tools
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # cargo-llvm-cov
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          tool: cargo-llvm-cov
       - name: Generate coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
@@ -125,7 +127,9 @@ jobs:
         with:
           toolchain: stable
       - name: Install cargo-audit
-        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # cargo-audit
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          tool: cargo-audit
       - name: Run cargo audit
         run: |
           # Ignore known transitive dependency vulnerabilities from jsonrpc (unmaintained)
@@ -141,6 +145,8 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install cargo-deny
-        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # cargo-deny
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          tool: cargo-deny
       - name: Check advisories, licenses, bans, sources
         run: cargo deny check

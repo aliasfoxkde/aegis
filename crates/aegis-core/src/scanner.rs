@@ -1225,7 +1225,10 @@ mod tests {
 
         assert_eq!(stats.files_failed, 0);
         assert!(stats.inspection_ledger.units.iter().any(|unit| {
-            unit.unit_id.ends_with(".git/objects/aa/deadbeef")
+            // Normalize separators: ledger ids use the host path style,
+            // which is `\` on Windows.
+            let unit_id = unit.unit_id.replace('\\', "/");
+            unit_id.ends_with(".git/objects/aa/deadbeef")
                 && unit.status == InspectionStatus::Excluded
                 && !unit.required
         }));

@@ -88,7 +88,9 @@ fn test_scan_json_output() {
 
 #[test]
 fn test_scan_sarif_output() {
-    let file_path = std::env::temp_dir().join("aegis_test_secret.txt");
+    // Distinct fixture per test: cargo runs tests in parallel, and two
+    // tests sharing one temp path race each other's write/remove.
+    let file_path = std::env::temp_dir().join("aegis_test_sarif.txt");
     std::fs::write(&file_path, "api_key: AKIAIOSFODNN7EXAMPLE").unwrap();
     let output = aegis_cmd()
         .args(["--format", "sarif", "scan", file_path.to_str().unwrap()])
