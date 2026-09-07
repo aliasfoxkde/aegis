@@ -16,3 +16,7 @@ cov/
 temp/
 .claude/
 CLAUDE.md
+
+# Python bytecode
+__pycache__/
+*.pyc

@@ -28,3 +28,7 @@ crates/aegis-patterns/src/
 # Integration tests are intentionally vulnerable fixtures — positive test
 # cases must contain real detections by construction.
 crates/*/tests/
+
+# The example generator's hand-written overrides are detection payloads by
+# construction (same rationale as the pattern source above).
+scripts/generate_examples.py

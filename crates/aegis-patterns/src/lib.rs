@@ -48,6 +48,7 @@ pub mod container;
 pub mod data_visualization;
 pub mod devops;
 pub mod docs;
+pub mod examples;
 pub mod finance;
 pub mod frameworks;
 pub mod git_hygiene;
@@ -69,6 +70,8 @@ pub mod terraform;
 pub mod typescript;
 pub mod web_development;
 pub mod web_security;
+
+pub use examples::example_for;
 
 /// Get all pattern definitions
 pub fn all_patterns() -> Vec<Pattern> {
