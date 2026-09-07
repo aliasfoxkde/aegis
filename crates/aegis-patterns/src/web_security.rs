@@ -115,7 +115,12 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "csrf-missing-token".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(POST|PUT|DELETE)\s*\([^)]*\)"#.to_string(),
+            // CSRF is a server-side concern: only route *registrations*
+            // (app.post, router.put, ...) are flagged. The previous
+            // method-only shape flagged every client HTTP call
+            // (axios.post, requests.post) and every Map/dict `.delete()`
+            // in the codebase, which is noise, not signal.
+            match_pattern: r#"(?i)\b(?:app|router|server|express|fastify|koa|route)\s*\.\s*(?:post|put|delete|patch)\s*\([^)]*\)"#.to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),

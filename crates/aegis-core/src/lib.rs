@@ -18,7 +18,7 @@
 //! use aegis_core::{Scanner, Config};
 //!
 //! let scanner = Scanner::new();
-//! let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
+//! let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs"); // aegis:ignore:aws-access-key
 //! ```
 
 pub mod ast;

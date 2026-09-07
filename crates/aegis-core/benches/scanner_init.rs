@@ -53,14 +53,15 @@ fn bench_registry_build(c: &mut Criterion) {
     group.bench_function("from_definitions", |b| {
         b.iter(|| {
             let definitions = black_box(bundled_definitions());
-            Scanner::from_definitions(definitions).expect("bundled patterns must compile")
+            // Bench setup may expect; the directive must share the flagged line.
+            Scanner::from_definitions(definitions).expect("patterns compile") // aegis:ignore:rust-expect-usage
         })
     });
 
     // First scan of a file type pays the per-extension scanner compile.
     group.bench_function("first_scan_extension_rs", |b| {
         b.iter_batched(
-            || Scanner::from_definitions(bundled_definitions()).expect("scanner must build"),
+            || Scanner::from_definitions(bundled_definitions()).expect("patterns compile"), // aegis:ignore:rust-expect-usage
             |scanner| {
                 scanner
                     .scan_string(black_box(&sample_source()), "src/main.rs")
@@ -72,8 +73,9 @@ fn bench_registry_build(c: &mut Criterion) {
 
     // Steady state: scanners for the extension are already compiled.
     group.bench_function("cached_scan_extension_rs", |b| {
-        let scanner = Scanner::from_definitions(bundled_definitions()).expect("scanner must build");
-        // Warm the extension cache outside the timed section.
+        // Bench setup may expect; the directive must share the flagged line.
+        let scanner = Scanner::from_definitions(bundled_definitions()).expect("patterns compile"); // aegis:ignore:rust-expect-usage
+                                                                                                   // Warm the extension cache outside the timed section.
         let _ = scanner.scan_string(&sample_source(), "src/main.rs");
         b.iter(|| {
             scanner
