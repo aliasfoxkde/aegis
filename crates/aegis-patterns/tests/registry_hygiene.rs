@@ -255,9 +255,13 @@ fn pattern_docs_are_fresh() {
         )
     });
 
+    // Windows runners check out with CRLF while the generator emits LF, so
+    // compare newline-insensitively — the freshness guarantee is about
+    // content, not checkout line endings.
+    let normalize = |s: &str| s.replace('\r', "");
     assert_eq!(
-        committed,
-        aegis_patterns::docs::generate_pattern_docs(),
+        normalize(&committed),
+        normalize(&aegis_patterns::docs::generate_pattern_docs()),
         "docs/patterns/README.md is stale; run cargo run -p aegis-patterns --example generate_docs"
     );
 }

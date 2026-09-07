@@ -240,11 +240,11 @@ mod tests {
     use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
     fn test_socket_path(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "aegis-daemon-{label}-{}-{}",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("test")
-        ))
+        // macOS caps sockaddr_un at 104 bytes and its TMPDIR is already
+        // ~70 chars deep, so the socket name must stay short or every
+        // bind fails with a name-too-long error. Labels are unique per
+        // test and the pid keeps separate runs apart.
+        std::env::temp_dir().join(format!("ad-{}-{label}", std::process::id()))
     }
 
     #[tokio::test]
