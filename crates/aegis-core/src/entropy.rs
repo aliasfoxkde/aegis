@@ -17,6 +17,7 @@ use std::collections::HashMap;
 ///
 /// # Returns
 /// Entropy value between 0.0 and 8.0 (for typical ASCII)
+#[must_use]
 pub fn shannon_entropy(content: &str) -> f64 {
     if content.is_empty() {
         return 0.0;
@@ -49,6 +50,7 @@ pub fn shannon_entropy(content: &str) -> f64 {
 ///
 /// # Returns
 /// Entropy value
+#[must_use]
 pub fn entropy_with_base(content: &str, base: f64) -> f64 {
     if content.is_empty() {
         return 0.0;
@@ -76,6 +78,7 @@ pub fn entropy_with_base(content: &str, base: f64) -> f64 {
 ///
 /// This is the ratio of unique characters to total length.
 /// High density suggests randomness (like secrets).
+#[must_use]
 pub fn information_density(content: &str) -> f64 {
     if content.is_empty() {
         return 0.0;
@@ -86,6 +89,7 @@ pub fn information_density(content: &str) -> f64 {
 }
 
 /// Classify entropy level
+#[must_use]
 pub fn classify_entropy(entropy: f64) -> &'static str {
     if entropy < 2.0 {
         "very_low"
@@ -101,6 +105,7 @@ pub fn classify_entropy(entropy: f64) -> &'static str {
 }
 
 /// Check if content appears to be base64 encoded
+#[must_use]
 pub fn is_base64_suggestive(content: &str) -> bool {
     // Base64 should have high density of uppercase, lowercase, digits, +, /
     // and length should be divisible by 4 (with padding)
@@ -120,13 +125,14 @@ pub fn is_base64_suggestive(content: &str) -> bool {
     let has_padding = content.ends_with("==") || content.ends_with('=');
 
     // Base64 density check
-    let alpha_count = content.chars().filter(|c| c.is_ascii_alphabetic()).count();
+    let alpha_count = content.chars().filter(char::is_ascii_alphabetic).count();
     let alpha_density = alpha_count as f64 / content.len() as f64;
 
     has_padding || (alpha_density > 0.5 && content.len() % 4 == 0)
 }
 
 /// Check if content appears to be hex encoded
+#[must_use]
 pub fn is_hex_suggestive(content: &str) -> bool {
     if content.len() < 4 || content.len() % 2 != 0 {
         return false;
@@ -138,6 +144,7 @@ pub fn is_hex_suggestive(content: &str) -> bool {
 /// Calculate the guessability score (0-100)
 ///
 /// Higher scores mean harder to guess (more entropy)
+#[must_use]
 pub fn guessability_score(content: &str) -> f64 {
     let entropy = shannon_entropy(content);
     let density = information_density(content);
@@ -155,9 +162,18 @@ pub fn guessability_score(content: &str) -> f64 {
 mod tests {
     use super::*;
 
+    /// Float equality within one ULP-ish epsilon; direct `==` on `f64` is
+    /// rejected by `clippy::float_cmp` and by good sense.
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < f64::EPSILON,
+            "{actual} should equal {expected}"
+        );
+    }
+
     #[test]
     fn test_empty_entropy() {
-        assert_eq!(shannon_entropy(""), 0.0);
+        assert_close(shannon_entropy(""), 0.0);
     }
 
     #[test]
@@ -176,9 +192,9 @@ mod tests {
 
     #[test]
     fn test_information_density() {
-        assert_eq!(information_density("aaaa"), 0.25);
-        assert_eq!(information_density("abcd"), 1.0);
-        assert_eq!(information_density(""), 0.0);
+        assert_close(information_density("aaaa"), 0.25);
+        assert_close(information_density("abcd"), 1.0);
+        assert_close(information_density(""), 0.0);
     }
 
     #[test]
@@ -231,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_empty_entropy_with_base() {
-        assert_eq!(entropy_with_base("", 2.0), 0.0);
+        assert_close(entropy_with_base("", 2.0), 0.0);
     }
 
     #[test]
@@ -257,6 +273,6 @@ mod tests {
 
     #[test]
     fn test_guessability_empty() {
-        assert_eq!(guessability_score(""), 0.0);
+        assert_close(guessability_score(""), 0.0);
     }
 }

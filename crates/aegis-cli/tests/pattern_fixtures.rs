@@ -5,13 +5,12 @@
 //! produce exactly the expected finding. They exist because the packs
 //! previously shipped patterns that fired on their own positive examples.
 
-use aegis_cli::scanner::convert_pattern;
 use aegis_core::{Finding, Scanner};
 
 fn scanner() -> Scanner {
     let definitions: Vec<aegis_core::PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
-        .map(convert_pattern)
+        .map(Into::into)
         .collect();
     Scanner::from_definitions(definitions).expect("all shipped patterns must compile")
 }

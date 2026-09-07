@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -24,7 +25,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "package-json".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"package\.json"#.to_string(),
+            match_pattern: r"package\.json".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -40,7 +41,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "npm-shrinkwrap".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"npm-shrinkwrap\.json"#.to_string(),
+            match_pattern: r"npm-shrinkwrap\.json".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -56,7 +57,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "yarn-lockfile".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"yarn\.lock"#.to_string(),
+            match_pattern: r"yarn\.lock".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -72,7 +73,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pnpm-lockfile".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"pnpm-lock\.yaml"#.to_string(),
+            match_pattern: r"pnpm-lock\.yaml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -89,7 +90,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-mod".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"go\.mod"#.to_string(),
+            match_pattern: r"go\.mod".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -105,7 +106,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-sum".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"go\.sum"#.to_string(),
+            match_pattern: r"go\.sum".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -121,7 +122,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-replace-directive".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"(?i)replace\s+"#.to_string(),
+            match_pattern: r"(?i)replace\s+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -138,7 +139,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "requirements-txt".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"requirements.*\.txt"#.to_string(),
+            match_pattern: r"requirements.*\.txt".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -154,7 +155,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pipfile".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"Pipfile"#.to_string(),
+            match_pattern: r"Pipfile".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -170,7 +171,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pipfile-lock".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"Pipfile\.lock"#.to_string(),
+            match_pattern: r"Pipfile\.lock".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -186,7 +187,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pyproject-toml".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"pyproject\.toml"#.to_string(),
+            match_pattern: r"pyproject\.toml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -202,7 +203,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "poetry-lock".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"poetry\.lock"#.to_string(),
+            match_pattern: r"poetry\.lock".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -218,7 +219,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "setup-py".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"setup\.py"#.to_string(),
+            match_pattern: r"setup\.py".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -235,7 +236,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cargo-toml".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"Cargo\.toml"#.to_string(),
+            match_pattern: r"Cargo\.toml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -251,7 +252,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cargo-lock".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"Cargo\.lock"#.to_string(),
+            match_pattern: r"Cargo\.lock".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -268,7 +269,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pom-xml".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"pom\.xml"#.to_string(),
+            match_pattern: r"pom\.xml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -284,7 +285,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gradle-build".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"build\.gradle"#.to_string(),
+            match_pattern: r"build\.gradle".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -300,7 +301,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gradle-lockfile".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"gradle\.lockfile"#.to_string(),
+            match_pattern: r"gradle\.lockfile".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -316,7 +317,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "maven-wrapper".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"mvnw"#.to_string(),
+            match_pattern: r"mvnw".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -332,7 +333,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gradle-wrapper".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"gradlew"#.to_string(),
+            match_pattern: r"gradlew".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -349,7 +350,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "nuget-config".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"nuget\.config"#.to_string(),
+            match_pattern: r"nuget\.config".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -365,7 +366,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "packages-config".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"packages\.config"#.to_string(),
+            match_pattern: r"packages\.config".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -381,7 +382,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dotnet-csproj".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"\.[a-z]+\.csproj"#.to_string(),
+            match_pattern: r"\.[a-z]+\.csproj".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -398,7 +399,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "github-advisory".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"github\.com/advisories"#.to_string(),
+            match_pattern: r"github\.com/advisories".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -414,7 +415,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "npm-audit".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"(?i)npm\s+audit"#.to_string(),
+            match_pattern: r"(?i)npm\s+audit".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -430,7 +431,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "safety-db".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"(?i)safety\s+check"#.to_string(),
+            match_pattern: r"(?i)safety\s+check".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -446,7 +447,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cargo-audit".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"(?i)cargo\s+audit"#.to_string(),
+            match_pattern: r"(?i)cargo\s+audit".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -463,7 +464,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sbom-spdx".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"SPDXID.*DocumentName"#.to_string(),
+            match_pattern: r"SPDXID.*DocumentName".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -479,7 +480,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sbom-cyclonedx".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"<bom.*xmlns.*cyclonedx"#.to_string(),
+            match_pattern: r"<bom.*xmlns.*cyclonedx".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -496,7 +497,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-base-image".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"(?i)^FROM\s+[a-z0-9._/-]+:([a-z0-9._-]+|latest)"#.to_string(),
+            match_pattern: r"(?i)^FROM\s+[a-z0-9._/-]+:([a-z0-9._-]+|latest)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -512,7 +513,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "helm-chart-dependency".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"dependencies:.*- name:"#.to_string(),
+            match_pattern: r"dependencies:.*- name:".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -528,7 +529,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "github-actions-workflow".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"\.github/workflows/"#.to_string(),
+            match_pattern: r"\.github/workflows/".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -544,7 +545,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dependabot-config".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"dependabot\.yml"#.to_string(),
+            match_pattern: r"dependabot\.yml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -560,7 +561,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "renovate-config".to_string(),
             category: "supply-chain".to_string(),
-            match_pattern: r#"renovate\.json"#.to_string(),
+            match_pattern: r"renovate\.json".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

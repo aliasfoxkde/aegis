@@ -154,21 +154,34 @@ pub struct CfgAnalyzer {
 
 impl CfgAnalyzer {
     /// Create a new analyzer
+    #[must_use]
     pub fn new(language: super::ast::Language) -> Self {
         Self { language }
     }
 
     /// Analyze a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CfgError::IoError`] if the file cannot be read.
     pub fn analyze_file(&self, path: &Path) -> Result<CfgAnalysis, CfgError> {
         let content = std::fs::read_to_string(path)?;
         self.analyze_content(&content, path.to_str().unwrap_or("unknown"))
     }
 
     /// Analyze content
+    ///
+    /// # Errors
+    ///
+    /// Never returns `Err` today: analysis over in-memory content cannot
+    /// fail. The `Result` keeps parity with [`CfgAnalyzer::analyze_file`].
+    // `&self` is kept so `CfgAnalyzer` stays a single instance-style entry
+    // point alongside `analyze_file`.
+    #[allow(clippy::unused_self)]
     pub fn analyze_content(&self, content: &str, source: &str) -> Result<CfgAnalysis, CfgError> {
-        let cfg = self.build_cfg(content);
-        let resources = self.track_resources(content);
-        let issues = self.detect_issues(&cfg, &resources, source);
+        let cfg = Self::build_cfg(content);
+        let resources = Self::track_resources(content);
+        let issues = Self::detect_issues(&cfg, &resources, source);
 
         Ok(CfgAnalysis {
             cfg,
@@ -178,7 +191,7 @@ impl CfgAnalyzer {
     }
 
     /// Build control flow graph
-    fn build_cfg(&self, content: &str) -> ControlFlowGraph {
+    fn build_cfg(content: &str) -> ControlFlowGraph {
         let mut nodes = Vec::new();
         let mut current_node = 0;
 
@@ -204,8 +217,8 @@ impl CfgAnalyzer {
                 continue;
             }
 
-            let kind = self.classify_statement(trimmed);
-            let successors = self.get_successors(trimmed, &kind);
+            let kind = Self::classify_statement(trimmed);
+            let successors = Self::get_successors(trimmed, &kind);
 
             let node_id = current_node;
             nodes.push(CfgNode {
@@ -263,7 +276,7 @@ impl CfgAnalyzer {
     }
 
     /// Classify a statement
-    fn classify_statement(&self, statement: &str) -> CfgNodeKind {
+    fn classify_statement(statement: &str) -> CfgNodeKind {
         if statement.starts_with("if") || statement.starts_with("match") {
             CfgNodeKind::Conditional
         } else if statement.starts_with("for") || statement.starts_with("while") {
@@ -280,16 +293,15 @@ impl CfgAnalyzer {
     }
 
     /// Get successors for a statement
-    fn get_successors(&self, _statement: &str, kind: &CfgNodeKind) -> Vec<usize> {
-        match kind {
-            CfgNodeKind::Conditional => vec![], // Would need branching analysis
-            CfgNodeKind::Loop => vec![],        // Would need loop analysis
-            _ => vec![],
-        }
+    ///
+    /// Branch targets and loop back-edges are not modeled yet, so no
+    /// statement kind contributes explicit successors.
+    fn get_successors(_statement: &str, _kind: &CfgNodeKind) -> Vec<usize> {
+        Vec::new()
     }
 
     /// Track resource acquisitions and releases
-    fn track_resources(&self, content: &str) -> Vec<Resource> {
+    fn track_resources(content: &str) -> Vec<Resource> {
         let mut resources = Vec::new();
         let mut resource_stack: Vec<Resource> = Vec::new();
 
@@ -371,7 +383,6 @@ impl CfgAnalyzer {
 
     /// Detect issues from CFG and resources
     fn detect_issues(
-        &self,
         cfg: &ControlFlowGraph,
         resources: &[Resource],
         source: &str,
@@ -381,9 +392,9 @@ impl CfgAnalyzer {
         for resource in resources {
             if resource.release_line.is_none() {
                 let issue_type = match resource.kind {
-                    ResourceKind::File => CfgIssueType::ResourceLeak,
                     ResourceKind::Lock => CfgIssueType::LockNotReleased,
                     ResourceKind::Connection => CfgIssueType::TransactionNotEnded,
+                    // Files and every other kind report a plain resource leak.
                     _ => CfgIssueType::ResourceLeak,
                 };
 
@@ -470,14 +481,14 @@ int main() {
     #[test]
     fn test_transaction_detection() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::Go);
-        let content = r#"
+        let content = r"
 package main
 
 func main() {
     db.Begin()
     // Missing commit or rollback
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.go").unwrap();
 
         let unended: Vec<_> = result
@@ -498,7 +509,7 @@ func main() {
             successors: vec![2],
             predecessors: vec![],
         };
-        assert!(!format!("{:?}", node).is_empty());
+        assert!(!format!("{node:?}").is_empty());
     }
 
     #[test]
@@ -563,7 +574,7 @@ func main() {
             severity: "high".to_string(),
             confidence: "medium".to_string(),
         };
-        let display = format!("{:?}", issue);
+        let display = format!("{issue:?}");
         assert!(!display.is_empty());
     }
 
@@ -628,7 +639,7 @@ func main() {
     #[test]
     fn test_lock_acquisition_and_release() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
-        let content = r#"
+        let content = r"
 #include <pthread.h>
 int main() {
     pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
@@ -636,7 +647,7 @@ int main() {
     pthread_mutex_unlock(&mu);
     return 0;
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.c").unwrap();
         // Should not detect lock issues when properly released
         let locks: Vec<_> = result
@@ -650,14 +661,14 @@ int main() {
     #[test]
     fn test_lock_not_released() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::C);
-        let content = r#"
+        let content = r"
 #include <pthread.h>
 int main() {
     pthread_mutex_init(&mu, NULL);
     pthread_mutex_lock(&mu);
     return 0;
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.c").unwrap();
         // Should detect lock not released
         let locks: Vec<_> = result
@@ -671,14 +682,14 @@ int main() {
     #[test]
     fn test_transaction_with_commit() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::Go);
-        let content = r#"
+        let content = r"
 package main
 func main() {
     db.begin()
     doSomething()
     commit()
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.go").unwrap();
         // Should not detect transaction issues when properly ended
         let txns: Vec<_> = result
@@ -692,14 +703,14 @@ func main() {
     #[test]
     fn test_transaction_with_rollback() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::Go);
-        let content = r#"
+        let content = r"
 package main
 func main() {
     db.begin()
     doSomething()
     rollback()
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.go").unwrap();
         let txns: Vec<_> = result
             .issues
@@ -779,15 +790,14 @@ int main() {
     #[test]
     fn test_cfg_error_io() {
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let result = analyzer.analyze_file(std::path::Path::new("/nonexistent/file.txt"));
+        let result = analyzer.analyze_file(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
     }
 
     #[test]
     fn test_cfg_classify_statement_panic() {
         // Test that classify_statement correctly classifies panic
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let kind = analyzer.classify_statement("panic!(\"error\")");
+        let kind = CfgAnalyzer::classify_statement("panic!(\"error\")");
         // panic is classified as Unwind (cfg node kind)
         assert_eq!(kind, CfgNodeKind::Unwind);
     }
@@ -796,11 +806,11 @@ int main() {
     fn test_cfg_try_block() {
         // Test that try blocks are classified
         let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let content = r#"
+        let content = r"
 fn main() {
     let result = do_something()?;
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.rs").unwrap();
         // The content should be analyzed without error
         assert!(!result.cfg.nodes.is_empty());
@@ -809,32 +819,28 @@ fn main() {
     #[test]
     fn test_cfg_classify_statement_try_with_braces() {
         // Test that "try {" with braces is classified as Try
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let kind = analyzer.classify_statement("try {");
+        let kind = CfgAnalyzer::classify_statement("try {");
         assert_eq!(kind, CfgNodeKind::Try);
     }
 
     #[test]
     fn test_cfg_classify_statement_return_arrow() {
         // Test that "->" is classified as Return (but only when it starts the statement)
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let kind = analyzer.classify_statement("-> SomeType");
+        let kind = CfgAnalyzer::classify_statement("-> SomeType");
         assert_eq!(kind, CfgNodeKind::Return);
     }
 
     #[test]
     fn test_cfg_classify_statement_match() {
         // Test that "match" is classified as Conditional
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let kind = analyzer.classify_statement("match x {");
+        let kind = CfgAnalyzer::classify_statement("match x {");
         assert_eq!(kind, CfgNodeKind::Conditional);
     }
 
     #[test]
     fn test_cfg_classify_statement_for() {
         // Test that "for" is classified as Loop
-        let analyzer = CfgAnalyzer::new(super::super::ast::Language::Rust);
-        let kind = analyzer.classify_statement("for i in 0..10 {");
+        let kind = CfgAnalyzer::classify_statement("for i in 0..10 {");
         assert_eq!(kind, CfgNodeKind::Loop);
     }
 }

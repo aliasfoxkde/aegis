@@ -2,13 +2,14 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // Angular patterns
         Pattern {
             name: "angular-bypass-security-trust".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.bypassSecurityTrust(HTML|Url|Script|Style|ResourceUrl)"#.to_string(),
+            match_pattern: r"\.bypassSecurityTrust(HTML|Url|Script|Style|ResourceUrl)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -24,7 +25,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "angular-innerhtml-xss".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.innerHTML\s*="#.to_string(),
+            match_pattern: r"\.innerHTML\s*=".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -41,7 +42,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "django-debug-print".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(?i)(print\(.*request|DEBUG\s*=\s*True|django.*debug)"#.to_string(),
+            match_pattern: r"(?i)(print\(.*request|DEBUG\s*=\s*True|django.*debug)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -59,7 +60,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "django-csrf-exempt".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"@csrf_exempt\b"#.to_string(),
+            match_pattern: r"@csrf_exempt\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -92,7 +93,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "express-eval-usage".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"eval\s*\(.*(?:req|request|body|params|query)"#.to_string(),
+            match_pattern: r"eval\s*\(.*(?:req|request|body|params|query)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -108,7 +109,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "express-sql-injection".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(query|execute)\s*\(.*[\+\`].*\$\{"#.to_string(),
+            match_pattern: r"(query|execute)\s*\(.*[\+\`].*\$\{".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -125,7 +126,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "flask-debug-enabled".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"app\.run\s*\([^)]*debug\s*=\s*True"#.to_string(),
+            match_pattern: r"app\.run\s*\([^)]*debug\s*=\s*True".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -141,7 +142,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "flask-sqlalchemy-raw-sql".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(execute|raw_sql)\s*\(.*[%\#\{]"#.to_string(),
+            match_pattern: r"(execute|raw_sql)\s*\(.*[%\#\{]".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -158,7 +159,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-defer-goroutine-leak".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"defer\s+go\s+"#.to_string(),
+            match_pattern: r"defer\s+go\s+".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -174,7 +175,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-json-marshal-error-ignore".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"json\.(Marshal|Unmarshal)\([^,)]+,\s*[^)]+\)\s*$"#.to_string(),
+            match_pattern: r"json\.(Marshal|Unmarshal)\([^,)]+,\s*[^)]+\)\s*$".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -190,7 +191,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "go-strconv-error-ignore".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"strconv\.(ParseInt|ParseUint|ParseFloat|ParseBool)\([^)]+\)[^\s]"#.to_string(),
+            match_pattern: r"strconv\.(ParseInt|ParseUint|ParseFloat|ParseBool)\([^)]+\)[^\s]".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -207,7 +208,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "laravel-app-key-hardcoded".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"APP_KEY\s*=\s*(base64:)?[a-zA-Z0-9\/+=]{32,}"#.to_string(),
+            match_pattern: r"APP_KEY\s*=\s*(base64:)?[a-zA-Z0-9\/+=]{32,}".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -256,7 +257,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "nodejs-sync-fs-readfile".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\bfs\.readFileSync\s*\("#.to_string(),
+            match_pattern: r"\bfs\.readFileSync\s*\(".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -272,7 +273,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "nodejs-todo-development".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(?i)(console\.log.*todo|\/\/\s*TODO.*fixme|FIXME.*console\.log)"#.to_string(),
+            match_pattern: r"(?i)(console\.log.*todo|\/\/\s*TODO.*fixme|FIXME.*console\.log)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -289,7 +290,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rails-raw-sql-injection".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.execute\s*\(.*[#\{]"#.to_string(),
+            match_pattern: r"\.execute\s*\(.*[#\{]".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -322,7 +323,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "react-console-log-dev".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(?i)(console\.log|console\.debug|console\.warn).*development|if.*process\.env\.NODE_ENV.*development"#.to_string(),
+            match_pattern: r"(?i)(console\.log|console\.debug|console\.warn).*development|if.*process\.env\.NODE_ENV.*development".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -338,7 +339,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "react-missing-key-prop".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.\s*map\s*\([^)]*\)\s*=>\s*[<\(]"#.to_string(),
+            match_pattern: r"\.\s*map\s*\([^)]*\)\s*=>\s*[<\(]".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -355,7 +356,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rust-env-macro".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"env!\s*\("#.to_string(),
+            match_pattern: r"env!\s*\(".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -371,7 +372,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rust-expect-usage".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.expect\("#.to_string(),
+            match_pattern: r"\.expect\(".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -419,7 +420,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rust-unsafe-block".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"unsafe\s*\{[^}]*\}"#.to_string(),
+            match_pattern: r"unsafe\s*\{[^}]*\}".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -451,7 +452,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rust-unwrap-usage".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"\.unwrap\(\)"#.to_string(),
+            match_pattern: r"\.unwrap\(\)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -468,7 +469,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "spring-deserialization-read-object".to_string(),
             category: "frameworks".to_string(),
-            match_pattern: r#"(ObjectInputStream|readObject)\s*\(\s*\)"#.to_string(),
+            match_pattern: r"(ObjectInputStream|readObject)\s*\(\s*\)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

@@ -36,11 +36,7 @@ fn convert(p: &Pattern) -> PatternDefinition {
 /// Filename used to scan an example: the pattern's first allowed extension
 /// when it is extension-scoped, otherwise a neutral one.
 fn source_for(p: &Pattern) -> String {
-    let ext = p
-        .file_extensions
-        .first()
-        .map(String::as_str)
-        .unwrap_or("txt");
+    let ext = p.file_extensions.first().map_or("txt", String::as_str);
     format!("example.{ext}")
 }
 

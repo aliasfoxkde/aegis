@@ -93,6 +93,7 @@ pub struct UserPatternFile {
 }
 
 /// Locate the user patterns file at the scan root, if any.
+#[must_use]
 pub fn find_user_pattern_file(root: &Path) -> Option<std::path::PathBuf> {
     USER_PATTERN_FILE_NAMES
         .iter()
@@ -105,6 +106,13 @@ pub fn find_user_pattern_file(root: &Path) -> Option<std::path::PathBuf> {
 /// Returns `Ok(None)` when the root has no `.aegis.yml` / `.aegis.yaml`.
 /// Any malformed entry is an error: a typo would otherwise silently
 /// disable a rule the author believes is protecting them.
+///
+/// # Errors
+///
+/// Returns [`UserPatternError`] when the file exists but cannot be read
+/// (`Io`), or when it fails validation (`Invalid`: malformed YAML, empty or
+/// duplicate names, invalid regex, unknown severity or confidence, out-of
+/// range `min_entropy`, dotted extensions, empty description).
 pub fn load_user_pattern_definitions(
     root: &Path,
 ) -> Result<Option<Vec<crate::pattern::PatternDefinition>>, UserPatternError> {
@@ -125,6 +133,11 @@ pub fn load_user_pattern_definitions(
 /// Split from [`load_user_pattern_definitions`] so the validation logic is
 /// fuzzable without a filesystem. Diagnostics reference `path` exactly as
 /// they do when the content was read from disk.
+///
+/// # Errors
+///
+/// Returns [`UserPatternError::Invalid`] when the YAML is malformed or any
+/// entry fails validation.
 pub fn parse_user_pattern_content(
     content: &str,
     path: &Path,
@@ -309,7 +322,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: internal-token
     category: secrets
@@ -317,7 +330,7 @@ patterns:
     match: 'INTT_[A-Za-z0-9]{24,}'
     description: Internal service token
     remediation: Use an environment variable
-"#,
+",
         );
 
         let definitions = load_user_pattern_definitions(temp.path())
@@ -339,13 +352,13 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: todo-tracker
     severity: low
     match: 'TD-[0-9]+'
     description: Unresolved tracker reference
-"#,
+",
         );
 
         let definition = &load_user_pattern_definitions(temp.path()).unwrap().unwrap()[0];
@@ -375,13 +388,13 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: broken
     severity: high
     match: '[unclosed'
     description: Broken regex
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(err.to_string().contains("invalid `match` regex"), "{err}");
@@ -393,13 +406,13 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: typo-severity
     severity: sever
     match: 'X'
     description: Misspelled severity
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(
@@ -413,7 +426,7 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: same-name
     severity: low
@@ -423,7 +436,7 @@ patterns:
     severity: low
     match: 'B'
     description: Second
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(
@@ -438,14 +451,14 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: bad-entropy
     severity: low
     match: 'A'
     description: Out of range
     min_entropy: 99.0
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(err.to_string().contains("min_entropy"), "{err}");
@@ -456,14 +469,14 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: dotted-ext
     severity: low
     match: 'A'
     description: Dotted extension
     file_extensions: ['.rs']
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(err.to_string().contains("without a dot"), "{err}");
@@ -474,14 +487,14 @@ patterns:
         let temp = TempDir::new().unwrap();
         write_config(
             temp.path(),
-            r#"
+            r"
 patterns:
   - name: typoed-field
     severity: low
     match: 'A'
     description: Typo
     severirty: low
-"#,
+",
         );
         let err = load_user_pattern_definitions(temp.path()).unwrap_err();
         assert!(err.to_string().contains("invalid YAML"), "{err}");

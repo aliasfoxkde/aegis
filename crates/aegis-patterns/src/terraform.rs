@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "db-public-access".to_string(),
             category: "terraform".to_string(),
-            match_pattern: r#"(?i)publicly_accessible\s*=\s*true|skip_final_snapshot\s*=\s*true"#.to_string(),
+            match_pattern: r"(?i)publicly_accessible\s*=\s*true|skip_final_snapshot\s*=\s*true".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "tf-ecs-no-secrets".to_string(),
             category: "terraform".to_string(),
-            match_pattern: r#"aws_ecs_task_definition"#.to_string(),
+            match_pattern: r"aws_ecs_task_definition".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "tf-ecs-privileged".to_string(),
             category: "terraform".to_string(),
-            match_pattern: r#"aws_ecs_task_definition[^{]*\{[^}]*privileged\s*=\s*true"#.to_string(),
+            match_pattern: r"aws_ecs_task_definition[^{]*\{[^}]*privileged\s*=\s*true".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "tf-s3-unencrypted".to_string(),
             category: "terraform".to_string(),
-            match_pattern: r#"aws_s3_bucket[^{]*\{[^}]*server_side_encryption_configuration\s*=\s*null"#.to_string(),
+            match_pattern: r"aws_s3_bucket[^{]*\{[^}]*server_side_encryption_configuration\s*=\s*null".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "unencrypted-storage".to_string(),
             category: "terraform".to_string(),
-            match_pattern: r#"(?i)encrypted\s*=\s*false|encryption\s*=\s*false|server_side_encryption_configuration\s*=\s*null"#.to_string(),
+            match_pattern: r"(?i)encrypted\s*=\s*false|encryption\s*=\s*false|server_side_encryption_configuration\s*=\s*null".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

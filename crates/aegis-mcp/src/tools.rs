@@ -1,17 +1,24 @@
 //! MCP tools implementation
 
-use super::*;
+use super::{
+    sandbox, ListPatternsResponse, PathBuf, PatternInfo, Result, ScanResponse, ServerState,
+    UpdateResponse,
+};
 
 #[allow(dead_code)]
 pub struct AegisTools;
 
 impl AegisTools {
     /// Execute scan_string tool
+    ///
+    /// # Errors
+    /// Never fails: string scanning is in-memory and infallible, so every
+    /// finding is reported in the returned response.
     pub async fn scan_string(
         state: &ServerState,
         content: String,
         source: String,
-    ) -> jsonrpc_core::Result<ScanResponse> {
+    ) -> Result<ScanResponse> {
         let scanner = state.scanner.read().await;
         let findings = scanner.scan_string(&content, &source);
 
@@ -19,10 +26,12 @@ impl AegisTools {
     }
 
     /// Execute scan_file tool
-    pub async fn scan_file(
-        state: &ServerState,
-        path: String,
-    ) -> jsonrpc_core::Result<ScanResponse> {
+    ///
+    /// # Errors
+    /// Returns `InvalidParams` when `path` falls outside the sandbox, and
+    /// `InternalError` when the file cannot be read or scanned (missing
+    /// file, permission denied, malformed content).
+    pub async fn scan_file(state: &ServerState, path: String) -> Result<ScanResponse> {
         let path = PathBuf::from(&path);
 
         // Security: validate path
@@ -35,7 +44,7 @@ impl AegisTools {
         }
 
         let scanner = state.scanner.read().await;
-        let (findings, stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
+        let (findings, scan_stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
             code: jsonrpc_core::ErrorCode::InternalError,
             message: e.to_string(),
             data: None,
@@ -43,13 +52,18 @@ impl AegisTools {
 
         Ok(ScanResponse::from_parts(
             findings,
-            stats,
+            scan_stats,
             path.to_string_lossy().to_string(),
         ))
     }
 
     /// Execute scan_dir tool
-    pub async fn scan_dir(state: &ServerState, path: String) -> jsonrpc_core::Result<ScanResponse> {
+    ///
+    /// # Errors
+    /// Returns `InvalidParams` when `path` falls outside the sandbox, and
+    /// `InternalError` when the directory walk fails (missing directory,
+    /// permission denied while descending into it).
+    pub async fn scan_dir(state: &ServerState, path: String) -> Result<ScanResponse> {
         let path = PathBuf::from(&path);
 
         // Security: validate path
@@ -62,7 +76,7 @@ impl AegisTools {
         }
 
         let scanner = state.scanner.read().await;
-        let (findings, stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
+        let (findings, scan_stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
             code: jsonrpc_core::ErrorCode::InternalError,
             message: e.to_string(),
             data: None,
@@ -70,13 +84,17 @@ impl AegisTools {
 
         Ok(ScanResponse::from_parts(
             findings,
-            stats,
+            scan_stats,
             path.to_string_lossy().to_string(),
         ))
     }
 
     /// Execute scan_env tool
-    pub async fn scan_env(state: &ServerState) -> jsonrpc_core::Result<ScanResponse> {
+    ///
+    /// # Errors
+    /// Never fails: the environment scan only reads process variables, so
+    /// every finding is reported in the returned response.
+    pub async fn scan_env(state: &ServerState) -> Result<ScanResponse> {
         let scanner = state.scanner.read().await;
         let findings = scanner.scan_env();
 
@@ -84,10 +102,13 @@ impl AegisTools {
     }
 
     /// List patterns
+    ///
+    /// # Errors
+    /// Never fails: an unknown category simply yields an empty pattern list.
     pub async fn list_patterns(
         state: &ServerState,
         category: Option<String>,
-    ) -> jsonrpc_core::Result<ListPatternsResponse> {
+    ) -> Result<ListPatternsResponse> {
         let scanner = state.scanner.read().await;
         let registry = scanner.registry();
 
@@ -115,23 +136,31 @@ impl AegisTools {
     }
 
     /// List categories
-    pub async fn list_categories(state: &ServerState) -> jsonrpc_core::Result<Vec<String>> {
+    ///
+    /// # Errors
+    /// Never fails: categories are derived from the in-memory registry.
+    pub async fn list_categories(state: &ServerState) -> Result<Vec<String>> {
         let scanner = state.scanner.read().await;
         let registry = scanner.registry();
         Ok(registry.categories())
     }
 
     /// Update bundle
+    ///
+    /// # Errors
+    /// Never fails: bundle updates run through the RPC method, so this
+    /// stub always answers with a pointer to that implementation.
     #[allow(dead_code)]
     pub async fn update_bundle(
         state: &ServerState,
         _bundle_path: Option<String>,
         _force: bool,
-    ) -> jsonrpc_core::Result<UpdateResponse> {
+    ) -> Result<UpdateResponse> {
         // Note: The actual update_bundle implementation is in main.rs
         // This tool exists for potential future direct tool calls
-        let scanner = state.scanner.read().await;
-        let _ = scanner;
+        // Take the scanner lock like the real tools do; the swap itself
+        // lives in the RPC method.
+        let _scanner_guard = state.scanner.read().await;
         Ok(UpdateResponse {
             success: true,
             message: "Use RPC update_bundle method".to_string(),
@@ -143,6 +172,8 @@ impl AegisTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aegis_core::{PatternDefinition, Scanner};
+    use std::sync::Arc;
 
     fn init_test_scanner() -> Scanner {
         // The canonical `From<Pattern>` conversion keeps this harness in
@@ -280,7 +311,7 @@ mod tests {
             let mut scanner = state.scanner.write().await;
             *scanner = init_test_scanner();
         }
-        let result = AegisTools::scan_string(&state, "".to_string(), "empty.txt".to_string()).await;
+        let result = AegisTools::scan_string(&state, String::new(), "empty.txt".to_string()).await;
         assert!(result.is_ok());
         let response = result.unwrap();
         assert_eq!(response.finding_count, 0);
@@ -304,7 +335,7 @@ mod tests {
         .expect("write fixture");
 
         let result = AegisTools::scan_file(&state, "temp/mcp-fixtures/leak.txt".to_string()).await;
-        let _ = std::fs::remove_dir_all(&fixture_dir);
+        let _removed = std::fs::remove_dir_all(&fixture_dir);
 
         let response = result.expect("scan_file inside cwd must succeed");
         assert!(response.finding_count > 0, "leaked token must be detected");
@@ -341,7 +372,7 @@ mod tests {
         .expect("write fixture"); // aegis:ignore:aws-secret-key
 
         let result = AegisTools::scan_dir(&state, "temp/mcp-dir-fixture".to_string()).await;
-        let _ = std::fs::remove_dir_all(&fixture_dir);
+        let _removed = std::fs::remove_dir_all(&fixture_dir);
 
         let response = result.expect("scan_dir inside cwd must succeed");
         assert!(response.finding_count > 0, "nested leak must be found");

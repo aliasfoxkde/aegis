@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // US Government IDs
@@ -105,7 +106,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "international-phone".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"\+\d{1,3}[-.\s]?(?:\(\d{1,4}\)|\d{1,4})[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b"#.to_string(),
+            match_pattern: r"\+\d{1,3}[-.\s]?(?:\(\d{1,4}\)|\d{1,4})[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -202,7 +203,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cvv".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)\b(?:cvv|cvc|security\s*code)\s*[:=]\s*\d{3,4}\b"#.to_string(),
+            match_pattern: r"(?i)\b(?:cvv|cvc|security\s*code)\s*[:=]\s*\d{3,4}\b".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -250,7 +251,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "bitcoin-address".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b"#.to_string(),
+            match_pattern: r"\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -580,7 +581,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gdpr-personal-data".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)personal\s*data"#.to_string(),
+            match_pattern: r"(?i)personal\s*data".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -596,7 +597,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "data-processing".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)data\s*processing\s*agreement"#.to_string(),
+            match_pattern: r"(?i)data\s*processing\s*agreement".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -612,7 +613,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "consent-record".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)consent\s*(record|management|given)"#.to_string(),
+            match_pattern: r"(?i)consent\s*(record|management|given)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -628,7 +629,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "right-to-erasure".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)(right\s*to\s*erasure|right\s*to\s*be\s*forgotten|delete\s*request)"#.to_string(),
+            match_pattern: r"(?i)(right\s*to\s*erasure|right\s*to\s*be\s*forgotten|delete\s*request)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

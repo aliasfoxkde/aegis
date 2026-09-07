@@ -14,8 +14,7 @@ pub use config::{
 };
 pub use output::Output;
 pub use scanner::{
-    convert_pattern, execute_scan, execute_scan_with_stdin, run_scan_and_get_exit_code,
-    update_bundle, ScanOptions,
+    execute_scan, execute_scan_with_stdin, run_scan_and_get_exit_code, update_bundle, ScanOptions,
 };
 
 use clap::ValueEnum;

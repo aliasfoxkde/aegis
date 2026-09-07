@@ -30,7 +30,7 @@ fn test_scan_detects_aws_key() {
         "stdout: {}",
         String::from_utf8_lossy(&output.stdout)
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_scan_no_findings() {
         "stdout: {}",
         String::from_utf8_lossy(&output.stdout)
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn test_scan_json_output() {
         stdout.contains("findings") || stdout.contains("No findings"),
         "stdout: {stdout}"
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn test_scan_sarif_output() {
         stdout.contains("version") || stdout.contains("2.1"),
         "stdout: {stdout}"
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn test_scan_with_severity_threshold() {
         stdout.contains("findings") || stdout.contains("No findings") || stderr.is_empty(),
         "stdout: {stdout}, stderr: {stderr}"
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn test_scan_with_categories() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let _ = std::fs::remove_file(file_path);
+    let _removed = std::fs::remove_file(file_path);
 }
 
 #[test]

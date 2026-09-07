@@ -67,6 +67,7 @@ pub enum LifecycleState {
 
 impl LifecycleState {
     /// Returns true if this state is terminal (no further transitions allowed)
+    #[must_use]
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
@@ -75,17 +76,17 @@ impl LifecycleState {
     }
 
     /// Returns true if transition to the given state is valid
+    #[must_use]
     pub fn can_transition_to(&self, next: LifecycleState) -> bool {
-        use LifecycleState::*;
+        use LifecycleState::{Accepted, Cancelled, Completed, Failed, Pending, Running};
         match (self, next) {
-            // Forward progress
-            (Pending, Accepted | Running | Failed | Cancelled) => true,
-            (Accepted, Running | Failed | Cancelled) => true,
-            (Running, Completed | Failed | Cancelled) => true,
-            // Idempotent self-transitions for terminal states
-            (Completed, Completed) => true,
-            (Failed, Failed) => true,
-            (Cancelled, Cancelled) => true,
+            // Forward progress, or an idempotent replay of a terminal state.
+            (Pending, Accepted | Running | Failed | Cancelled)
+            | (Accepted, Running | Failed | Cancelled)
+            | (Running, Completed | Failed | Cancelled)
+            | (Completed, Completed)
+            | (Failed, Failed)
+            | (Cancelled, Cancelled) => true,
             // All other transitions are invalid
             _ => false,
         }
@@ -114,6 +115,7 @@ pub struct LifecycleTransition {
 
 impl LifecycleTransition {
     /// Create a new initial transition (first state assignment)
+    #[must_use]
     pub fn initial(state: LifecycleState) -> Self {
         Self {
             schema_version: 1,
@@ -121,13 +123,13 @@ impl LifecycleTransition {
             to_state: state,
             transitioned_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+                .map_or(0, |d| d.as_secs()),
             reason: None,
         }
     }
 
     /// Create a state transition with optional reason
+    #[must_use]
     pub fn transition(
         from: LifecycleState,
         to: LifecycleState,
@@ -140,8 +142,7 @@ impl LifecycleTransition {
                 to_state: to,
                 transitioned_at: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0),
+                    .map_or(0, |d| d.as_secs()),
                 reason,
             })
         } else {
@@ -168,6 +169,7 @@ pub struct LifecycleRecord {
 
 impl LifecycleRecord {
     /// Create a new lifecycle record starting in Pending state
+    #[must_use]
     pub fn new(work_request_id: String) -> Self {
         Self {
             schema_version: 1,
@@ -193,21 +195,25 @@ impl LifecycleRecord {
     }
 
     /// Get the initial timestamp (when work request was received)
+    #[must_use]
     pub fn started_at(&self) -> Option<u64> {
         self.transitions.first().map(|t| t.transitioned_at)
     }
 
     /// Get the last transition timestamp
+    #[must_use]
     pub fn last_updated_at(&self) -> Option<u64> {
         self.transitions.last().map(|t| t.transitioned_at)
     }
 
     /// Get the number of transitions
+    #[must_use]
     pub fn transition_count(&self) -> usize {
         self.transitions.len()
     }
 
     /// Returns true if the record is in a terminal state
+    #[must_use]
     pub fn is_terminal(&self) -> bool {
         self.current_state.is_terminal()
     }
@@ -227,6 +233,7 @@ pub enum ScanResult {
 
 impl ScanResult {
     /// Returns true if the result allows work to proceed
+    #[must_use]
     pub fn allows_work(&self) -> bool {
         matches!(self, ScanResult::Pass | ScanResult::Fail)
     }
@@ -258,6 +265,7 @@ pub struct EvidenceRecord {
 
 impl EvidenceRecord {
     /// Create a new evidence record from scan results
+    #[must_use]
     pub fn new(
         work_request_id: String,
         scan_result: ScanResult,
@@ -271,8 +279,7 @@ impl EvidenceRecord {
             evidence_ref: content_hash,
             scanned_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+                .map_or(0, |d| d.as_secs()),
             finding_count,
             highest_severity,
             receipt: None,
@@ -280,6 +287,7 @@ impl EvidenceRecord {
     }
 
     /// Create an evidence record with a redacted, complete scan receipt.
+    #[must_use]
     pub fn from_scan(
         work_request_id: String,
         source: &str,
@@ -350,16 +358,19 @@ pub struct ControlCenterAdapter {
 }
 
 impl std::fmt::Debug for ControlCenterAdapter {
+    // `scanner` is deliberately omitted: `Scanner` has no `Debug` impl, and
+    // its compiled patterns and ignore state are not diagnostic output.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ControlCenterAdapter")
             .field("evidence_store", &self.evidence_store)
             .field("lifecycle_store", &self.lifecycle_store)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
 impl ControlCenterAdapter {
     /// Create a new adapter with a default scanner
+    #[must_use]
     pub fn new() -> Self {
         Self {
             scanner: Scanner::new(),
@@ -411,6 +422,14 @@ impl ControlCenterAdapter {
     /// - Empty content: Blocked
     /// - Findings detected: Fail (allows work to proceed but logs failure)
     /// - No findings: Pass
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AdapterError::MalformedInput`] for an empty content or
+    /// work request ID, [`AdapterError::WorkRequestConflict`] when a known
+    /// work request ID arrives with different content, and
+    /// [`AdapterError::ScannerError`] or [`AdapterError::Internal`] when the
+    /// scan fails closed.
     #[cfg(feature = "tokio")]
     pub async fn scan_work(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
         Self::validate_request(&request)?;
@@ -451,6 +470,13 @@ impl ControlCenterAdapter {
     /// Scan work request synchronously (blocking)
     ///
     /// This is a convenience method for contexts where async is not available.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AdapterError::MalformedInput`] for an empty content or
+    /// work request ID, [`AdapterError::WorkRequestConflict`] when a known
+    /// work request ID arrives with different content, and
+    /// [`AdapterError::ScannerError`] when the scan fails closed.
     pub fn scan_work_sync(&mut self, request: WorkRequest) -> Result<ScanResult, AdapterError> {
         Self::validate_request(&request)?;
         if let Some(existing) = self.existing_result(&request)? {
@@ -540,9 +566,11 @@ impl ControlCenterAdapter {
         // Work delivery may be retried. Treat an identical request ID/content
         // pair as an idempotent replay, but fail closed when an ID is reused
         // for different content.
-        // Clone content for scan to avoid borrow issues with panic catch
-        let content = request.content.clone();
-        let source = request.source.clone();
+        let WorkRequest {
+            work_request_id,
+            content,
+            source,
+        } = request;
 
         // Perform scan - any panic or error results in Blocked
         // We create a fresh scanner within the catch_unwind to avoid
@@ -571,7 +599,7 @@ impl ControlCenterAdapter {
         // Create a redacted evidence record and durable receipt.
         let stats = ScanStats::for_content(format!("string:{source}"), content.len());
         let evidence_record = EvidenceRecord::from_scan(
-            request.work_request_id.clone(),
+            work_request_id,
             &source,
             scan_result.clone(),
             content_hash,
@@ -607,6 +635,12 @@ impl ControlCenterAdapter {
     }
 
     /// Persist all evidence records atomically as redacted JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if a record cannot be serialized, the parent
+    /// directory cannot be created, the staged temporary file cannot be
+    /// written, or the final rename fails.
     pub fn persist_evidence(&self, path: &Path) -> io::Result<()> {
         let records: Vec<serde_json::Value> = self
             .evidence_store
@@ -636,7 +670,8 @@ impl ControlCenterAdapter {
         let temp_path = path.with_file_name(format!(".{file_name}.tmp-{}", std::process::id()));
         fs::write(&temp_path, json.as_bytes())?;
         if let Err(error) = fs::rename(&temp_path, path) {
-            let _ = fs::remove_file(&temp_path);
+            // Roll back the staged file; a failed cleanup is not fatal.
+            let _cleanup = fs::remove_file(&temp_path);
             return Err(error);
         }
         Ok(())
@@ -796,7 +831,7 @@ mod tests {
         let mut adapter = ControlCenterAdapter::new();
         let request = WorkRequest {
             work_request_id: "wr-123".to_string(),
-            content: "".to_string(),
+            content: String::new(),
             source: "test.rs".to_string(),
         };
 
@@ -812,7 +847,7 @@ mod tests {
     fn test_adapter_scan_work_empty_id() {
         let mut adapter = ControlCenterAdapter::new();
         let request = WorkRequest {
-            work_request_id: "".to_string(),
+            work_request_id: String::new(),
             content: "content".to_string(),
             source: "test.rs".to_string(),
         };
@@ -892,14 +927,14 @@ mod tests {
         let path = root.join("evidence.json");
 
         adapter.persist_evidence(&path).unwrap();
-        let json = std::fs::read_to_string(&path).unwrap();
+        let json = fs::read_to_string(&path).unwrap();
         let records: Vec<EvidenceRecord> = serde_json::from_str(&json).unwrap();
         assert_eq!(records.len(), 1);
         assert!(records[0].receipt.is_some());
         assert!(json.contains("schema_version"));
         assert!(!json.contains("AKIAIOSFODNN7EXAMPLE")); // aegis:ignore:aws-access-key
 
-        std::fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -924,7 +959,7 @@ mod tests {
 
         for i in 0..5 {
             let request = WorkRequest {
-                work_request_id: format!("wr-{}", i),
+                work_request_id: format!("wr-{i}"),
                 content: "fn main() {}".to_string(),
                 source: "test.rs".to_string(),
             };
@@ -1015,11 +1050,13 @@ mod tests {
             for to in states {
                 let expected = match (from, to) {
                     // Forward progress only; no revisiting earlier states.
-                    (Pending, Accepted | Running | Failed | Cancelled) => true,
-                    (Accepted, Running | Failed | Cancelled) => true,
-                    (Running, Completed | Failed | Cancelled) => true,
                     // Terminal states accept idempotent replays of themselves.
-                    (Completed, Completed) | (Failed, Failed) | (Cancelled, Cancelled) => true,
+                    (Pending, Accepted | Running | Failed | Cancelled)
+                    | (Accepted, Running | Failed | Cancelled)
+                    | (Running, Completed | Failed | Cancelled)
+                    | (Completed, Completed)
+                    | (Failed, Failed)
+                    | (Cancelled, Cancelled) => true,
                     _ => false,
                 };
                 assert_eq!(from.can_transition_to(to), expected, "{from:?} -> {to:?}");
@@ -1238,7 +1275,7 @@ mod tests {
         let path = root.join("nested/deeper/evidence.json");
         adapter.persist_evidence(&path).unwrap();
         assert!(path.is_file());
-        std::fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1257,10 +1294,10 @@ mod tests {
         let root =
             std::env::temp_dir().join(format!("aegis-evidence-collision-{}", std::process::id()));
         let target = root.join("evidence.json");
-        std::fs::create_dir_all(&target).unwrap();
+        fs::create_dir_all(&target).unwrap();
 
         assert!(adapter.persist_evidence(&target).is_err());
-        let leftovers: Vec<_> = std::fs::read_dir(&root)
+        let leftovers: Vec<_> = fs::read_dir(&root)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .filter(|name| name.contains(".tmp-"))
@@ -1269,6 +1306,6 @@ mod tests {
             leftovers.is_empty(),
             "temp files must not leak: {leftovers:?}"
         );
-        std::fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 }

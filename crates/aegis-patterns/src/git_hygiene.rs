@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "merge-conflict".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^<{7}|^={7}|^>{7}"#.to_string(),
+            match_pattern: r"^<{7}|^={7}|^>{7}".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-commit-signoff".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"Signed-off-by:"#.to_string(),
+            match_pattern: r"Signed-off-by:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-commit-verify".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"gpg.sign\s*=\s*true"#.to_string(),
+            match_pattern: r"gpg.sign\s*=\s*true".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gitignore-entry".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^\.gitignore$"#.to_string(),
+            match_pattern: r"^\.gitignore$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gitattributes-entry".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^\.gitattributes$"#.to_string(),
+            match_pattern: r"^\.gitattributes$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gitmodules-entry".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^\.gitmodules$"#.to_string(),
+            match_pattern: r"^\.gitmodules$".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "commit-message-conventional".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"(?i)^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)\([^)]+\):"#.to_string(),
+            match_pattern: r"(?i)^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)\([^)]+\):".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -119,7 +120,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "branch-naming-feature".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^feature/[a-z0-9-_]+$"#.to_string(),
+            match_pattern: r"^feature/[a-z0-9-_]+$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -135,7 +136,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "branch-naming-bugfix".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^bugfix/[a-z0-9-_]+$"#.to_string(),
+            match_pattern: r"^bugfix/[a-z0-9-_]+$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -151,7 +152,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "branch-naming-hotfix".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^hotfix/[a-z0-9-_]+$"#.to_string(),
+            match_pattern: r"^hotfix/[a-z0-9-_]+$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -167,7 +168,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "branch-naming-release".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^release/[a-z0-9._-]+$"#.to_string(),
+            match_pattern: r"^release/[a-z0-9._-]+$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -183,7 +184,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "commit-sha-reference".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\b[0-9a-f]{40}\b"#.to_string(),
+            match_pattern: r"\b[0-9a-f]{40}\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -209,7 +210,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "merge-commit".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^Merge branch"#.to_string(),
+            match_pattern: r"^Merge branch".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -225,7 +226,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "tag-reference".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"^refs/tags/v?\d+\.\d+"#.to_string(),
+            match_pattern: r"^refs/tags/v?\d+\.\d+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -241,7 +242,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-hygiene-github-actions-workflow".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\.github/workflows/[^/]+\.ya?ml"#.to_string(),
+            match_pattern: r"\.github/workflows/[^/]+\.ya?ml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -257,7 +258,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-hygiene-dependabot-config".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"dependabot\.yml"#.to_string(),
+            match_pattern: r"dependabot\.yml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -273,7 +274,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-hygiene-renovate-config".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"renovate\.json"#.to_string(),
+            match_pattern: r"renovate\.json".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -289,7 +290,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "commitizen-config".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\.(czrc|cz.json|commitizen)"#.to_string(),
+            match_pattern: r"\.(czrc|cz.json|commitizen)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -305,7 +306,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "semantic-release-config".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\.releaserc|semantic-release"#.to_string(),
+            match_pattern: r"\.releaserc|semantic-release".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -321,7 +322,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-flow-model".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"(?i)git.flow|gitflow"#.to_string(),
+            match_pattern: r"(?i)git.flow|gitflow".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -337,7 +338,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "github-issue-reference".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"(?i)(fixes|closes|resolves)\s+#\d+"#.to_string(),
+            match_pattern: r"(?i)(fixes|closes|resolves)\s+#\d+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -353,7 +354,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-hooks-husky".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\.husky/"#.to_string(),
+            match_pattern: r"\.husky/".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -369,7 +370,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pre-commit-config".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\.pre-commit-config\.ya?ml"#.to_string(),
+            match_pattern: r"\.pre-commit-config\.ya?ml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -385,7 +386,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-worktree".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"git\s+worktree"#.to_string(),
+            match_pattern: r"git\s+worktree".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -401,7 +402,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-stash".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"git\s+stash"#.to_string(),
+            match_pattern: r"git\s+stash".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -417,7 +418,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-lfs".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"git\s+lfs|\.gitattributes.*lfs"#.to_string(),
+            match_pattern: r"git\s+lfs|\.gitattributes.*lfs".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -433,7 +434,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "force-push-detected".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"(?i)git\s+push\s+--force|git\s+push\s+-f"#.to_string(),
+            match_pattern: r"(?i)git\s+push\s+--force|git\s+push\s+-f".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -449,7 +450,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "commit-ampersand".to_string(),
             category: "git-hygiene".to_string(),
-            match_pattern: r#"\bamp\b"#.to_string(),
+            match_pattern: r"\bamp\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "low".to_string(),

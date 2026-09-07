@@ -41,3 +41,6 @@ path = "src/lib.rs"
 [[bin]]
 name = "aegis"
 path = "src/main.rs"
+
+[lints]
+workspace = true

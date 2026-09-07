@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 use crate::finding::Finding;
 use crate::risk::risk_classification::RiskCategory;
@@ -18,6 +19,7 @@ pub struct RemediationAdvisor {
 
 impl RemediationAdvisor {
     /// Create a new remediation advisor
+    #[must_use]
     pub fn new() -> Self {
         let mut advisor = Self::default();
         advisor.register_fix_patterns();
@@ -319,6 +321,7 @@ impl RemediationAdvisor {
     }
 
     /// Get remediation guidance for a finding
+    #[must_use]
     pub fn get_remediation(&self, finding: &Finding) -> Option<Remediation> {
         let fix_pattern = self.fix_patterns.get(&finding.pattern).or_else(|| {
             // Try pattern matching with partial match
@@ -329,11 +332,11 @@ impl RemediationAdvisor {
         })?;
 
         let classification = RiskClassification::new(
-            self.parse_risk_level(&finding.severity),
-            self.parse_risk_category(&finding.category),
+            Self::parse_risk_level(&finding.severity),
+            Self::parse_risk_category(&finding.category),
         );
 
-        let roi = self.calculate_roi(fix_pattern, &classification);
+        let roi = Self::calculate_roi(fix_pattern, &classification);
 
         Some(Remediation {
             pattern_name: finding.pattern.clone(),
@@ -348,6 +351,7 @@ impl RemediationAdvisor {
     }
 
     /// Get prioritized list of remediations
+    #[must_use]
     pub fn prioritize(&self, findings: &[Finding]) -> Vec<Remediation> {
         let mut remediations: Vec<Remediation> = findings
             .iter()
@@ -366,11 +370,7 @@ impl RemediationAdvisor {
     }
 
     /// Calculate ROI for a fix
-    fn calculate_roi(
-        &self,
-        fix: &FixPattern,
-        classification: &RiskClassification,
-    ) -> RemediationRoi {
+    fn calculate_roi(fix: &FixPattern, classification: &RiskClassification) -> RemediationRoi {
         // Impact score: how much risk does fixing remove? (0-100)
         let impact_score = match classification.level {
             RiskLevel::Critical => 100.0,
@@ -381,7 +381,7 @@ impl RemediationAdvisor {
         };
 
         // Effort score: how hard is the fix? (0-100, inverse of time)
-        let avg_minutes = (fix.estimated_minutes + fix.estimated_max_minutes) as f64 / 2.0;
+        let avg_minutes = f64::from(fix.estimated_minutes + fix.estimated_max_minutes) / 2.0;
         let effort_score = if avg_minutes <= 15.0 {
             100.0
         } else if avg_minutes <= 60.0 {
@@ -423,7 +423,7 @@ impl RemediationAdvisor {
         }
     }
 
-    fn parse_risk_level(&self, severity: &str) -> RiskLevel {
+    fn parse_risk_level(severity: &str) -> RiskLevel {
         match severity.to_lowercase().as_str() {
             "critical" => RiskLevel::Critical,
             "high" => RiskLevel::High,
@@ -433,7 +433,7 @@ impl RemediationAdvisor {
         }
     }
 
-    fn parse_risk_category(&self, category: &str) -> RiskCategory {
+    fn parse_risk_category(category: &str) -> RiskCategory {
         match category.to_lowercase().as_str() {
             "secrets" | "secret" => RiskCategory::Secrets,
             "security" => RiskCategory::Security,
@@ -469,6 +469,7 @@ pub struct Remediation {
 
 impl Remediation {
     /// Get a summary of this remediation
+    #[must_use]
     pub fn summary(&self) -> String {
         format!(
             "[{}] {} at {}:{}",
@@ -480,70 +481,60 @@ impl Remediation {
     }
 
     /// Get detailed markdown report for this remediation
+    #[must_use]
     pub fn to_markdown(&self) -> String {
         let mut md = String::new();
-        md.push_str(&format!("## {}\n\n", self.summary()));
-        md.push_str(&format!("**Category:** {}  \n", self.category));
-        md.push_str(&format!(
-            "**Severity:** {}  \n",
-            self.severity.to_uppercase()
-        ));
-        md.push_str(&format!("**Confidence:** {}  \n\n", self.confidence));
+        let _ = writeln!(md, "## {}\n", self.summary());
+        let _ = writeln!(md, "**Category:** {}  ", self.category);
+        let _ = writeln!(md, "**Severity:** {}  ", self.severity.to_uppercase());
+        let _ = writeln!(md, "**Confidence:** {}  \n", self.confidence);
 
         md.push_str("### Risk Impact\n\n");
-        md.push_str(&format!(
-            "- **Risk Level:** {:?}\n",
-            self.classification.level
-        ));
-        md.push_str(&format!(
-            "- **Recommended Action:** {}\n\n",
+        let _ = writeln!(md, "- **Risk Level:** {:?}", self.classification.level);
+        let _ = writeln!(
+            md,
+            "- **Recommended Action:** {}\n",
             self.classification.action.description()
-        ));
+        );
 
         md.push_str("### Remediation Details\n\n");
-        md.push_str(&format!(
-            "- **Fix Type:** {:?}\n",
-            self.fix_pattern.fix_type
-        ));
-        md.push_str(&format!(
-            "- **Difficulty:** {:?}\n",
-            self.fix_pattern.difficulty
-        ));
-        md.push_str(&format!(
-            "- **Estimated Time:** {} - {} minutes\n\n",
+        let _ = writeln!(md, "- **Fix Type:** {:?}", self.fix_pattern.fix_type);
+        let _ = writeln!(md, "- **Difficulty:** {:?}", self.fix_pattern.difficulty);
+        let _ = writeln!(
+            md,
+            "- **Estimated Time:** {} - {} minutes\n",
             self.roi.estimated_minutes, self.roi.estimated_max_minutes
-        ));
+        );
 
         md.push_str("### Steps to Fix\n\n");
         for (i, step) in self.fix_pattern.steps.iter().enumerate() {
-            md.push_str(&format!("{}. {}\n", i + 1, step));
+            let _ = writeln!(md, "{}. {}", i + 1, step);
         }
 
         if let Some(ref effort_reducer) = self.fix_pattern.effort_reducer {
             md.push_str("\n### Effort Reduction Tips\n\n");
-            md.push_str(&format!("{}\n", effort_reducer));
+            let _ = writeln!(md, "{effort_reducer}");
         }
 
         if !self.fix_pattern.reference_urls.is_empty() {
             md.push_str("\n### References\n\n");
             for url in &self.fix_pattern.reference_urls {
-                md.push_str(&format!("- {}\n", url));
+                let _ = writeln!(md, "- {url}");
             }
         }
 
         md.push_str("\n### ROI Analysis\n\n");
-        md.push_str(&format!(
-            "- **Impact Score:** {:.0}/100 (risk reduction potential)\n",
+        let _ = writeln!(
+            md,
+            "- **Impact Score:** {:.0}/100 (risk reduction potential)",
             self.roi.impact_score
-        ));
-        md.push_str(&format!(
-            "- **Effort Score:** {:.0}/100 (lower is harder)\n",
+        );
+        let _ = writeln!(
+            md,
+            "- **Effort Score:** {:.0}/100 (lower is harder)",
             self.roi.effort_score
-        ));
-        md.push_str(&format!(
-            "- **Total ROI Score:** {:.1}/100\n",
-            self.roi.total_score
-        ));
+        );
+        let _ = writeln!(md, "- **Total ROI Score:** {:.1}/100", self.roi.total_score);
 
         md
     }
@@ -656,6 +647,7 @@ pub struct RemediationReport {
 
 impl RemediationReport {
     /// Create a new report from findings
+    #[must_use]
     pub fn from_findings(findings: &[Finding], advisor: &RemediationAdvisor) -> Self {
         let remediations = advisor.prioritize(findings);
         let unique_patterns: std::collections::HashSet<_> =
@@ -663,11 +655,11 @@ impl RemediationReport {
 
         let total_min: u64 = remediations
             .iter()
-            .map(|r| r.roi.estimated_minutes as u64)
+            .map(|r| u64::from(r.roi.estimated_minutes))
             .sum();
         let total_max: u64 = remediations
             .iter()
-            .map(|r| r.roi.estimated_max_minutes as u64)
+            .map(|r| u64::from(r.roi.estimated_max_minutes))
             .sum();
 
         Self {
@@ -680,20 +672,19 @@ impl RemediationReport {
     }
 
     /// Generate markdown report
+    #[must_use]
     pub fn to_markdown(&self) -> String {
         let mut md = String::new();
         md.push_str("# Remediation Report\n\n");
 
         md.push_str("## Summary\n\n");
-        md.push_str(&format!("- **Total Findings:** {}\n", self.total_findings));
-        md.push_str(&format!(
-            "- **Unique Patterns:** {}\n",
-            self.unique_patterns
-        ));
-        md.push_str(&format!(
-            "- **Total Estimated Fix Time:** {} - {} minutes\n\n",
+        let _ = writeln!(md, "- **Total Findings:** {}", self.total_findings);
+        let _ = writeln!(md, "- **Unique Patterns:** {}", self.unique_patterns);
+        let _ = writeln!(
+            md,
+            "- **Total Estimated Fix Time:** {} - {} minutes\n",
             self.total_estimated_minutes, self.total_estimated_max_minutes
-        ));
+        );
 
         if self.total_findings == 0 {
             md.push_str("No findings to remediate.\n");
@@ -706,14 +697,15 @@ impl RemediationReport {
         );
 
         for (i, rem) in self.remediations.iter().enumerate() {
-            md.push_str(&format!("### {}. {}\n\n", i + 1, rem.summary()));
-            md.push_str(&format!(
-                "**ROI Score:** {:.1}/100 | **Difficulty:** {:?} | **Est. Time:** {}-{} min\n\n",
+            let _ = writeln!(md, "### {}. {}\n", i + 1, rem.summary());
+            let _ = writeln!(
+                md,
+                "**ROI Score:** {:.1}/100 | **Difficulty:** {:?} | **Est. Time:** {}-{} min\n",
                 rem.roi.total_score,
                 rem.fix_pattern.difficulty,
                 rem.roi.estimated_minutes,
                 rem.roi.estimated_max_minutes
-            ));
+            );
         }
 
         md.push_str("---\n\n");

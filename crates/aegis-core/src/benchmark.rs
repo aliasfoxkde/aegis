@@ -25,6 +25,7 @@ pub struct ScanBenchmark {
 
 impl ScanBenchmark {
     /// Create a new benchmark from scan results
+    #[must_use]
     pub fn new(duration: Duration, stats: &ScanStats, findings_count: usize) -> Self {
         let files_scanned = stats.files_scanned;
         let bytes_scanned = stats.bytes_scanned;
@@ -72,6 +73,7 @@ impl Default for BenchmarkConfig {
 }
 
 /// Format benchmark results as JSON for tracking over time
+#[must_use]
 pub fn format_benchmark_json(
     name: &str,
     benchmark: &ScanBenchmark,
@@ -87,13 +89,12 @@ pub fn format_benchmark_json(
     // Get timestamp as Unix timestamp for simplicity
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs());
 
     serde_json::json!({
         "name": name,
         "timestamp": timestamp,
-        "duration_ms": benchmark.duration.as_millis() as u64,
+        "duration_ms": u64::try_from(benchmark.duration.as_millis()).unwrap_or(u64::MAX),
         "files_scanned": benchmark.files_scanned,
         "bytes_scanned": benchmark.bytes_scanned,
         "findings_count": benchmark.findings_count,
@@ -139,8 +140,8 @@ mod tests {
             ..Default::default()
         };
         let benchmark = ScanBenchmark::new(Duration::ZERO, &stats, 0);
-        assert_eq!(benchmark.files_per_second, 0.0);
-        assert_eq!(benchmark.mb_per_second, 0.0);
+        assert!(benchmark.files_per_second.abs() < f64::EPSILON);
+        assert!(benchmark.mb_per_second.abs() < f64::EPSILON);
     }
 
     #[test]

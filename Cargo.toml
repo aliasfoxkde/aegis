@@ -36,6 +36,27 @@ license = "Apache-2.0"
 repository = "https://github.com/aegis/aegis"
 rust-version = "1.75"
 
+# Strict-but-practical lint baseline. Every member crate opts in with
+# `[lints] workspace = true`; CI runs clippy with `-D warnings`, so all of
+# these are errors in practice.
+[workspace.lints.rust]
+future_incompatible = { level = "deny", priority = -1 }
+let_underscore_drop = "deny"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unsafe_code = "deny"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Throughput and score math intentionally narrows counters to f64; precision
+# past the 52-bit mantissa is irrelevant for reported metrics.
+cast_precision_loss = "allow"
+# Backtick styling and function-length opinions are review concerns, not
+# build gates.
+doc_markdown = "allow"
+too_many_lines = "allow"
+
 [workspace.dependencies]
 # Core dependencies
 regex = "1.10"

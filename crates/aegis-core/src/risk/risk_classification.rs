@@ -37,6 +37,7 @@ pub enum RiskCategory {
 
 impl RiskCategory {
     /// Get display name
+    #[must_use]
     pub fn display_name(&self) -> &'static str {
         match self {
             RiskCategory::Secrets => "Secrets & Credentials",
@@ -70,6 +71,7 @@ pub enum RecommendedAction {
 
 impl RecommendedAction {
     /// Get action description
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             RecommendedAction::None => "No action required",
@@ -84,22 +86,21 @@ impl RecommendedAction {
 
 impl RiskClassification {
     /// Classify a risk level and category
+    #[must_use]
     pub fn new(level: super::RiskLevel, category: RiskCategory) -> Self {
         let action = match (level, category) {
-            (super::RiskLevel::None, _) => RecommendedAction::None,
             (super::RiskLevel::Low, RiskCategory::Secrets) => RecommendedAction::Review,
-            (super::RiskLevel::Low, _) => RecommendedAction::None,
-            (super::RiskLevel::Medium, RiskCategory::Secrets) => RecommendedAction::Fix,
-            (super::RiskLevel::Medium, RiskCategory::Security) => RecommendedAction::Fix,
-            (super::RiskLevel::Medium, RiskCategory::Compliance) => {
+            (super::RiskLevel::None | super::RiskLevel::Low, _) => RecommendedAction::None,
+            (super::RiskLevel::Medium, RiskCategory::Secrets | RiskCategory::Security) => {
+                RecommendedAction::Fix
+            }
+            (super::RiskLevel::High, RiskCategory::Secrets | RiskCategory::Security) => {
+                RecommendedAction::Block
+            }
+            (super::RiskLevel::Medium | super::RiskLevel::High, RiskCategory::Compliance) => {
                 RecommendedAction::ComplianceReview
             }
             (super::RiskLevel::Medium, _) => RecommendedAction::Review,
-            (super::RiskLevel::High, RiskCategory::Secrets) => RecommendedAction::Block,
-            (super::RiskLevel::High, RiskCategory::Security) => RecommendedAction::Block,
-            (super::RiskLevel::High, RiskCategory::Compliance) => {
-                RecommendedAction::ComplianceReview
-            }
             (super::RiskLevel::High, _) => RecommendedAction::Fix,
             (super::RiskLevel::Critical, _) => RecommendedAction::Block,
         };
@@ -121,6 +122,7 @@ impl RiskClassification {
     }
 
     /// Get action description
+    #[must_use]
     pub fn action_description(&self) -> &'static str {
         self.action.description()
     }

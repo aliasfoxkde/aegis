@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 /// Render the full pattern catalog as Markdown.
+#[must_use]
 pub fn generate_pattern_docs() -> String {
     // BTreeMap keeps category order stable across runs.
     let mut by_category: BTreeMap<&str, Vec<&crate::Pattern>> = BTreeMap::new();
@@ -74,8 +75,7 @@ Each pattern can carry two optional scoping fields:
         patterns.sort_by(|a, b| a.name.cmp(&b.name));
         let _ = writeln!(
             out,
-            "\n## {}\n\n| Pattern | Severity | Confidence | Description |\n|----------|----------|------------|-------------|",
-            category
+            "\n## {category}\n\n| Pattern | Severity | Confidence | Description |\n|----------|----------|------------|-------------|"
         );
         for p in patterns {
             let _ = writeln!(

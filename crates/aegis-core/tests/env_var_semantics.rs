@@ -207,7 +207,7 @@ fn env_scan_only_rules_are_exactly_the_documented_set() {
         .collect();
     let mut actual = actual;
     actual.sort_unstable();
-    let mut expected: Vec<String> = ENV_ONLY_RULES.iter().map(|s| s.to_string()).collect();
+    let mut expected: Vec<String> = ENV_ONLY_RULES.iter().map(|s| (*s).to_string()).collect();
     expected.sort_unstable();
     assert_eq!(
         actual, expected,

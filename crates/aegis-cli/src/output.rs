@@ -16,6 +16,7 @@ impl std::fmt::Write for Output {
 }
 
 impl Output {
+    #[must_use]
     pub fn new(format: OutputFormat, quiet: bool) -> Self {
         Self {
             format,
@@ -24,6 +25,13 @@ impl Output {
         }
     }
 
+    /// Render `findings` plus `stats` and `risk` into the output buffer in
+    /// the configured format.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::fmt::Error`] when the JSON or SARIF document cannot be
+    /// serialized; writing to the in-memory buffer itself cannot fail.
     pub fn write_findings(
         &mut self,
         findings: &[Finding],
@@ -48,7 +56,7 @@ impl Output {
         if !self.quiet {
             writeln!(self, "Aegis Security Scan")?;
             writeln!(self, "==================")?;
-            writeln!(self, "{}", risk)?;
+            writeln!(self, "{risk}")?;
             writeln!(self)?;
         }
 
@@ -85,7 +93,7 @@ impl Output {
 
         if !self.quiet {
             writeln!(self)?;
-            writeln!(self, "{}", stats)?;
+            writeln!(self, "{stats}")?;
         }
 
         Ok(())
@@ -107,7 +115,7 @@ impl Output {
 
         let output = JsonOutput { findings, stats };
         let json = serde_json::to_string_pretty(&output).map_err(|_| std::fmt::Error)?;
-        writeln!(self.buffer, "{}", json)?;
+        writeln!(self.buffer, "{json}")?;
         Ok(())
     }
 
@@ -251,7 +259,7 @@ impl Output {
         };
 
         let json = serde_json::to_string_pretty(&output).map_err(|_| std::fmt::Error)?;
-        writeln!(self.buffer, "{}", json)?;
+        writeln!(self.buffer, "{json}")?;
         Ok(())
     }
 }
@@ -287,17 +295,17 @@ pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
 }
 
 /// Format patterns for listing (testable)
-pub fn format_patterns(enabled: bool, disabled: bool, category: Option<String>) -> String {
+#[must_use]
+pub fn format_patterns(enabled: bool, disabled: bool, category: Option<&str>) -> String {
+    use std::fmt::Write as _;
+
     use aegis_core::Severity;
 
     let patterns = aegis_patterns::all_patterns();
 
     // Filter by category if specified
-    let patterns: Vec<_> = match &category {
-        Some(cat) => patterns
-            .into_iter()
-            .filter(|p| &p.category == cat)
-            .collect(),
+    let patterns: Vec<_> = match category {
+        Some(cat) => patterns.into_iter().filter(|p| p.category == cat).collect(),
         None => patterns,
     };
 
@@ -311,11 +319,13 @@ pub fn format_patterns(enabled: bool, disabled: bool, category: Option<String>) 
     };
 
     let mut output = String::new();
-    output.push_str("Aegis Patterns\n");
-    output.push_str("==============\n");
-    output.push_str(&format!("Total: {} patterns\n", patterns.len()));
-    if let Some(ref cat) = category {
-        output.push_str(&format!("Category: {}\n", cat));
+    // Writing into a `String` cannot fail, so the `Result` is discarded as in
+    // the remediation formatter.
+    let _ = writeln!(output, "Aegis Patterns");
+    let _ = writeln!(output, "==============");
+    let _ = writeln!(output, "Total: {} patterns", patterns.len());
+    if let Some(cat) = category {
+        let _ = writeln!(output, "Category: {cat}");
     }
     output.push('\n');
 
@@ -328,19 +338,26 @@ pub fn format_patterns(enabled: bool, disabled: bool, category: Option<String>) 
             Some(Severity::Low) => "\x1b[36mLOW\x1b[0m",
             None => &p.severity,
         };
-        output.push_str(&format!(
-            "{} {:15} {:8} {}\n",
+        let _ = writeln!(
+            output,
+            "{} {:15} {:8} {}",
             status, p.name, severity_str, p.description
-        ));
+        );
     }
 
     output
 }
 
+/// List patterns as text, honoring the enabled/disabled/category filters.
+///
+/// # Errors
+///
+/// Never fails today; the result type is kept for consistency with the other
+/// CLI command handlers.
 pub fn list_patterns(
     enabled: bool,
     disabled: bool,
-    category: Option<String>,
+    category: Option<&str>,
 ) -> Result<String, anyhow::Error> {
     Ok(format_patterns(enabled, disabled, category))
 }
@@ -371,7 +388,11 @@ mod tests {
     }
 
     fn make_test_risk() -> RiskScore {
-        RiskScore::new(&[], &Default::default(), &Default::default())
+        RiskScore::new(
+            &[],
+            &std::collections::HashMap::default(),
+            &std::collections::HashMap::default(),
+        )
     }
 
     #[test]
@@ -475,7 +496,7 @@ mod tests {
     #[test]
     fn test_output_display() {
         let output = Output::new(OutputFormat::Human, false);
-        let display = format!("{}", output);
+        let display = format!("{output}");
         assert_eq!(display, "");
     }
 
@@ -592,7 +613,7 @@ mod tests {
         output.write_findings(&[finding], &stats, &risk).ok();
 
         // Display impl should return the buffer
-        let display_str = format!("{}", output);
+        let display_str = format!("{output}");
         assert!(!display_str.is_empty());
     }
 
@@ -764,7 +785,7 @@ mod tests {
 
     #[test]
     fn test_format_patterns_with_category() {
-        let output = format_patterns(false, false, Some("secrets".to_string()));
+        let output = format_patterns(false, false, Some("secrets"));
         assert!(output.contains("Category: secrets"));
     }
 
@@ -806,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_list_patterns_with_category() {
-        let result = list_patterns(false, false, Some("secrets".to_string()));
+        let result = list_patterns(false, false, Some("secrets"));
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Category: secrets"));

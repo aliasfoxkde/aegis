@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "bundler-optimization".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"import.*\*.*from|require.*dynamic.*import|import.*\(?.*await"#.to_string(),
+            match_pattern: r"import.*\*.*from|require.*dynamic.*import|import.*\(?.*await".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "error-boundaries".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"componentDidCatch|getDerivedStateFromError|class.*ErrorBoundary"#.to_string(),
+            match_pattern: r"componentDidCatch|getDerivedStateFromError|class.*ErrorBoundary".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "form-validation".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"form.*onSubmit.*preventDefault|input.*required.*false|pattern.*validation"#.to_string(),
+            match_pattern: r"form.*onSubmit.*preventDefault|input.*required.*false|pattern.*validation".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "inefficient-css".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"@import.*css|style.*attribute.*important|\*.*\{.*display.*none|animation.*no.*hardware"#.to_string(),
+            match_pattern: r"@import.*css|style.*attribute.*important|\*.*\{.*display.*none|animation.*no.*hardware".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-prop-validation".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"PropsTypes|propTypes.*isRequired|React\.PropTypes.*\.isRequired"#.to_string(),
+            match_pattern: r"PropsTypes|propTypes.*isRequired|React\.PropTypes.*\.isRequired".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "nextjs".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"useEffect.*\[\].*fetch|export default.*function.*props|getStaticPaths.*fallback.*false"#.to_string(),
+            match_pattern: r"useEffect.*\[\].*fetch|export default.*function.*props|getStaticPaths.*fallback.*false".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -119,7 +120,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "poor-error-boundary".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"componentDidCatch.*console\.log|ErrorBoundary.*return.*null|catch.*error.*render.*null"#.to_string(),
+            match_pattern: r"componentDidCatch.*console\.log|ErrorBoundary.*return.*null|catch.*error.*render.*null".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -135,7 +136,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "react-optimization".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"useCallback.*\[\]|useMemo.*\[\]|React\.memo.*props.*object"#.to_string(),
+            match_pattern: r"useCallback.*\[\]|useMemo.*\[\]|React\.memo.*props.*object".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -167,7 +168,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "state-management".to_string(),
             category: "web-development".to_string(),
-            match_pattern: r#"useState.*useEffect.*useState|setState.*prevState|dispatch.*action.*type"#.to_string(),
+            match_pattern: r"useState.*useEffect.*useState|setState.*prevState|dispatch.*action.*type".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

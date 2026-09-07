@@ -30,6 +30,7 @@ pub enum Severity {
 
 impl Severity {
     /// Get the numeric weight for risk calculation
+    #[must_use]
     pub fn weight(&self) -> i32 {
         match self {
             Severity::Critical => 40,
@@ -40,6 +41,7 @@ impl Severity {
     }
 
     /// Parse from string
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "critical" | "crit" => Some(Severity::Critical),
@@ -73,6 +75,7 @@ pub enum Confidence {
 
 impl Confidence {
     /// Get the multiplier for risk calculation
+    #[must_use]
     pub fn multiplier(&self) -> f64 {
         match self {
             Confidence::High => 1.0,
@@ -82,6 +85,7 @@ impl Confidence {
     }
 
     /// Parse from string
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "high" => Some(Confidence::High),
@@ -237,6 +241,11 @@ struct PatternInner {
 
 impl Pattern {
     /// Create a new pattern from a definition
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::InvalidRegex`] if the match pattern or the
+    /// optional exclude pattern does not compile.
     pub fn new(definition: PatternDefinition) -> Result<Self, PatternError> {
         let regex = Regex::new(&definition.match_pattern)
             .map_err(|e| PatternError::InvalidRegex(e.to_string()))?;
@@ -258,6 +267,11 @@ impl Pattern {
     }
 
     /// Create a new pattern from components
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::InvalidRegex`] if the assembled definition's
+    /// match pattern does not compile.
     pub fn with_components(
         name: impl Into<String>,
         category: impl Into<String>,
@@ -287,66 +301,79 @@ impl Pattern {
     }
 
     /// Get the pattern name
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.inner.definition.name
     }
 
     /// Get the category
+    #[must_use]
     pub fn category(&self) -> &str {
         &self.inner.definition.category
     }
 
     /// Get the severity
+    #[must_use]
     pub fn severity(&self) -> Severity {
         self.inner.definition.severity
     }
 
     /// Get the confidence
+    #[must_use]
     pub fn confidence(&self) -> Confidence {
         self.inner.definition.confidence
     }
 
     /// Check if pattern is enabled
+    #[must_use]
     pub fn is_enabled(&self) -> bool {
         self.inner.definition.enabled
     }
 
     /// Get the description
+    #[must_use]
     pub fn description(&self) -> &str {
         &self.inner.definition.description
     }
 
     /// Get the reference URL
+    #[must_use]
     pub fn reference(&self) -> Option<&str> {
         self.inner.definition.reference.as_deref()
     }
     /// Remediation guidance for this pattern, when provided
+    #[must_use]
     pub fn remediation(&self) -> Option<&str> {
         self.inner.definition.remediation.as_deref()
     }
 
     /// Get the tags
+    #[must_use]
     pub fn tags(&self) -> &[String] {
         &self.inner.definition.tags
     }
 
     /// Get the minimum entropy
+    #[must_use]
     pub fn min_entropy(&self) -> Option<f64> {
         self.inner.definition.min_entropy
     }
 
     /// Check if this is an env-var only pattern
+    #[must_use]
     pub fn is_env_var_only(&self) -> bool {
         self.inner.definition.env_var
     }
 
     /// Check if binary files are allowed
+    #[must_use]
     pub fn allows_binary(&self) -> bool {
         self.inner.definition.binary
     }
 
     /// Check whether a candidate match span should be suppressed because it
     /// also matches this pattern's exclude regex
+    #[must_use]
     pub fn is_excluded(&self, matched_text: &str) -> bool {
         self.inner
             .exclude_regex
@@ -359,6 +386,7 @@ impl Pattern {
     /// `None` means the source has no recognizable extension (stdin, env scan,
     /// in-memory snippets without a filename). Extension-scoped patterns do not
     /// run there; universal patterns (empty `file_extensions`) always do.
+    #[must_use]
     pub fn matches_extension(&self, ext: Option<&str>) -> bool {
         let extensions = &self.inner.definition.file_extensions;
         if extensions.is_empty() {
@@ -374,6 +402,7 @@ impl Pattern {
     }
 
     /// Match against a string
+    #[must_use]
     pub fn matches(&self, content: &str) -> bool {
         // Check entropy if required
         if let Some(min_entropy) = self.inner.definition.min_entropy {
@@ -387,6 +416,7 @@ impl Pattern {
     }
 
     /// Match and return all captures
+    #[must_use]
     pub fn find_matches<'a>(&self, content: &'a str) -> Vec<PatternMatch<'a>> {
         if let Some(min_entropy) = self.inner.definition.min_entropy {
             let entropy = shannon_entropy(content);
@@ -413,16 +443,19 @@ impl Pattern {
     }
 
     /// Get the raw regex pattern string
+    #[must_use]
     pub fn pattern_str(&self) -> &str {
         &self.inner.definition.match_pattern
     }
 
     /// Get a reference to the definition
+    #[must_use]
     pub fn definition(&self) -> &PatternDefinition {
         &self.inner.definition
     }
 
     /// Check if text matches this pattern's regex (without entropy check)
+    #[must_use]
     pub fn regex_matches(&self, text: &str) -> bool {
         self.inner.regex.is_match(text)
     }
@@ -442,6 +475,11 @@ pub struct CategoryScanner {
 
 impl CategoryScanner {
     /// Create a new category scanner from patterns
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::InvalidRegex`] when `patterns` is empty or
+    /// when the combined alternation of their patterns does not compile.
     pub fn new(category: &str, patterns: Vec<Pattern>) -> Result<Self, PatternError> {
         if patterns.is_empty() {
             return Err(PatternError::InvalidRegex(
@@ -467,26 +505,31 @@ impl CategoryScanner {
     }
 
     /// Check if this category might have any matches (fast pre-filter)
+    #[must_use]
     pub fn might_match(&self, content: &str) -> bool {
         self.combined.is_match(content)
     }
 
     /// Get the category name
+    #[must_use]
     pub fn category(&self) -> &str {
         &self.category
     }
 
     /// Get the number of patterns
+    #[must_use]
     pub fn len(&self) -> usize {
         self.patterns.len()
     }
 
     /// Check if there are no patterns
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.patterns.is_empty()
     }
 
     /// Get patterns
+    #[must_use]
     pub fn patterns(&self) -> &[Pattern] {
         &self.patterns
     }
@@ -498,6 +541,7 @@ impl CategoryScanner {
     /// versions re-matched each hit against the pattern list and attributed it
     /// to the first pattern whose regex fit, which double-reported overlapping
     /// patterns and misattributed findings.
+    #[must_use]
     pub fn find_matches<'a>(&'a self, content: &'a str) -> Vec<AttributedMatch<'a>> {
         // Fast path: if combined regex doesn't match, skip all patterns in this category
         if !self.combined.is_match(content) {
@@ -580,6 +624,7 @@ pub struct PatternRegistry {
 
 impl PatternRegistry {
     /// Create a new empty registry
+    #[must_use]
     pub fn new() -> Self {
         Self {
             patterns: RwLock::new(HashMap::new()),
@@ -588,6 +633,12 @@ impl PatternRegistry {
     }
 
     /// Create a registry from a list of pattern definitions
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error raised by [`PatternRegistry::register`]:
+    /// [`PatternError::InvalidRegex`] for an uncompilable pattern or
+    /// [`PatternError::Duplicate`] for a repeated name.
     pub fn from_definitions(definitions: Vec<PatternDefinition>) -> Result<Self, PatternError> {
         let registry = Self::new();
         for def in definitions {
@@ -597,6 +648,12 @@ impl PatternRegistry {
     }
 
     /// Register a new pattern
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::InvalidRegex`] if the pattern does not
+    /// compile and [`PatternError::Duplicate`] if its name is already
+    /// registered.
     pub fn register(&self, definition: PatternDefinition) -> Result<(), PatternError> {
         let name = definition.name.clone();
 
@@ -671,6 +728,11 @@ impl PatternRegistry {
     /// An unknown category would silently match nothing if it reached the
     /// scanner filter, so callers gate on this before scanning and fail
     /// loudly instead of reporting a clean pass.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::UnknownCategories`] listing the requested
+    /// categories the registry does not know.
     pub fn validate_categories(&self, requested: &[String]) -> Result<(), PatternError> {
         let valid = self.categories();
         let unknown: Vec<String> = requested
@@ -766,8 +828,7 @@ impl PatternRegistry {
         } else {
             self.enabled()
         };
-        let mut by_category: std::collections::HashMap<String, Vec<Pattern>> =
-            std::collections::HashMap::new();
+        let mut by_category: HashMap<String, Vec<Pattern>> = HashMap::new();
 
         for p in patterns {
             if p.is_env_var_only() || !p.matches_extension(ext) {
@@ -895,9 +956,9 @@ mod tests {
 
         for i in 0..5 {
             let def = PatternDefinition {
-                name: format!("pattern-{}", i),
+                name: format!("pattern-{i}"),
                 category: "test".to_string(),
-                match_pattern: format!("test{}", i),
+                match_pattern: format!("test{i}"),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
                 enabled: true,
@@ -960,9 +1021,9 @@ mod tests {
 
     #[test]
     fn test_confidence_multiplier() {
-        assert_eq!(Confidence::High.multiplier(), 1.0);
-        assert_eq!(Confidence::Medium.multiplier(), 0.7);
-        assert_eq!(Confidence::Low.multiplier(), 0.4);
+        assert!((Confidence::High.multiplier() - 1.0).abs() < f64::EPSILON);
+        assert!((Confidence::Medium.multiplier() - 0.7).abs() < f64::EPSILON);
+        assert!((Confidence::Low.multiplier() - 0.4).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -1393,14 +1454,14 @@ mod tests {
         let cat = Category::new("test-category", "A test category", 1.5);
         assert_eq!(cat.name, "test-category");
         assert_eq!(cat.description, "A test category");
-        assert_eq!(cat.weight, 1.5);
+        assert!((cat.weight - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_category_fields() {
         let cat = Category::new("fields-test", "Test fields", 3.0);
         assert_eq!(cat.name, "fields-test");
-        assert_eq!(cat.weight, 3.0);
+        assert!((cat.weight - 3.0).abs() < f64::EPSILON);
         assert_eq!(cat.description, "Test fields");
     }
 
@@ -1628,14 +1689,14 @@ mod tests {
             remediation: None,
         };
         registry.register(def).unwrap();
-        let debug_str = format!("{:?}", registry);
+        let debug_str = format!("{registry:?}");
         assert!(debug_str.contains("PatternRegistry"));
     }
 
     #[test]
     fn test_registry_default() {
         // Test Default trait implementation
-        let registry: PatternRegistry = Default::default();
+        let registry = PatternRegistry::default();
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
     }

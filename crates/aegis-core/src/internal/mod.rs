@@ -52,7 +52,7 @@ pub fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 
@@ -61,7 +61,7 @@ pub fn format_duration_ms(ms: u64) -> String {
     if ms >= 1000 {
         format!("{:.2}s", ms as f64 / 1000.0)
     } else {
-        format!("{}ms", ms)
+        format!("{ms}ms")
     }
 }
 
@@ -81,7 +81,7 @@ pub fn is_comment_line(line: &str, language: &str) -> bool {
     let trimmed = line.trim();
     match language {
         "rust" | "go" | "java" | "javascript" | "typescript" | "c" | "cpp" => {
-            trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*")
+            trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with('*')
         }
         "python" | "ruby" => trimmed.starts_with('#') || trimmed.starts_with("\"\"\""),
         _ => trimmed.starts_with('#') || trimmed.starts_with("//"),

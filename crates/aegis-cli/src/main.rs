@@ -199,7 +199,10 @@ async fn main() -> Result<()> {
             disabled,
             category,
         } => {
-            println!("{}", output::list_patterns(enabled, disabled, category)?);
+            println!(
+                "{}",
+                output::list_patterns(enabled, disabled, category.as_deref())?
+            );
         }
         Commands::Enable { pattern } => {
             config::enable_pattern(&pattern)?;
@@ -218,7 +221,7 @@ async fn main() -> Result<()> {
             runs,
             compare,
         } => {
-            benchmark::run_benchmark(benchmark::BenchmarkOptions {
+            benchmark::run_benchmark(&benchmark::BenchmarkOptions {
                 path,
                 warmup,
                 runs,

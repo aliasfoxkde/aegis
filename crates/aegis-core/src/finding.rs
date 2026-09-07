@@ -172,24 +172,28 @@ impl Finding {
     }
 
     /// Set the reference URL
+    #[must_use]
     pub fn with_reference(mut self, reference: impl Into<String>) -> Self {
         self.reference = Some(reference.into());
         self
     }
 
     /// Set the remediation guidance
+    #[must_use]
     pub fn with_remediation(mut self, remediation: impl Into<String>) -> Self {
         self.remediation = Some(remediation.into());
         self
     }
 
     /// Set the tags
+    #[must_use]
     pub fn with_tags(mut self, tags: Vec<String>) -> Self {
         self.tags = tags;
         self
     }
 
     /// Set the finding kind
+    #[must_use]
     pub fn with_kind(mut self, kind: FindingKind) -> Self {
         self.kind = kind;
         self
@@ -269,6 +273,7 @@ impl InspectionLedger {
     }
 
     /// A scan cannot be considered safe without at least one inspected unit.
+    #[must_use]
     pub fn allows_safe(&self) -> bool {
         !self.units.is_empty()
             && self.units.iter().all(|unit| {
@@ -323,6 +328,7 @@ pub struct ScanStats {
 
 impl ScanStats {
     /// Create new empty stats
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -342,6 +348,7 @@ impl ScanStats {
     }
 
     /// Build coverage stats for an environment scan.
+    #[must_use]
     pub fn for_environment() -> Self {
         Self::for_content("environment", 0)
     }
@@ -387,6 +394,7 @@ impl ScanStats {
     }
 
     /// Calculate files per second
+    #[must_use]
     pub fn files_per_second(&self) -> f64 {
         if self.scan_time_ms == 0 {
             return 0.0;
@@ -395,6 +403,7 @@ impl ScanStats {
     }
 
     /// Calculate MB per second
+    #[must_use]
     pub fn mb_per_second(&self) -> f64 {
         if self.scan_time_ms == 0 {
             return 0.0;
@@ -433,7 +442,7 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{:032x}", timestamp)
+    format!("{timestamp:032x}")
 }
 
 #[cfg(test)]
@@ -451,7 +460,7 @@ mod tests {
     #[test]
     fn test_location_display() {
         let loc = Location::new("test.rs", 10, 5, "let x = 1;");
-        let display = format!("{}", loc);
+        let display = format!("{loc}");
         assert_eq!(display, "test.rs:10:5");
     }
 
@@ -486,7 +495,7 @@ mod tests {
             "Hardcoded secret detected",
         );
 
-        let display = format!("{}", finding);
+        let display = format!("{finding}");
         assert!(display.contains("high"));
         assert!(display.contains("hardcoded-secret"));
         assert!(display.contains("test.rs:10:5"));
@@ -536,7 +545,7 @@ mod tests {
         stats.bytes_scanned = 1024 * 1024;
         stats.scan_time_ms = 1000;
 
-        assert_eq!(stats.files_per_second(), 100.0);
+        assert!((stats.files_per_second() - 100.0).abs() < 0.01);
         assert!((stats.mb_per_second() - 1.0).abs() < 0.01);
     }
 
@@ -584,8 +593,8 @@ mod tests {
     #[test]
     fn test_stats_zero_scan_time() {
         let stats = ScanStats::new();
-        assert_eq!(stats.files_per_second(), 0.0);
-        assert_eq!(stats.mb_per_second(), 0.0);
+        assert!(stats.files_per_second().abs() < f64::EPSILON);
+        assert!(stats.mb_per_second().abs() < f64::EPSILON);
     }
 
     #[test]
@@ -597,7 +606,7 @@ mod tests {
         stats.finding_count = 5;
         stats.scan_time_ms = 1000;
 
-        let display = format!("{}", stats);
+        let display = format!("{stats}");
         assert!(display.contains("Files scanned: 10"));
         assert!(display.contains("Files skipped: 2"));
         assert!(display.contains("Findings: 5"));

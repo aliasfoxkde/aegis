@@ -59,6 +59,7 @@ impl Suppression {
     }
 
     /// Create with a reason
+    #[must_use]
     pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
         self.reason = Some(reason.into());
         self
@@ -82,6 +83,7 @@ pub struct SuppressionRange {
 
 impl SuppressionRange {
     /// Whether this range covers the line
+    #[must_use]
     pub fn contains(&self, line: u32) -> bool {
         match self.end {
             Some(end) => line >= self.start && line <= end,
@@ -104,6 +106,7 @@ pub struct SuppressionManager {
 
 impl SuppressionManager {
     /// Create a new manager
+    #[must_use]
     pub fn new() -> Self {
         Self {
             suppressions: RwLock::new(HashSet::new()),
@@ -114,6 +117,10 @@ impl SuppressionManager {
     }
 
     /// Load suppressions from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] when `path` cannot be read as UTF-8 text.
     pub fn load_file(&mut self, path: &Path) -> std::io::Result<()> {
         let content = std::fs::read_to_string(path)?;
         self.parse_content(&content);
@@ -123,7 +130,9 @@ impl SuppressionManager {
     /// Parse suppressions from file content
     pub fn parse_content(&mut self, content: &str) {
         for (line_num, line) in content.lines().enumerate() {
-            let line_num = line_num as u32 + 1; // 1-indexed
+            let line_num = u32::try_from(line_num)
+                .unwrap_or(u32::MAX)
+                .saturating_add(1); // 1-indexed
 
             // Check for // aegis:ignore or # aegis:ignore. Rust fixtures often
             // need an inline directive after the expression being tested.
@@ -144,8 +153,7 @@ impl SuppressionManager {
                 let remaining = remaining
                     .trim()
                     .strip_suffix("*/")
-                    .map(str::trim)
-                    .unwrap_or(remaining);
+                    .map_or(remaining, str::trim);
                 self.parse_directive(line_num, remaining);
             }
         }
@@ -157,7 +165,7 @@ impl SuppressionManager {
         // `/* ... */` parses; the name tokenizer below already tolerates
         // stray characters from directives embedded in string literals.
         let rest = raw_rest.trim();
-        let rest = rest.strip_suffix("*/").map(str::trim).unwrap_or(rest);
+        let rest = rest.strip_suffix("*/").map_or(rest, str::trim);
 
         // Split an optional trailing reason: `:pat -- why`.
         let (spec, reason) = match rest.split_once(" -- ") {
@@ -227,6 +235,11 @@ impl SuppressionManager {
     }
 
     /// Check if a finding should be suppressed
+    ///
+    /// # Panics
+    ///
+    /// Panics if a suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn is_suppressed(&self, pattern: &str, line: u32) -> bool {
         let suppressed = self.file_suppressed.read().unwrap().is_some()
             || self
@@ -247,6 +260,11 @@ impl SuppressionManager {
     }
 
     /// The reason recorded for a suppressed `(pattern, line)`, if any.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn reason_for(&self, pattern: &str, line: u32) -> Option<String> {
         self.suppressions
             .read()
@@ -256,11 +274,21 @@ impl SuppressionManager {
     }
 
     /// Whether the whole file is suppressed via `aegis:ignore-file`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file-suppression lock was poisoned by a panic in
+    /// another thread.
     pub fn is_file_suppressed(&self) -> bool {
         self.file_suppressed.read().unwrap().is_some()
     }
 
     /// The reason recorded by `aegis:ignore-file`, if any.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file-suppression lock was poisoned by a panic in
+    /// another thread.
     pub fn file_reason(&self) -> Option<String> {
         self.file_suppressed
             .read()
@@ -270,6 +298,10 @@ impl SuppressionManager {
     }
 
     /// All `aegis:ignore-start` ranges, open or closed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the range lock was poisoned by a panic in another thread.
     pub fn ranges(&self) -> Vec<SuppressionRange> {
         self.ranges.read().unwrap().clone()
     }
@@ -280,21 +312,41 @@ impl SuppressionManager {
     }
 
     /// Add a suppression
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn add(&mut self, suppression: Suppression) {
         self.suppressions.write().unwrap().insert(suppression);
     }
 
     /// Remove a suppression
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn remove(&mut self, suppression: &Suppression) {
         self.suppressions.write().unwrap().remove(suppression);
     }
 
     /// Get all suppressions
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn all(&self) -> Vec<Suppression> {
         self.suppressions.read().unwrap().iter().cloned().collect()
     }
 
     /// Clear all suppressions
+    ///
+    /// # Panics
+    ///
+    /// Panics if any suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn clear(&mut self) {
         self.suppressions.write().unwrap().clear();
         self.ranges.write().unwrap().clear();
@@ -303,11 +355,21 @@ impl SuppressionManager {
     }
 
     /// Get suppression count
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn len(&self) -> usize {
         self.suppressions.read().unwrap().len()
     }
 
     /// Check if empty
+    ///
+    /// # Panics
+    ///
+    /// Panics if the suppression lock was poisoned by a panic in another
+    /// thread.
     pub fn is_empty(&self) -> bool {
         self.suppressions.read().unwrap().is_empty()
     }
@@ -478,7 +540,7 @@ mod tests {
     #[test]
     fn test_load_file_missing() {
         let mut manager = SuppressionManager::new();
-        let result = manager.load_file(std::path::Path::new("/nonexistent/file.txt"));
+        let result = manager.load_file(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
     }
 

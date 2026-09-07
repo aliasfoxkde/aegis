@@ -16,3 +16,6 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 lazy_static = { workspace = true }
 regex = { workspace = true }
+
+[lints]
+workspace = true

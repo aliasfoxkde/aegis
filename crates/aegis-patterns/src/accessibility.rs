@@ -34,13 +34,14 @@ fn style_extensions() -> Vec<String> {
     ]
 }
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // WCAG 1.1.1 Non-text Content
         Pattern {
             name: "missing-alt-text".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<img\b[^>]*(?:/>|>)"#.to_string(),
+            match_pattern: r"(?i)<img\b[^>]*(?:/>|>)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -66,7 +67,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "empty-button".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<button\b[^>]*>\s*</button>"#.to_string(),
+            match_pattern: r"(?is)<button\b[^>]*>\s*</button>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -83,14 +84,14 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\baria-label(?:ledby)?\s*=|\btitle\s*="#.to_string()),
+            exclude: Some(r"(?i)\baria-label(?:ledby)?\s*=|\btitle\s*=".to_string()),
             file_extensions: web_extensions(),
         },
         // WCAG 3.1.1 Language of Page
         Pattern {
             name: "missing-lang-attribute".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<html\b[^>]*>"#.to_string(),
+            match_pattern: r"(?i)<html\b[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -107,14 +108,14 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\blang\s*="#.to_string()),
+            exclude: Some(r"(?i)\blang\s*=".to_string()),
             file_extensions: web_extensions(),
         },
         // WCAG 2.4.4 Link Purpose - empty anchors have no link text
         Pattern {
             name: "empty-link-text".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<a\b[^>]*>\s*</a>"#.to_string(),
+            match_pattern: r"(?is)<a\b[^>]*>\s*</a>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -132,7 +133,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\baria-label(?:ledby)?\s*=|\btitle\s*=|\baria-hidden\b"#.to_string(),
+                r"(?i)\baria-label(?:ledby)?\s*=|\btitle\s*=|\baria-hidden\b".to_string(),
             ),
             file_extensions: web_extensions(),
         },
@@ -140,7 +141,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-form-label".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<input\b[^>]*>"#.to_string(),
+            match_pattern: r"(?i)<input\b[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -167,7 +168,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-title".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<head\b[^>]*>.*?</head>"#.to_string(),
+            match_pattern: r"(?is)<head\b[^>]*>.*?</head>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -182,7 +183,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)<title[\s>]"#.to_string()),
+            exclude: Some(r"(?i)<title[\s>]".to_string()),
             file_extensions: web_extensions(),
         },
         // WCAG 1.4.4 Resize Text - viewport meta that disables zoom
@@ -211,7 +212,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "font-size-below-12px".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?(?:px|pt)\b"#.to_string(),
+            match_pattern: r"(?i)font-size\s*:\s*(?:[0-9]|1[01])(?:\.\d+)?(?:px|pt)\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -226,14 +227,14 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)@media[^{]*print"#.to_string()),
+            exclude: Some(r"(?i)@media[^{]*print".to_string()),
             file_extensions: style_extensions(),
         },
         // WCAG 2.4.1 Bypass Blocks
         Pattern {
             name: "missing-skip-link".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<body\b[^>]*>.*?</body>"#.to_string(),
+            match_pattern: r"(?is)<body\b[^>]*>.*?</body>".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -255,7 +256,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-main-landmark".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<body\b[^>]*>.*?</body>"#.to_string(),
+            match_pattern: r"(?is)<body\b[^>]*>.*?</body>".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -279,7 +280,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "invalid-heading-level".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<h(?:[6-9]|[1-9][0-9])[\s>]"#.to_string(),
+            match_pattern: r"(?i)<h(?:[6-9]|[1-9][0-9])[\s>]".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -303,7 +304,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "autocomplete-missing".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<input\b[^>]*>"#.to_string(),
+            match_pattern: r"(?i)<input\b[^>]*>".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -330,7 +331,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-focus-indicator".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i):focus[^{]*\{[^}]*outline\s*:\s*(?:none|0)\b"#.to_string(),
+            match_pattern: r"(?i):focus[^{]*\{[^}]*outline\s*:\s*(?:none|0)\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -345,14 +346,14 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)box-shadow|outline-offset|border\b"#.to_string()),
+            exclude: Some(r"(?i)box-shadow|outline-offset|border\b".to_string()),
             file_extensions: style_extensions(),
         },
         // WCAG 1.3.1 - data tables need header cells
         Pattern {
             name: "missing-table-headers".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<table\b[^>]*>.*?</table>"#.to_string(),
+            match_pattern: r"(?is)<table\b[^>]*>.*?</table>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -378,7 +379,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "video-missing-captions".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<video\b[^>]*(?:/>|>.*?</video>)"#.to_string(),
+            match_pattern: r"(?is)<video\b[^>]*(?:/>|>.*?</video>)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -402,7 +403,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "audio-missing-transcript".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<audio\b[^>]*(?:/>|>.*?</audio>)"#.to_string(),
+            match_pattern: r"(?is)<audio\b[^>]*(?:/>|>.*?</audio>)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "low".to_string(),
@@ -429,7 +430,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "iframe-missing-title".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<iframe\b[^>]*>"#.to_string(),
+            match_pattern: r"(?i)<iframe\b[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -447,7 +448,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\btitle\s*=|\baria-label(?:ledby)?\s*=|\baria-hidden\b"#.to_string(),
+                r"(?i)\btitle\s*=|\baria-label(?:ledby)?\s*=|\baria-hidden\b".to_string(),
             ),
             file_extensions: web_extensions(),
         },
@@ -455,7 +456,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "marquee-element".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<marquee[\s>]"#.to_string(),
+            match_pattern: r"(?i)<marquee[\s>]".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -478,7 +479,7 @@ pub fn get() -> Vec<Pattern> {
             name: "blinking-content".to_string(),
             category: "accessibility".to_string(),
             match_pattern:
-                r#"(?i:animation.*:blink|@keyframes\s+.*\s+0%\s*\{\s*[^}]*opacity\s*:\s*0)"#
+                r"(?i:animation.*:blink|@keyframes\s+.*\s+0%\s*\{\s*[^}]*opacity\s*:\s*0)"
                     .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -497,7 +498,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)prefers-reduced-motion"#.to_string()),
+            exclude: Some(r"(?i)prefers-reduced-motion".to_string()),
             file_extensions: style_extensions(),
         },
         // Invalid ARIA roles commonly seen in the wild (correct is img, button, ...)
@@ -575,7 +576,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "click-without-keyboard".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<(?:div|span|p|img|li|ul|section)\b[^>]*\sonclick\s*="#.to_string(),
+            match_pattern: r"(?i)<(?:div|span|p|img|li|ul|section)\b[^>]*\sonclick\s*=".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -600,7 +601,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "autoplay-media".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)<(?:video|audio)\b[^>]*\bautoplay\b[^>]*>"#.to_string(),
+            match_pattern: r"(?i)<(?:video|audio)\b[^>]*\bautoplay\b[^>]*>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -615,14 +616,14 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\bmuted\b"#.to_string()),
+            exclude: Some(r"(?i)\bmuted\b".to_string()),
             file_extensions: web_extensions(),
         },
         // WCAG 3.3.2 - empty <label> provides no label text
         Pattern {
             name: "empty-label".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<label\b[^>]*>\s*</label>"#.to_string(),
+            match_pattern: r"(?is)<label\b[^>]*>\s*</label>".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -646,7 +647,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "accesskey-usage".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?i)\saccesskey\s*="#.to_string(),
+            match_pattern: r"(?i)\saccesskey\s*=".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -695,7 +696,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "single-character-heading".to_string(),
             category: "accessibility".to_string(),
-            match_pattern: r#"(?is)<h[1-6]\b[^>]*>\s*[^<\s]\s*</h[1-6]>"#.to_string(),
+            match_pattern: r"(?is)<h[1-6]\b[^>]*>\s*[^<\s]\s*</h[1-6]>".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),

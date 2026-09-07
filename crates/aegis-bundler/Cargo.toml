@@ -33,3 +33,6 @@ aegis-core = { path = "../aegis-core" }
 name = "aegis-bundler"
 path = "src/main.rs"
 
+
+[lints]
+workspace = true

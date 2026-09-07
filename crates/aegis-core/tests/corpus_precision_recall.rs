@@ -7,6 +7,7 @@
 //! as the corpus grows, never down to make a regression pass.
 
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use aegis_core::pattern::PatternDefinition;
@@ -157,7 +158,7 @@ fn corpus_meets_precision_and_recall_thresholds() {
                     misses.push(Miss {
                         file: relative.clone(),
                         line: *line,
-                        rule: (*rule).to_string(),
+                        rule: (*rule).clone(),
                     });
                 }
             }
@@ -197,22 +198,22 @@ fn corpus_meets_precision_and_recall_thresholds() {
 
     let mut failure = String::new();
     if recall < RECALL_THRESHOLD {
-        failure.push_str(&format!(
-            "recall {recall:.3} < {RECALL_THRESHOLD} — missed:\n"
-        ));
+        let _ = writeln!(failure, "recall {recall:.3} < {RECALL_THRESHOLD} — missed:");
         for miss in &misses {
-            failure.push_str(&format!(
-                "  {}:{} expected {}\n",
+            let _ = writeln!(
+                failure,
+                "  {}:{} expected {}",
                 miss.file, miss.line, miss.rule
-            ));
+            );
         }
     }
     if precision < PRECISION_THRESHOLD {
-        failure.push_str(&format!(
-            "precision {precision:.3} < {PRECISION_THRESHOLD} — false positives:\n"
-        ));
+        let _ = writeln!(
+            failure,
+            "precision {precision:.3} < {PRECISION_THRESHOLD} — false positives:"
+        );
         for fp in &false_positives {
-            failure.push_str(&format!("  {fp}\n"));
+            let _ = writeln!(failure, "  {fp}");
         }
     }
     assert!(failure.is_empty(), "corpus quality gate failed:\n{failure}");

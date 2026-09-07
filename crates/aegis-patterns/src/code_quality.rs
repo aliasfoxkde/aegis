@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -256,7 +257,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "double-negation".to_string(),
             category: "code-quality".to_string(),
-            match_pattern: r#"!![a-zA-Z_]"#.to_string(),
+            match_pattern: r"!![a-zA-Z_]".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

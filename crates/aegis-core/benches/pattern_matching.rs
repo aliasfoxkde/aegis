@@ -81,7 +81,7 @@ fn bench_scan_string(c: &mut Criterion) {
     let mut group = c.benchmark_group("scan_string");
     group.throughput(criterion::Throughput::Bytes(source.len() as u64));
     group.bench_function("bundled_registry_1k_lines", |b| {
-        b.iter(|| scanner.scan_string(black_box(&source), "bench.rs"))
+        b.iter(|| scanner.scan_string(black_box(&source), "bench.rs"));
     });
     group.finish();
 }
@@ -93,13 +93,15 @@ fn bench_extension_dispatch(c: &mut Criterion) {
     // cached dispatch path (the steady state of a real scan), not cache
     // construction.
     for ext in ["rs", "py", "html", "yaml"] {
-        let _ = scanner.scan_string(&source, &format!("warm.{ext}"));
+        let warmup = scanner.scan_string(&source, &format!("warm.{ext}"));
+        // Warm-up findings are discarded before the timed section begins.
+        drop(warmup);
     }
 
     let mut group = c.benchmark_group("extension_dispatch");
     for ext in ["rs", "py", "html", "yaml"] {
         group.bench_function(ext, |b| {
-            b.iter(|| scanner.scan_string(black_box(&source), &format!("bench.{ext}")))
+            b.iter(|| scanner.scan_string(black_box(&source), &format!("bench.{ext}")));
         });
     }
     group.finish();

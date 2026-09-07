@@ -45,13 +45,19 @@ pub struct Bundle {
 }
 
 /// Read patterns from a directory of YAML files
+///
+/// # Errors
+///
+/// Returns an error when `input_dir` does not exist or is not a directory,
+/// when a `*.yaml` file cannot be read or parsed, or when a pattern's
+/// `match` regex fails to compile.
 pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
     // A missing or non-directory input would otherwise walk zero entries
     // and silently produce a valid-looking but empty bundle.
     if !input_dir.is_dir() {
         anyhow::bail!(
-            "input directory does not exist or is not a directory: {:?}",
-            input_dir
+            "input directory does not exist or is not a directory: {}",
+            input_dir.display()
         );
     }
 
@@ -59,7 +65,7 @@ pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
 
     for entry in WalkDir::new(input_dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_type().is_file())
     {
         let path = entry.path();
@@ -67,21 +73,20 @@ pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
             continue;
         }
 
-        let content =
-            std::fs::read_to_string(path).with_context(|| format!("Failed to read {:?}", path))?;
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
 
         let yaml_patterns: Vec<Pattern> = serde_yaml::from_str(&content)
-            .with_context(|| format!("Failed to parse {:?}", path))?;
+            .with_context(|| format!("Failed to parse {}", path.display()))?;
 
         for yaml_pat in yaml_patterns {
             // Fail closed: a pattern whose regex will never compile must
             // abort the bundle build, not silently shrink coverage.
             if let Err(err) = regex::Regex::new(&yaml_pat.match_pattern) {
                 anyhow::bail!(
-                    "Invalid regex in pattern '{}' from {:?}: {}",
+                    "Invalid regex in pattern '{}' from {}: {err}",
                     yaml_pat.name,
-                    path,
-                    err
+                    path.display()
                 );
             }
 
@@ -93,6 +98,12 @@ pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
 }
 
 /// Create a bundle from patterns
+///
+/// # Panics
+///
+/// Panics if the system clock is set before the Unix epoch, so the created
+/// timestamp cannot be computed.
+#[must_use]
 pub fn create_bundle(patterns: Vec<Pattern>) -> Bundle {
     Bundle {
         schema_version: 2,
@@ -108,12 +119,17 @@ pub fn create_bundle(patterns: Vec<Pattern>) -> Bundle {
 }
 
 /// Serialize and compress a bundle
+///
+/// # Errors
+///
+/// Returns an error when the bundle cannot be serialized to JSON or the
+/// gzip stream cannot be written or finished.
 pub fn serialize_bundle(bundle: &Bundle) -> Result<Vec<u8>> {
-    let json = serde_json::to_string(bundle)?;
-
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::Write;
+
+    let json = serde_json::to_string(bundle)?;
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(json.as_bytes())?;
@@ -123,6 +139,11 @@ pub fn serialize_bundle(bundle: &Bundle) -> Result<Vec<u8>> {
 }
 
 /// Full bundle creation from directory
+///
+/// # Errors
+///
+/// Returns an error when [`read_patterns_from_dir`] fails or when the
+/// bundle cannot be serialized and compressed.
 pub fn create_bundle_from_dir(input_dir: &Path) -> Result<Vec<u8>> {
     let patterns = read_patterns_from_dir(input_dir)?;
     let bundle = create_bundle(patterns);
@@ -201,6 +222,9 @@ mod tests {
 
     #[test]
     fn test_serialize_bundle() {
+        use flate2::read::GzDecoder;
+        use std::io::Read;
+
         let patterns = vec![Pattern {
             name: "test".to_string(),
             category: "test".to_string(),
@@ -222,8 +246,6 @@ mod tests {
         let compressed = serialize_bundle(&bundle).unwrap();
 
         // Should be able to decompress
-        use flate2::read::GzDecoder;
-        use std::io::Read;
         let mut decoder = GzDecoder::new(&compressed[..]);
         let mut decompressed = String::new();
         decoder.read_to_string(&mut decompressed).unwrap();

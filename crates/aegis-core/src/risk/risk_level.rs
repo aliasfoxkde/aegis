@@ -16,6 +16,7 @@ pub enum RiskLevel {
 
 impl RiskLevel {
     /// Create from a score
+    #[must_use]
     pub fn from_score(score: i32) -> Self {
         if score == 0 {
             RiskLevel::None
@@ -31,6 +32,7 @@ impl RiskLevel {
     }
 
     /// Get the numeric value
+    #[must_use]
     pub fn value(&self) -> i32 {
         match self {
             RiskLevel::None => 0,
@@ -42,6 +44,7 @@ impl RiskLevel {
     }
 
     /// Get description
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             RiskLevel::None => "No risk detected",
@@ -75,7 +78,7 @@ impl std::str::FromStr for RiskLevel {
             "medium" | "med" => Ok(RiskLevel::Medium),
             "high" => Ok(RiskLevel::High),
             "critical" | "crit" => Ok(RiskLevel::Critical),
-            _ => Err(format!("Unknown risk level: {}", s)),
+            _ => Err(format!("Unknown risk level: {s}")),
         }
     }
 }

@@ -103,6 +103,7 @@ pub mod web_security;
 pub use examples::example_for;
 
 /// Get all pattern definitions
+#[must_use]
 pub fn all_patterns() -> Vec<Pattern> {
     let mut patterns = Vec::new();
     patterns.extend(secrets::get());
@@ -142,6 +143,7 @@ pub fn all_patterns() -> Vec<Pattern> {
 }
 
 /// Get patterns by category
+#[must_use]
 pub fn by_category(category: &str) -> Vec<Pattern> {
     match category {
         "secrets" => secrets::get(),

@@ -37,6 +37,7 @@ fn service_extensions() -> Vec<String> {
     ]
 }
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // Credentials in query strings end up in access logs, browser
@@ -59,7 +60,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)example\.(?:com|org|net)|your[-_]|placeholder|<[^>]*>|\$\{|insert[-_]?key|xxx"#.to_string(),
+                r"(?i)example\.(?:com|org|net)|your[-_]|placeholder|<[^>]*>|\$\{|insert[-_]?key|xxx".to_string(),
             ),
             file_extensions: service_extensions(),
         },
@@ -68,7 +69,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "bearer-token-logged".to_string(),
             category: "api-integration".to_string(),
-            match_pattern: r#"(?i)\b(?:console|logger|logging|log)\s*\.\s*(?:log|debug|info|warn|error|trace)\s*\([^)\n]*(?:authorization|bearer|auth[_-]?token|access[_-]?token)"#.to_string(),
+            match_pattern: r"(?i)\b(?:console|logger|logging|log)\s*\.\s*(?:log|debug|info|warn|error|trace)\s*\([^)\n]*(?:authorization|bearer|auth[_-]?token|access[_-]?token)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -82,7 +83,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)redact|scrub|mask|placeholder|your[-_]?token"#.to_string()),
+            exclude: Some(r"(?i)redact|scrub|mask|placeholder|your[-_]?token".to_string()),
             file_extensions: js_extensions(),
         },
         // Disabling certificate validation re-enables interception of every
@@ -104,7 +105,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\b(?:example|test|spec|dummy|mock)\b"#.to_string()),
+            exclude: Some(r"(?i)\b(?:example|test|spec|dummy|mock)\b".to_string()),
             file_extensions: service_extensions(),
         },
         // Webhook endpoints that never verify a signature accept forged
@@ -130,7 +131,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)signature|signing[_-]?secret|hmac|\bverify|raw[_-]?body|x-hub|x-signature"#.to_string(),
+                r"(?i)signature|signing[_-]?secret|hmac|\bverify|raw[_-]?body|x-hub|x-signature".to_string(),
             ),
             file_extensions: vec![
                 "js".to_string(),
@@ -144,7 +145,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "api-client-no-timeout".to_string(),
             category: "api-integration".to_string(),
-            match_pattern: r#"(?i)\baxios\.create\s*\(\s*\{[^}\n]*\}"#.to_string(),
+            match_pattern: r"(?i)\baxios\.create\s*\(\s*\{[^}\n]*\}".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -158,7 +159,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\btimeout\b"#.to_string()),
+            exclude: Some(r"(?i)\btimeout\b".to_string()),
             file_extensions: js_extensions(),
         },
         // Parsing the body before checking `response.ok` turns 4xx/5xx
@@ -167,7 +168,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "api-response-status-unchecked".to_string(),
             category: "api-integration".to_string(),
-            match_pattern: r#"(?i)await\s+[^;\n]{0,60}\bfetch\b[^;\n]{0,40}\.json\s*\(\s*\)"#.to_string(),
+            match_pattern: r"(?i)await\s+[^;\n]{0,60}\bfetch\b[^;\n]{0,40}\.json\s*\(\s*\)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -183,7 +184,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\.ok\b|\.status\b|checkStatus|assert"#.to_string()),
+            exclude: Some(r"(?i)\.ok\b|\.status\b|checkStatus|assert".to_string()),
             file_extensions: js_extensions(),
         },
         // Fixed-interval polling hammers the API and hides failures behind
@@ -191,7 +192,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "api-polling-loop".to_string(),
             category: "api-integration".to_string(),
-            match_pattern: r#"\bsetInterval\s*\([^)\n]{0,120}\bfetch\b"#.to_string(),
+            match_pattern: r"\bsetInterval\s*\([^)\n]{0,120}\bfetch\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -208,7 +209,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"\bbackoff\b|\bjitter\b|\bretry\b"#.to_string()),
+            exclude: Some(r"\bbackoff\b|\bjitter\b|\bretry\b".to_string()),
             file_extensions: js_extensions(),
         },
         // Wildcard origin plus credentials lets any site make authenticated
@@ -255,7 +256,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\btest\b|\bspec\b|\bmock\b|allow[_-]?origin|proxy|redirect"#.to_string(),
+                r"(?i)\btest\b|\bspec\b|\bmock\b|allow[_-]?origin|proxy|redirect".to_string(),
             ),
             file_extensions: service_extensions(),
         },

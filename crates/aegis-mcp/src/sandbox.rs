@@ -5,14 +5,12 @@ use std::path::{Path, PathBuf};
 /// Check if a path is safe (within allowed boundaries)
 pub fn is_path_safe(path: &PathBuf) -> bool {
     // Get current working directory and resolve it to an absolute, canonical path
-    let cwd = match std::env::current_dir() {
-        Ok(c) => c,
-        Err(_) => return false,
+    let Ok(cwd) = std::env::current_dir() else {
+        return false;
     };
 
-    let cwd = match cwd.canonicalize() {
-        Ok(c) => c,
-        Err(_) => return false,
+    let Ok(cwd) = cwd.canonicalize() else {
+        return false;
     };
 
     // Resolve the input path to an absolute path
@@ -22,13 +20,10 @@ pub fn is_path_safe(path: &PathBuf) -> bool {
         path.clone()
     };
 
-    // Canonicalize the absolute path to resolve symlinks and .. components
-    let abs_path = match abs_path.canonicalize() {
-        Ok(p) => p,
-        // If the path doesn't exist, check if normalized path would be within cwd
-        Err(_) => {
-            return lexical_contains(&cwd, &abs_path);
-        }
+    // Canonicalize the absolute path to resolve symlinks and .. components.
+    // If the path doesn't exist, check if normalized path would be within cwd
+    let Ok(abs_path) = abs_path.canonicalize() else {
+        return lexical_contains(&cwd, &abs_path);
     };
 
     // Check if the canonical path starts with cwd
@@ -176,11 +171,7 @@ mod tests {
         assert!(is_path_safe(&safe_nonexistent));
 
         let outside = cwd.join("..").join("outside-aegis.txt");
-        if !outside
-            .canonicalize()
-            .map(|p| p.starts_with(&cwd))
-            .unwrap_or(false)
-        {
+        if !outside.canonicalize().is_ok_and(|p| p.starts_with(&cwd)) {
             assert!(!is_path_safe(&outside));
         }
     }

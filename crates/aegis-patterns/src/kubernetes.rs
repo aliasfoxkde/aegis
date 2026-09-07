@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "k8s-allow-privilege-escalation".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"allowPrivilegeEscalation:\s*(true|null)"#.to_string(),
+            match_pattern: r"allowPrivilegeEscalation:\s*(true|null)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "k8s-empty-dir-memory-backed".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"emptyDir:\s*\n\s*medium:\s*Memory"#.to_string(),
+            match_pattern: r"emptyDir:\s*\n\s*medium:\s*Memory".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hostnetwork".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(?i)securityContext:\s*\n\s*hostNetwork:\s*true"#.to_string(),
+            match_pattern: r"(?i)securityContext:\s*\n\s*hostNetwork:\s*true".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hostpid".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(?i)securityContext:\s*\n\s*hostPID:\s*true"#.to_string(),
+            match_pattern: r"(?i)securityContext:\s*\n\s*hostPID:\s*true".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-latest-tag".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(?i)image:\s*[^:\n]+:latest"#.to_string(),
+            match_pattern: r"(?i)image:\s*[^:\n]+:latest".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "k8s-missing-capability-drop".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"securityContext"#.to_string(),
+            match_pattern: r"securityContext".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "k8s-no-network-policy".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(NetworkPolicy|networkPolicy).*:\s*\|?\s*-\s*\{"#.to_string(),
+            match_pattern: r"(NetworkPolicy|networkPolicy).*:\s*\|?\s*-\s*\{".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -119,7 +120,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "no-resource-limits".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(?i)(containers:|-\s+name:).*?(image:|containers:)|resources:\s*\n\s*limits:"#.to_string(),
+            match_pattern: r"(?i)(containers:|-\s+name:).*?(image:|containers:)|resources:\s*\n\s*limits:".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -135,7 +136,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-privileged-container".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(?i)securityContext:\s*\n\s*privileged:\s*true"#.to_string(),
+            match_pattern: r"(?i)securityContext:\s*\n\s*privileged:\s*true".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -151,7 +152,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "k8s-run-as-non-root".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r#"(runAsNonRoot|runAsRoot):\s*(true|false)"#.to_string(),
+            match_pattern: r"(runAsNonRoot|runAsRoot):\s*(true|false)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

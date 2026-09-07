@@ -22,7 +22,7 @@ fn yaml_pattern() -> Pattern {
         tags: vec!["secrets".to_string(), "api-key".to_string()],
         env_var: false,
         binary: false,
-        exclude: Some(r#"(?i)example|placeholder"#.to_string()),
+        exclude: Some(r"(?i)example|placeholder".to_string()),
         file_extensions: vec!["js".to_string(), "ts".to_string()],
     }
 }
@@ -43,7 +43,7 @@ fn bundler_bundle_loads_into_core_registry() {
     assert_eq!(def.match_pattern, yaml_pattern().match_pattern);
     assert_eq!(
         def.exclude_pattern.as_deref(),
-        Some(r#"(?i)example|placeholder"#)
+        Some(r"(?i)example|placeholder")
     );
     assert_eq!(def.file_extensions, vec!["js", "ts"]);
 

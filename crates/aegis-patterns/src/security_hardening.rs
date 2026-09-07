@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "weak-ssl".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(ssl_v2|ssl_v3|tls_1[01]|md5|sha1)\s*[=:]"#.to_string(),
+            match_pattern: r"(?i)(ssl_v2|ssl_v3|tls_1[01]|md5|sha1)\s*[=:]".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "insecure-random".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)Math\.random\(\)"#.to_string(),
+            match_pattern: r"(?i)Math\.random\(\)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -90,7 +91,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "security-hardening-path-traversal".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)\b(?:open|read|readFile|readFileSync|writeFile|unlink|load|include|require|join|fopen|sendFile|createReadStream|createWriteStream|Path)[\w:.!]*\s*\([^)\n]*\+[^)\n]*(?:req\.|params|query|user|input)"#.to_string(),
+            match_pattern: r"(?i)\b(?:open|read|readFile|readFileSync|writeFile|unlink|load|include|require|join|fopen|sendFile|createReadStream|createWriteStream|Path)[\w:.!]*\s*\([^)\n]*\+[^)\n]*(?:req\.|params|query|user|input)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -106,7 +107,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "xss-vulnerability".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(innerHTML|outerHTML|document\.write)\s*\([^)]*\+"#.to_string(),
+            match_pattern: r"(?i)(innerHTML|outerHTML|document\.write)\s*\([^)]*\+".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -122,7 +123,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "insecure-cookie".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)cookie.*(secure|samesite).*=.*false"#.to_string(),
+            match_pattern: r"(?i)cookie.*(secure|samesite).*=.*false".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -170,7 +171,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "private-key-exposed".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(PRIVATE\s+KEY|-----\s*BEGIN\s+.*PRIVATE\s+KEY-----)"#.to_string(),
+            match_pattern: r"(?i)(PRIVATE\s+KEY|-----\s*BEGIN\s+.*PRIVATE\s+KEY-----)".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -197,7 +198,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"#
+                r"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"
                     .to_string(),
             ),
             file_extensions: Vec::new(),
@@ -205,7 +206,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "bearer-token-url".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)bearer\s+[A-Za-z0-9_\-\.]+"#.to_string(),
+            match_pattern: r"(?i)bearer\s+[A-Za-z0-9_\-\.]+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -232,7 +233,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"#
+                r"(?i)\bexample\.(?:com|org|net)\b|[<{\[]|username\s*:\s*password|user\s*:\s*pass\b"
                     .to_string(),
             ),
             file_extensions: Vec::new(),
@@ -279,7 +280,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "github-token".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}"#.to_string(),
+            match_pattern: r"(?i)(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -295,7 +296,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "slack-token".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)xox[baprs]-[0-9]{10,12}-[0-9]{10,12}-[A-Za-z0-9]+"#.to_string(),
+            match_pattern: r"(?i)xox[baprs]-[0-9]{10,12}-[0-9]{10,12}-[A-Za-z0-9]+".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -311,7 +312,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "stripe-api-key".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}"#.to_string(),
+            match_pattern: r"(?i)(sk|pk)_(?:live|test)_[A-Za-z0-9]{24,}".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -327,7 +328,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sendgrid-api-key".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}"#.to_string(),
+            match_pattern: r"(?i)SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -343,7 +344,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "twilio-api-key".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)SK[a-zA-Z0-9]{32}"#.to_string(),
+            match_pattern: r"(?i)SK[a-zA-Z0-9]{32}".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -407,7 +408,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "deserialization-vulnerability".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\("#.to_string(),
+            match_pattern: r"(?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\(".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -423,7 +424,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "eval-usage".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)\beval\s*\("#.to_string(),
+            match_pattern: r"(?i)\beval\s*\(".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -439,7 +440,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "setuid-root".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)chmod\s+[47]\d{3}"#.to_string(),
+            match_pattern: r"(?i)chmod\s+[47]\d{3}".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -455,7 +456,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "world-writable".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)chmod\s+777|chmod\s+a\+rw"#.to_string(),
+            match_pattern: r"(?i)chmod\s+777|chmod\s+a\+rw".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -471,7 +472,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sensitive-file-access".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(/etc/passwd|/etc/shadow|\.ssh|\.aws|\.git/config)"#.to_string(),
+            match_pattern: r"(?i)(/etc/passwd|/etc/shadow|\.ssh|\.aws|\.git/config)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -487,7 +488,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ldap-injection".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(ldap|LDAP).*\+.*request|screen\s*name"#.to_string(),
+            match_pattern: r"(?i)(ldap|LDAP).*\+.*request|screen\s*name".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -503,7 +504,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "xpath-injection".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(?:xpath|XPath)[^\n]*\+[^\n]*(?:input|param|query)"#.to_string(),
+            match_pattern: r"(?i)(?:xpath|XPath)[^\n]*\+[^\n]*(?:input|param|query)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -519,7 +520,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ssti-template".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(template|render|view)\s*\.\s*(format|render|make)"#.to_string(),
+            match_pattern: r"(?i)(template|render|view)\s*\.\s*(format|render|make)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
