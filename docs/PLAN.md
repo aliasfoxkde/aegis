@@ -7,16 +7,17 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-07, phases 0–7 of the improvement plan merged)
+## Current state (2026-09-07, phases 0–10 of the improvement plan merged; v0.4.0 released)
 
 | Dimension | State |
 | --- | --- |
 | Patterns | 633 across 33 categories, per-extension dispatch, entropy + exclude gates |
-| Engine | Suppression directives (line/range/file/reason), baseline filtering, `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode |
+| Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 729 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
-| Surfaces | CLI (human/json/sarif), MCP server, Unix-socket daemon, wasm build, 5-platform release tarballs |
-| Known defects | Rule liveness and hygiene are CI-enforced; the CI-parity self-scan is clean (0 findings as of Phase 9 — the two fixture residues were fixed by correcting their suppression directives) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 735 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
+| Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server, Unix-socket daemon, wasm build, 5-platform release tarballs |
+| Release | v0.4.0 published (2026-09-07): 9 assets, `CHANGELOG.md` tracking begins here; workflows bumped to Node-24-native action releases (#95) |
+| Known defects | None open. The CI-parity self-scan is clean (0 findings); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
 [docs/architecture/OVERVIEW.md](architecture/OVERVIEW.md). Per-category
@@ -249,12 +250,36 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   custom rule fires); GitForge hook routes the cargo gates; all workflow
   YAMLs validated.
 
-### Phase 10 — Release — IN PROGRESS (this branch)
+### Phase 10 — Release — DELIVERED (v0.4.0, #94)
 
 - Full gates, version bump PR (`cargo update -w` for workspace lock
-  entries, `fuzz/Cargo.lock` refreshed), changelog, squash merge, tag push
-  with the bumped commit verified before tagging, release workflow
-  publishes all 9 assets.
+  entries, `fuzz/Cargo.lock` refreshed), `CHANGELOG.md` created
+  (Keep a Changelog), squash merge, tag push with the bumped commit
+  verified before tagging, release workflow published all 9 assets
+  (2026-09-07). Follow-up (#95): the four actions the release logs
+  flagged for Node 20 deprecation moved to Node-24-native releases
+  (checkout v7.0.1, upload-artifact v7.0.1, download-artifact v8.0.1,
+  action-gh-release v3.0.3).
+
+---
+
+## Post-0.4.0 candidates
+
+Not committed to; recorded so the next phase starts from a written
+shortlist rather than a fresh audit.
+
+- **crates.io publishing** — the release workflow builds and attaches
+  binaries but does not `cargo publish` the seven workspace crates; a
+  publish job (or a deliberate decision not to publish) would close the
+  distribution gap.
+- **Coverage ratchet** — the codecov gate sits at the measured 97.24%;
+  raising the patch threshold gradually walks toward the 99% target.
+- **MCP/daemon protocol conformance tests** — the surfaces are e2e
+  smoke-tested; a conformance fixture suite (documented request/response
+  pairs replayed in CI) would pin the wire format against regressions.
+- **Benchmark trend tracking** — criterion results are produced per run
+  but not compared across runs; a stored baseline (or a performance
+  regression job) would turn measurements into a gate.
 
 ---
 
