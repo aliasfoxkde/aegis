@@ -86,3 +86,7 @@ tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-go", "dep:tree-sitter-rust", 
 [[bench]]
 name = "pattern_matching"
 harness = false
+
+[[bench]]
+name = "scanner_init"
+harness = false
