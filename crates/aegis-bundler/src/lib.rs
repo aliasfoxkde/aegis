@@ -46,6 +46,15 @@ pub struct Bundle {
 
 /// Read patterns from a directory of YAML files
 pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
+    // A missing or non-directory input would otherwise walk zero entries
+    // and silently produce a valid-looking but empty bundle.
+    if !input_dir.is_dir() {
+        anyhow::bail!(
+            "input directory does not exist or is not a directory: {:?}",
+            input_dir
+        );
+    }
+
     let mut patterns = Vec::new();
 
     for entry in WalkDir::new(input_dir)

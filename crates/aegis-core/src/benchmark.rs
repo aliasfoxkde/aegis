@@ -127,6 +127,55 @@ mod tests {
         let benchmark = ScanBenchmark::new(duration, &stats, 10);
         assert_eq!(benchmark.files_scanned, 50);
         assert_eq!(benchmark.findings_count, 10);
-        assert!(benchmark.files_per_second > 0.0);
+        assert!((benchmark.files_per_second - 500.0).abs() < f64::EPSILON);
+        assert!((benchmark.mb_per_second - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn zero_duration_yields_zero_throughput() {
+        let stats = ScanStats {
+            files_scanned: 100,
+            bytes_scanned: 4096,
+            ..Default::default()
+        };
+        let benchmark = ScanBenchmark::new(Duration::ZERO, &stats, 0);
+        assert_eq!(benchmark.files_per_second, 0.0);
+        assert_eq!(benchmark.mb_per_second, 0.0);
+    }
+
+    #[test]
+    fn benchmark_json_reports_findings_by_severity() {
+        let duration = Duration::from_millis(250);
+        let stats = ScanStats {
+            files_scanned: 10,
+            bytes_scanned: 2048,
+            ..Default::default()
+        };
+        let benchmark = ScanBenchmark::new(duration, &stats, 3);
+        let make_finding = |severity: &str| {
+            Finding::new(
+                "test-pattern",
+                "test-category",
+                severity,
+                "medium",
+                crate::finding::Location::new("src.rs", 1, 1, "needle"),
+                "needle",
+                "Test finding",
+            )
+        };
+        let findings = [
+            make_finding("high"),
+            make_finding("high"),
+            make_finding("low"),
+        ];
+        let report = format_benchmark_json("baseline", &benchmark, &findings);
+        assert_eq!(report["name"], "baseline");
+        assert_eq!(report["files_scanned"], 10);
+        assert_eq!(report["bytes_scanned"], 2048);
+        assert_eq!(report["findings_count"], 3);
+        assert_eq!(report["duration_ms"], 250);
+        assert_eq!(report["findings_by_severity"]["high"], 2);
+        assert_eq!(report["findings_by_severity"]["low"], 1);
+        assert!(report["timestamp"].as_u64().expect("unix timestamp") > 0);
     }
 }

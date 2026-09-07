@@ -1080,6 +1080,140 @@ func main() {}
         let result = analyzer.analyze_file(std::path::Path::new("/nonexistent/file.rs"));
         assert!(result.is_err());
     }
+
+    #[test]
+    fn analyze_file_reads_real_sources() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("sample.go");
+        std::fs::write(&file, "package main\n\nfunc main() {}\n").expect("write sample");
+
+        let analyzer = AstAnalyzer::new(Language::Go);
+        let result = analyzer.analyze_file(&file).expect("analyze file");
+        assert!(result.complexity.loc > 0);
+    }
+
+    #[test]
+    fn from_extension_maps_every_supported_variant_case_insensitively() {
+        let cases: &[(&str, Language)] = &[
+            ("GO", Language::Go),
+            ("RS", Language::Rust),
+            ("PY", Language::Python),
+            ("js", Language::JavaScript),
+            ("mjs", Language::JavaScript),
+            ("cjs", Language::JavaScript),
+            ("ts", Language::TypeScript),
+            ("mts", Language::TypeScript),
+            ("cts", Language::TypeScript),
+            ("java", Language::Java),
+            ("c", Language::C),
+            ("h", Language::C),
+            ("cpp", Language::Cpp),
+            ("cc", Language::Cpp),
+            ("cxx", Language::Cpp),
+            ("hpp", Language::Cpp),
+            ("hxx", Language::Cpp),
+        ];
+        for (extension, language) in cases {
+            assert_eq!(
+                AstAnalyzer::from_extension(extension).map(|a| a.language),
+                Some(*language),
+                "extension {extension}"
+            );
+        }
+        assert_eq!(AstAnalyzer::from_extension("TXT"), None);
+    }
+
+    #[test]
+    fn inspect_source_classifies_non_sources() {
+        let no_extension = AstAnalyzer::inspect_source("text", "README");
+        assert_eq!(no_extension.status, AstInspectionStatus::NotApplicable);
+        assert_eq!(
+            no_extension.reason.as_deref(),
+            Some("source_has_no_extension")
+        );
+        assert!(!no_extension.required);
+
+        let unsupported = AstAnalyzer::inspect_source("text", "notes.weird");
+        assert_eq!(unsupported.status, AstInspectionStatus::NotApplicable);
+        assert_eq!(unsupported.reason.as_deref(), Some("unsupported_extension"));
+
+        let error_source = AstAnalyzer::inspect_source("{{{", "broken.rs");
+        assert_eq!(error_source.language.as_deref(), Some("rs"));
+        #[cfg(feature = "tree-sitter")]
+        assert_eq!(error_source.status, AstInspectionStatus::ParseError);
+        #[cfg(not(feature = "tree-sitter"))]
+        assert_eq!(error_source.status, AstInspectionStatus::Fallback);
+    }
+
+    #[test]
+    fn ast_node_type_queries_reach_deep_descendants() {
+        let tree = AstNode {
+            node_type: "root".to_string(),
+            text: String::new(),
+            start_byte: 0,
+            end_byte: 0,
+            children: vec![AstNode {
+                node_type: "branch".to_string(),
+                text: String::new(),
+                start_byte: 0,
+                end_byte: 0,
+                children: vec![
+                    AstNode {
+                        node_type: "leaf".to_string(),
+                        text: String::new(),
+                        start_byte: 0,
+                        end_byte: 0,
+                        children: Vec::new(),
+                    },
+                    AstNode {
+                        node_type: "leaf".to_string(),
+                        text: String::new(),
+                        start_byte: 0,
+                        end_byte: 0,
+                        children: Vec::new(),
+                    },
+                ],
+            }],
+        };
+        assert!(tree.is_type("root"));
+        assert!(!tree.is_type("leaf"));
+        // Only descendants: the root itself never appears in the results.
+        assert_eq!(tree.descendants_of_type("leaf").len(), 2);
+        assert!(tree.descendants_of_type("root").is_empty());
+    }
+
+    #[test]
+    fn taint_tracker_sanitization_clears_taint() {
+        let mut tracker = TaintTracker::new();
+        assert!(!tracker.is_tainted("input"));
+
+        tracker.taint("input");
+        assert!(tracker.is_tainted("input"));
+
+        // A tainted variable that is also marked sanitized is treated as
+        // clean; an untouched variable stays unaffected.
+        tracker.sanitize("input");
+        assert!(!tracker.is_tainted("input"));
+
+        tracker.sanitize("other");
+        assert!(!tracker.is_tainted("other"));
+    }
+
+    #[test]
+    fn security_patterns_catalog_is_non_empty_and_well_formed() {
+        let patterns = get_security_patterns();
+        assert!(!patterns.is_empty());
+        for pattern in &patterns {
+            assert!(
+                !pattern.node_types.is_empty(),
+                "{} has node types",
+                pattern.name
+            );
+            assert!(!pattern.description.is_empty());
+            assert!(!pattern.severity.is_empty());
+        }
+        assert!(patterns.iter().any(|p| p.name == "sql-injection"));
+    }
 }
 
 // =============================================================================
