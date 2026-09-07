@@ -1,0 +1,85 @@
+# Changelog
+
+All notable changes to Aegis are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Binary assets for
+every release are attached to the matching GitHub release.
+
+## [Unreleased]
+
+## [0.4.0] - 2026-09-07
+
+### Added
+
+- `-c/--config` is wired on every scan invocation: a built-in preset
+  (`production`, `pipeline`, `development`, `mcp-integration`) or a path to a
+  JSON profile file supplies defaults for flags the operator did not set
+  (output format, categories, severity threshold); explicit flags always win.
+  Unknown names fail with the list of valid presets, and the built-in presets
+  are tested field-by-field against the shipped `config/profiles/*.json` so
+  they cannot drift.
+- Rule-liveness harness: 633 provably-firing example matches, one per bundled
+  pattern, so a pattern that cannot match anything fails CI.
+- Custom user patterns via `.aegis.yml` in the scan root, merged into the
+  registry before the walk.
+
+### Fixed
+
+- **Baseline rescans stay green**: `scan` no longer scans the baseline file
+  itself. A baseline records findings verbatim, so a rescan that included it
+  re-flagged every documented secret and kept the exit code red even when no
+  new findings existed. The baseline path is now excluded from the walk, and
+  the exit-code contract is verified end-to-end (0 = no new findings,
+  1 = new findings only).
+- **`stats` agrees with `findings`**: stdin (`--stdin`), env (`--env`), and
+  diff (`--diff`) scans folded findings into ad-hoc counters, so
+  `--format json` could emit `finding_count: 0` next to a non-empty
+  `findings` array. All scan paths now aggregate through
+  `ScanStats::add_finding`; reports and receipts agree with the finding list.
+- **WASM scanner works**: `scan_content` previously scanned nothing; the WASM
+  build now bundles the full pattern set.
+- **Vendor-prefixed secret rules are file-active** again after the noise
+  audit.
+- **Noise audit round two**: repaired noisy patterns and deduplicated AST
+  rules, cutting the project's self-scan from 941 to 817 findings and the
+  CI-parity self-scan (secrets, security-hardening, web-security at high+) to
+  0 findings.
+- Suppression fixtures in the MCP and daemon suites now name the rules that
+  actually fire and sit on the finding's own line, so inline suppression is
+  genuinely exercised.
+
+### Changed
+
+- Lazy per-extension pattern compilation: patterns are grouped and compiled
+  once per file extension, so a TypeScript rule never runs against a Rust
+  file and unreachable regexes are never compiled.
+- Workspace-wide strict lint enforcement (`clippy` all + pedantic,
+  `rust_2018_idioms`, `unused_qualifications`, `missing_docs`) with
+  `-D warnings` in CI; fail-closed scanner initialization.
+- Test coverage swept to 98% line coverage across the workspace, with a
+  coverage gate in CI.
+- Documentation accuracy audit: every user-facing claim re-verified against
+  the built binaries; public API fully documented (`missing_docs` enforced).
+
+## [0.3.0] - 2026-09-06
+
+### Added
+
+- `--staged` pre-commit mode: scan the git index instead of the working tree.
+- `--baseline` filtering: record a scan with `--format json`, then rescan with
+  `--baseline` so the exit code reflects new findings only.
+- Inline suppression directives with reasons (`aegis:ignore:<patterns> --
+  why`), suppression ranges (`ignore-start`/`ignore-end`), file-level
+  ignores, and expanded AST coverage.
+- Coverage gate, Criterion benchmarks, fuzz targets, and a corpus harness.
+
+## [0.2.7] - 2026-09-06
+
+### Fixed
+
+- Release pipeline fixes; supersedes the poisoned v0.2.6 draft release.
+
+[Unreleased]: https://github.com/aliasfoxkde/aegis/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aliasfoxkde/aegis/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/aliasfoxkde/aegis/compare/v0.2.7...v0.3.0
+[0.2.7]: https://github.com/aliasfoxkde/aegis/compare/v0.2.6-final...v0.2.7

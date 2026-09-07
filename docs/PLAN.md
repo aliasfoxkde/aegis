@@ -232,7 +232,7 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   claims; corrected flag placement, counts, release assets, and MCP
   surface descriptions; documented real gaps honestly.
 
-### Phase 9 — E2E + local CI validation — IN PROGRESS (this branch)
+### Phase 9 — E2E + local CI validation — DELIVERED (#93)
 
 - Full e2e pass: every CLI scan mode, MCP handshake/tools, daemon socket,
   staged mode, custom patterns, baseline, ignore semantics.
@@ -242,9 +242,14 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   built-in presets synced with `config/profiles/*.json` (test-enforced),
   unused `ratelimit` dependency removed, and the CI-parity self-scan is
   clean (0 findings).
-- Validate workflows locally via GitForge where supported.
+- Baseline rescans exclude the baseline artifact itself, so the exit code
+  returns to 0 with no new findings (verified e2e: 1 → 0 → 1 with a clean
+  delta).
+- Bundler roundtrip verified e2e (YAML → bundle → MCP `update_bundle` →
+  custom rule fires); GitForge hook routes the cargo gates; all workflow
+  YAMLs validated.
 
-### Phase 10 — Release
+### Phase 10 — Release — IN PROGRESS (this branch)
 
 - Full gates, version bump PR (`cargo update -w` for workspace lock
   entries, `fuzz/Cargo.lock` refreshed), changelog, squash merge, tag push
