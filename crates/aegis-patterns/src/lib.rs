@@ -35,6 +35,35 @@ pub struct Pattern {
     pub file_extensions: Vec<String>,
 }
 
+/// Convert a bundled pattern into the engine's runtime definition.
+///
+/// This is the single canonical conversion: the CLI, MCP server, daemon,
+/// WASM bindings, and the test harnesses all build their scanners through
+/// it instead of maintaining private copies of the field mapping.
+impl From<Pattern> for aegis_core::PatternDefinition {
+    fn from(p: Pattern) -> Self {
+        aegis_core::PatternDefinition {
+            name: p.name,
+            category: p.category,
+            match_pattern: p.match_pattern,
+            enabled: p.enabled,
+            severity: aegis_core::Severity::parse(&p.severity)
+                .unwrap_or(aegis_core::Severity::Medium),
+            confidence: aegis_core::Confidence::parse(&p.confidence)
+                .unwrap_or(aegis_core::Confidence::Medium),
+            min_entropy: p.min_entropy,
+            description: p.description,
+            reference: p.reference,
+            tags: p.tags,
+            env_var: p.env_var,
+            binary: p.binary,
+            exclude_pattern: p.exclude,
+            file_extensions: p.file_extensions,
+            remediation: None,
+        }
+    }
+}
+
 pub mod accessibility;
 pub mod ai_detection;
 pub mod ai_safety;

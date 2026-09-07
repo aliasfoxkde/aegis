@@ -3,6 +3,8 @@
 //! Provides WASM bindings for Aegis security scanning.
 //! This allows running Aegis pattern matching in browser environments.
 
+use std::sync::OnceLock;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -33,6 +35,29 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
+/// The shared scanner over the full bundled pattern set.
+///
+/// Compilation is lazy (first call pays for it) and the result is reused
+/// for every subsequent scan. On `wasm32` there is a single thread, so a
+/// `OnceLock` is all the synchronization needed.
+fn bundled_scanner() -> Result<&'static aegis_core::Scanner, JsError> {
+    static SCANNER: OnceLock<Result<aegis_core::Scanner, String>> = OnceLock::new();
+
+    match SCANNER.get_or_init(|| {
+        let definitions: Vec<aegis_core::pattern::PatternDefinition> =
+            aegis_patterns::all_patterns()
+                .into_iter()
+                .map(Into::into)
+                .collect();
+        aegis_core::Scanner::from_definitions(definitions).map_err(|e| e.to_string())
+    }) {
+        Ok(scanner) => Ok(scanner),
+        Err(message) => Err(JsError::new(&format!(
+            "bundled pattern compilation failed: {message}"
+        ))),
+    }
+}
+
 /// Scan content for patterns
 ///
 /// # Arguments
@@ -40,10 +65,12 @@ pub fn init() {
 /// * `source` - The source name/identifier for findings
 ///
 /// # Returns
-/// JSON string containing an array of findings
+/// JSON string containing an array of findings. Throws a `JsError` if the
+/// bundled patterns cannot be compiled — a broken bundle is a setup error,
+/// not an empty result.
 #[wasm_bindgen]
-pub fn scan_content(content: &str, source: &str) -> String {
-    let scanner = aegis_core::Scanner::new();
+pub fn scan_content(content: &str, source: &str) -> Result<String, JsError> {
+    let scanner = bundled_scanner()?;
 
     let findings = scanner.scan_string(content, source);
 
@@ -64,12 +91,66 @@ pub fn scan_content(content: &str, source: &str) -> String {
         })
         .collect();
 
-    serde_json::to_string(&wasm_findings).unwrap_or_else(|_| "[]".to_string())
+    serde_json::to_string(&wasm_findings)
+        .map_err(|e| JsError::new(&format!("finding serialization failed: {e}")))
 }
 
 /// Get the number of available patterns
+///
+/// Throws a `JsError` if the bundled patterns cannot be compiled.
 #[wasm_bindgen]
-pub fn get_pattern_count() -> usize {
-    let scanner = aegis_core::Scanner::new();
-    scanner.registry().len()
+pub fn get_pattern_count() -> Result<usize, JsError> {
+    let scanner = bundled_scanner()?;
+    Ok(scanner.registry().len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The crate builds as an `rlib` too, so the bindings are exercised on
+    /// the host: the same code path the browser calls, no wasm runtime
+    /// required. Real `wasm32` coverage stays with the release build job.
+    #[test]
+    fn bundled_scanner_compiles_full_pattern_set() {
+        let count = get_pattern_count().expect("bundled patterns must compile");
+        assert!(count > 600, "unexpectedly small bundled registry: {count}");
+    }
+
+    #[test]
+    fn scan_content_finds_a_leaked_credential() {
+        let json =
+            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed");
+        let findings: Vec<WasmFinding> =
+            serde_json::from_str(&json).expect("scan_content emits a finding array");
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.pattern == "aws-access-key" && f.location.file == "demo.js"),
+            "aws-access-key missing from {json}"
+        );
+    }
+
+    #[test]
+    fn scan_content_reports_nothing_for_benign_content() {
+        let json = scan_content("fn main() { println!(\"Hello, World!\"); }", "main.rs")
+            .expect("scan must succeed");
+        let findings: Vec<WasmFinding> =
+            serde_json::from_str(&json).expect("scan_content emits a finding array");
+        assert!(findings.is_empty(), "unexpected findings: {json}");
+    }
+
+    #[test]
+    fn finding_shape_survives_the_json_round_trip() {
+        let json =
+            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed");
+        let findings: Vec<WasmFinding> =
+            serde_json::from_str(&json).expect("scan_content emits a finding array");
+        let f = &findings[0];
+        assert!(!f.pattern.is_empty());
+        assert!(!f.category.is_empty());
+        assert!(!f.severity.is_empty());
+        assert!(!f.description.is_empty());
+        assert_eq!(f.location.line, 1);
+    }
 }

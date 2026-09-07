@@ -148,6 +148,7 @@ dependencies = [
 name = "aegis-patterns"
 version = "0.3.0"
 dependencies = [
+ "aegis-core",
  "lazy_static",
  "regex",
  "serde",
@@ -160,6 +161,7 @@ name = "aegis-wasm"
 version = "0.3.0"
 dependencies = [
  "aegis-core",
+ "aegis-patterns",
  "console_error_panic_hook",
  "serde",
  "serde_json",

@@ -106,6 +106,12 @@ codegen-units = 1
 opt-level = 3
 strip = true
 
+# The WASM artifact optimizes for download size, not speed. Profiles are
+# only valid in the workspace root, so this lives here (a crate-level
+# [profile.release] would be silently ignored).
+[profile.release.package.aegis-wasm]
+opt-level = "s"
+
 [profile.dev]
 opt-level = 0
 debug = true
