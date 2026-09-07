@@ -69,8 +69,11 @@ aegis update
 aegis --config production scan .
 ```
 
-Available presets: `production`, `pipeline`, `development`, `mcp`.
-JSON copies of the preset documents also ship in `config/profiles/`.
+Available presets: `production`, `pipeline`, `development`,
+`mcp-integration`. A profile supplies defaults for anything you did not
+set on the command line (categories, output format, severity
+threshold); explicit flags win. JSON copies of the preset documents
+also ship in `config/profiles/`.
 See [Configuration](CONFIGURATION.md) for the field reference.
 
 ## Ignoring Files

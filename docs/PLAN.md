@@ -16,7 +16,7 @@ and quality phases. Status is updated as phases land.
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
 | Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 729 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
 | Surfaces | CLI (human/json/sarif), MCP server, Unix-socket daemon, wasm build, 5-platform release tarballs |
-| Known defects | Rule liveness and hygiene are CI-enforced; the CI-parity self-scan currently reports 2 `high` findings, both `env-credential-assignment` inside `#[cfg(test)]` fixtures that already suppress `aws-secret-key` (`crates/aegis-mcp/src/tools.rs`, `crates/aegis-daemon/src/lib.rs`) — test-fixture residue, not shipped-code issues |
+| Known defects | Rule liveness and hygiene are CI-enforced; the CI-parity self-scan is clean (0 findings as of Phase 9 — the two fixture residues were fixed by correcting their suppression directives) |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
 [docs/architecture/OVERVIEW.md](architecture/OVERVIEW.md). Per-category
@@ -223,23 +223,26 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
 - **Exit criteria:** strict lints enforced in CI; duplication reduced
   without abstracting single-use code. ✅
 
-### Phase 8 — Documentation coverage and accuracy — IN PROGRESS (this branch)
+### Phase 8 — Documentation coverage and accuracy — DELIVERED (#92)
 
-- `missing_docs` clean on aegis-core / aegis-patterns public API.
-- Accuracy pass over `docs/` against current behavior (suppression
-  grammar, custom patterns, `--staged`, baseline, env flags).
-- Regenerate `docs/patterns/README.md`; keep the WCAG 2.2 pattern-coverage
-  matrix current (it tracks shipped rule coverage; Aegis itself ships no
-  web front-end).
+- `missing_docs` enforced workspace-wide (all seven crates); `cargo doc`
+  runs zero-warning.
+- Accuracy pass over all docs against the built binaries: removed
+  invented install paths, config formats, env vars, and architecture
+  claims; corrected flag placement, counts, release assets, and MCP
+  surface descriptions; documented real gaps honestly.
 
-### Phase 9 — E2E + local CI validation — OPEN
+### Phase 9 — E2E + local CI validation — IN PROGRESS (this branch)
 
 - Full e2e pass: every CLI scan mode, MCP handshake/tools, daemon socket,
   staged mode, custom patterns, baseline, ignore semantics.
-- Validate workflows locally via GitForge where supported; aegis self-scan
-  clean at CI parity. Today the CI-parity scan reports the 2 test-fixture
-  findings noted above; they need a same-line directive or a fixture
-  rewrite, not a rule change.
+- Fixes landed from the e2e/audit pass: stdin scans read stdin (stats now
+  agree with the findings list), `-c/--config` is wired into the scan
+  path (profile defaults for categories/format/threshold; flags win),
+  built-in presets synced with `config/profiles/*.json` (test-enforced),
+  unused `ratelimit` dependency removed, and the CI-parity self-scan is
+  clean (0 findings).
+- Validate workflows locally via GitForge where supported.
 
 ### Phase 10 — Release
 

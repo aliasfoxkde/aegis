@@ -53,7 +53,7 @@ printf 'credential = "test-only"\n' \
   | cargo run --release -p aegis-cli -- --format json scan --stdin
 ```
 
-The second command returns a JSON document with two findings and exit code 1. Exit code 1 means "findings reported", not "tool failure".
+The second command returns a JSON document with at least one finding and exit code 1. Exit code 1 means "findings reported", not "tool failure". The `stats` block agrees with the `findings` array (`finding_count` equals its length).
 
 For transport health, start `aegis-mcp` from the configured allowed root and send line-delimited JSON-RPC 2.0 requests. Diagnostic logging is written to stderr; stdout must contain only JSON responses.
 
@@ -71,7 +71,7 @@ For transport health, start `aegis-mcp` from the configured allowed root and sen
 | CLI | `aegis scan --env` | Scan environment variables |
 | CLI | `aegis scan --stdin` | Scan piped content |
 | CLI | `aegis scan --staged` | Scan the git index for pre-commit checks |
-| CLI | `aegis scan --baseline <file>` | Suppress previously recorded findings; exit code reflects new findings only |
+| CLI | `aegis scan --baseline <file>` | Suppress previously recorded findings; exit code reflects new findings only; the baseline file itself is excluded from the scan |
 | CLI | `aegis list` / `enable` / `disable` | Inspect and toggle bundled detection patterns |
 | CLI | `aegis update` | Reinstall the pattern bundle |
 | CLI | `aegis benchmark` | Measure scan throughput against a path |

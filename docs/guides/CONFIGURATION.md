@@ -11,15 +11,19 @@ aegis --config production scan .
 ```
 
 Four preset names are built in: `production`, `pipeline`,
-`development`, and `mcp`. JSON copies of the preset documents also ship
-in [`config/profiles/`](../../config/profiles/) (`development.json`,
-`pipeline.json`, `production.json`, `mcp-integration.json`) so they can
-be reviewed or copied.
+`development`, and `mcp-integration`. A test in `aegis-core` keeps the
+built-ins in sync with the JSON copies that ship in
+[`config/profiles/`](../../config/profiles/) (`development.json`,
+`pipeline.json`, `production.json`, `mcp-integration.json`).
 
-Note that profile loading is not wired into the scan path yet: `-c` is
-accepted and resolves a preset, but it does not change the behaviour of
-the current run. `--format` and the scan-level flags remain
-authoritative.
+A profile supplies defaults for the current run — `enabled_categories`
+become the category allowlist, `output_format` the render, and
+`severity_threshold` the threshold — for any flag you did not set
+explicitly. Flags given on the command line always win over profile
+values. The remaining profile fields (`strict_mode`,
+`performance_mode`, `max_file_size_mb`, `timeout_seconds`,
+`exit_on_findings`) are recorded profile metadata and are not yet
+applied to the scan itself.
 
 ## Profile Fields
 

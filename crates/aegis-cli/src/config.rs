@@ -64,6 +64,30 @@ pub fn save_config(config: &aegis_core::Config, path: &PathBuf) -> Result<(), an
     Ok(())
 }
 
+/// Resolve a `-c/--config` value to a configuration profile.
+///
+/// A value that names an existing file or directory path is loaded from
+/// disk; anything else is looked up among the built-in presets
+/// (`production`, `pipeline`, `development`, `mcp-integration`). Unknown
+/// names fail with the list of valid presets.
+///
+/// # Errors
+///
+/// Returns an error when `name_or_path` looks like a file but cannot be
+/// read or parsed, or when it is not a known preset.
+pub fn resolve_profile(name_or_path: &str) -> Result<aegis_core::Config, anyhow::Error> {
+    let candidate = PathBuf::from(name_or_path);
+    if candidate.is_file() {
+        return aegis_core::Config::load(&candidate).map_err(anyhow::Error::from);
+    }
+    aegis_core::Config::preset(name_or_path).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown configuration profile `{name_or_path}`; available presets: {}",
+            aegis_core::Config::list_presets().join(", ")
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,5 +142,36 @@ mod tests {
         // Load it back
         let loaded = load_config(&config_path);
         assert!(loaded.is_ok());
+    }
+
+    #[test]
+    fn resolve_profile_loads_builtin_presets_by_name() {
+        for name in aegis_core::Config::list_presets() {
+            let profile = resolve_profile(name).expect("built-in preset must resolve");
+            assert_eq!(profile.name, name);
+        }
+    }
+
+    #[test]
+    fn resolve_profile_loads_profiles_from_file_paths() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../config/profiles/production.json"
+        );
+        let profile = resolve_profile(path).expect("profile file must resolve");
+        assert_eq!(profile.name, "production");
+        assert_eq!(
+            profile.output_format,
+            aegis_core::config::OutputFormat::Sarif
+        );
+    }
+
+    #[test]
+    fn resolve_profile_rejects_unknown_names_with_preset_list() {
+        let error = resolve_profile("no-such-profile").expect_err("unknown preset");
+        let message = error.to_string();
+        assert!(message.contains("no-such-profile"));
+        assert!(message.contains("production"));
+        assert!(message.contains("mcp-integration"));
     }
 }
