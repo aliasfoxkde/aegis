@@ -1,0 +1,50 @@
+# cargo-deny — dependency policy gate alongside cargo-audit.
+# CI runs `cargo deny check` (see .github/workflows/ci.yml).
+# Locally: cargo deny check
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+    # Transitive via jsonrpc (unmaintained upstream). Kept in lockstep with
+    # the cargo-audit ignores in .github/workflows/ci.yml — remove from both
+    # or neither.
+    "RUSTSEC-2024-0421", # idna < 1.0.0
+    "RUSTSEC-2026-0097", # rand < 0.8.6
+]
+
+[licenses]
+version = 2
+# Every license in the dependency tree (verified against `cargo metadata`
+# when this list was authored; cargo-deny fails closed on anything new).
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+    "CC0-1.0",
+    "BSL-1.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+
+[bans]
+# Duplicate major versions of a crate are common in large trees; surface
+# them without failing the build.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
