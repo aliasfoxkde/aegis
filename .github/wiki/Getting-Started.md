@@ -4,41 +4,47 @@
 
 ### Binary Releases (Recommended)
 
+Grab the asset for your platform from the [latest release](https://github.com/aliasfoxkde/aegis/releases/latest):
+
 ```bash
 # Linux x86_64
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf aegis-x86_64-unknown-linux-gnu.tar.gz
-sudo mv aegis /usr/local/bin/
-
-# macOS Intel
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-apple-darwin.tar.gz
-tar -xzf aegis-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+tar -xzf aegis-linux-x86_64.tar.gz
 sudo mv aegis /usr/local/bin/
 
 # macOS Apple Silicon
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-aarch64-apple-darwin.tar.gz
-tar -xzf aegis-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-arm64.tar.gz
+tar -xzf aegis-darwin-arm64.tar.gz
 sudo mv aegis /usr/local/bin/
 
-# Windows
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-pc-windows-gnu.tar.gz
-tar -xzf aegis-x86_64-pc-windows-gnu.tar.gz
+# macOS Intel
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-x86_64.tar.gz
+tar -xzf aegis-darwin-x86_64.tar.gz
+sudo mv aegis /usr/local/bin/
 
-# Verify
+# Linux arm64
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-arm64.tar.gz
+tar -xzf aegis-linux-arm64.tar.gz
+sudo mv aegis /usr/local/bin/
+
+# Windows: download aegis-windows-x86_64.tar.gz and extract it
+
+# Verify (each tarball also carries aegis-mcp, aegis-daemon, aegis-bundler)
 aegis --version
 ```
 
-### Install Script
+### From Source
+
+Requires Rust 1.75+ (`rustup update stable` if needed):
 
 ```bash
-curl -sSL https://get.aegis.dev | sh
+git clone https://github.com/aliasfoxkde/aegis
+cd aegis
+cargo build --release
+# Binaries land in target/release/
 ```
 
-### Docker
-
-```bash
-docker run --rm -v $(pwd):/scan ghcr.io/aliasfoxkde/aegis scan /scan
-```
+See [Building from Source](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/BUILDING.md) for details.
 
 ## Your First Scan
 
@@ -46,69 +52,87 @@ docker run --rm -v $(pwd):/scan ghcr.io/aliasfoxkde/aegis scan /scan
 # Scan current directory
 aegis scan .
 
-# Scan specific file
-aegis scan ./config/app.yaml
+# Scan a specific file
+aegis scan --file ./config/app.yaml
 
-# Scan with severity filter
+# Scan with a severity filter
 aegis scan . --severity-threshold high
+
+# JSON output for tooling
+aegis --format json scan .
+```
+
+The `-c/--config` flag takes a preset (`production`, `pipeline`,
+`development`, `mcp-integration`) or a profile JSON file, and supplies
+defaults for flags you did not set explicitly:
+
+```bash
+aegis -c production scan .
 ```
 
 ## Understanding the Output
 
 ```
-[CRITICAL] aws-access-key detected
-  File: config/app.yaml:47
-  Content: AKIAIOSFODNN7EXAMPLE
+Aegis Security Scan
+==================
+Risk Assessment:
+  Level: critical
+  Score: 65
+  Findings: 1
+  Highest Severity: critical
 
-[HIGH] commented-secret detected
-  File: src/auth.rs:23
-  Content: # password:supersecret123
+[CRITICAL] aws-access-key at config/app.yaml:47:9
+  AWS Access Key ID detected
 
-2 finding(s) in 23 file(s) - 41.3 KB scanned in 4ms
+Scan Statistics:
+  Files scanned: 23
+  ...
 ```
+
+Findings never include the matched source text — reports reference the
+location, not the secret. Use `--format json` for the machine-readable
+document (`findings` + `stats`), or `--format sarif` for code-scanning
+platforms.
 
 ## Common Use Cases
 
 ### Pre-commit Hook
 
+Scan exactly what would be committed (the git index), even if the
+working tree has since changed:
+
 ```bash
-# Create hook
 echo '#!/bin/sh
-aegis scan .' > .git/hooks/pre-commit
+aegis scan . --staged' > .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 
-### CI/CD Integration
+### CI Gate Over New Findings Only
 
-#### GitHub Actions
+```bash
+# Record a baseline once (exit code reflects new findings afterwards)
+aegis --format json scan . --output-file baseline.json
 
-```yaml
-- name: Security Scan
-  uses: aliasfoxkde/aegis-action@v1
-  with:
-    severity-threshold: high
-    format: sarif
+# Every later scan: exit 0 when nothing new was introduced
+aegis scan . --baseline baseline.json
 ```
 
-#### GitLab CI
+### GitHub Actions
 
-```yaml
-security_scan:
-  script:
-    - aegis scan . --format json --severity-threshold medium
-  artifacts:
-    reports:
-      sast: aegis-results.json
-```
+The repository ships its own scanning workflow at
+[.github/workflows/aegis-scan.yml](https://github.com/aliasfoxkde/aegis/blob/main/.github/workflows/aegis-scan.yml);
+copy it into your project. See
+[CI/CD Integration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CICD_INTEGRATION.md)
+for GitLab, Jenkins, and Azure examples.
 
 ### MCP Server Setup
 
 ```bash
-# Start MCP server
+# Start the MCP server on stdio
 aegis-mcp
 
-# Configure AI assistant (Claude Desktop)
-# Add to claude_desktop_config.json:
+# Configure an MCP client (e.g. Claude Desktop). Add to
+# claude_desktop_config.json:
 {
   "mcpServers": {
     "aegis": {
@@ -118,18 +142,22 @@ aegis-mcp
 }
 ```
 
-## Configuration Profiles
+The server exposes `scan_string`, `scan_file`, `scan_dir`, `scan_env`,
+`list_patterns`, `list_categories`, and `update_bundle` over JSON-RPC.
 
-Aegis comes with pre-configured profiles:
+## Configuration Presets
 
-- **production** - High-security production environments
-- **pipeline** - CI/CD optimized (default for CI)
-- **development** - Full features for local testing
+Four presets ship with the CLI and are kept in lockstep with the profile
+files in
+[config/profiles/](https://github.com/aliasfoxkde/aegis/tree/main/config/profiles):
+
+- **production** - high-security gate (SARIF output, strict categories)
+- **pipeline** - CI/CD optimized
+- **development** - full feature set for local work
 - **mcp-integration** - MCP server settings
 
 ```bash
-# Use profile
-aegis scan ./my-project --profile production
+aegis -c pipeline scan .
 ```
 
 ## Pattern Management
@@ -138,71 +166,54 @@ aegis scan ./my-project --profile production
 # List all patterns
 aegis list
 
-# Search patterns
-aegis list --search aws
-
 # List by category
 aegis list --category secrets
 
-# Update patterns
-aegis update
+# Browse the full generated catalog with per-pattern details
+# (GitHub) https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md
 ```
 
-## Ignoring Files
+## Ignoring Files and Findings
 
-Create `.aegisignore` in your project root:
+Create `.aegisignore` in your project root to skip **files** (gitignore
+syntax):
 
 ```
-# Ignore node_modules
-node_modules/
+# Ignore vendored code
+vendor/
 
 # Ignore build output
 dist/
 build/
 
-# Ignore test files
+# Ignore test fixtures
 **/*_test.go
 **/*.test.ts
-
-# Ignore specific findings
-ignore: aws-access-key
-ignore: commented-secret
 ```
+
+To suppress a **finding** on a specific line, add an inline directive on
+that same line:
+
+```js
+const token = "sample"; // aegis:ignore:generic-secret -- test fixture
+```
+
+Between `--` and the end of the line is an optional reason. Ranges
+(`aegis:ignore-start` / `aegis:ignore-end`) and whole files
+(`aegis:ignore-file`) are also supported.
 
 ## Troubleshooting
 
-### "command not found" after installation
-
-```bash
-# Verify PATH includes /usr/local/bin
-echo $PATH | grep /usr/local/bin
-
-# Or install to ~/.local/bin
-export PATH=$PATH:$HOME/.local/bin
-```
-
-### Performance issues on large projects
-
-```bash
-# Use severity filter
-aegis scan . --severity-threshold high
-
-# Use pipeline profile
-aegis scan . --profile pipeline
-
-# Increase workers
-aegis scan . --workers 8
-```
-
-### Pattern not working
-
-- Check if pattern is enabled: `aegis list --search <name>`
-- Verify pattern regex with `aegis list --json | jq '.[] | select(.name == "pattern")'`
-- Try updating patterns: `aegis update`
+- **"command not found" after installation** — verify `PATH` includes
+  the install directory: `echo $PATH | grep /usr/local/bin`.
+- **Pattern not behaving as expected** — check its detail page in the
+  [catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md);
+  every page documents the regex, scoping, and a verified example.
+- More in [Troubleshooting](Troubleshooting).
 
 ## Next Steps
 
-- Explore [Configuration Profiles](../docs/guides/CONFIGURATION.md)
+- Explore [Configuration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CONFIGURATION.md)
 - Learn about [Pattern Development](Pattern-Development)
-- Set up [CI/CD Integration](../docs/guides/CICD_INTEGRATION.md)
-- Configure [MCP Integration](../docs/guides/MCP.md)
+- Set up [CI/CD Integration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CICD_INTEGRATION.md)
+- Configure [MCP Integration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/MCP.md)

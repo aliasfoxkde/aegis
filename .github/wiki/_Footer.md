@@ -4,20 +4,20 @@
 
 | Resource | Link |
 |----------|------|
-| Documentation | [docs/](docs/) |
+| Documentation | [docs/](https://github.com/aliasfoxkde/aegis/blob/main/docs/) |
 | GitHub Repository | [aliasfoxkde/aegis](https://github.com/aliasfoxkde/aegis) |
 | Issue Tracker | [Report Issues](https://github.com/aliasfoxkde/aegis/issues) |
 | Discussions | [GitHub Discussions](https://github.com/aliasfoxkde/aegis/discussions) |
-| Pattern Catalog | [620 Patterns](docs/patterns/README.md) |
+| Pattern Catalog | [633 patterns across 33 categories](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) |
 
 ## Project Info
 
 **Aegis** is an open-source security scanning tool.
 
-- [Code of Conduct](../.github/CODE_OF_CONDUCT.md)
-- [Contributing](../.github/CONTRIBUTING.md)
-- [Security Policy](../.github/SECURITY.md)
-- [License](../LICENSE)
+- [Code of Conduct](https://github.com/aliasfoxkde/aegis/blob/main/.github/CODE_OF_CONDUCT.md)
+- [Contributing](https://github.com/aliasfoxkde/aegis/blob/main/.github/CONTRIBUTING.md)
+- [Security Policy](https://github.com/aliasfoxkde/aegis/blob/main/.github/SECURITY.md)
+- [License](https://github.com/aliasfoxkde/aegis/blob/main/LICENSE)
 
 ## Disclaimer
 
@@ -25,9 +25,7 @@
 
 ## Version
 
-- **Current**: v0.1.0
-- **Patterns**: 620 across 32 categories
-- **Last Updated**: August 2026
+See [Releases](https://github.com/aliasfoxkde/aegis/releases) for the current version and the [changelog](https://github.com/aliasfoxkde/aegis/blob/main/CHANGELOG.md) for what shipped in each. The [pattern catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) is generated from the source and always reflects the shipped rule set.
 
 ---
 

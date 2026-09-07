@@ -7,32 +7,32 @@
 - [Troubleshooting](Troubleshooting)
 
 ### User Guides
-- [Installation Guide](../docs/guides/INSTALLATION.md) - Binary releases, Docker
-- [Quick Start](../docs/guides/QUICK_START.md) - Basic workflows
-- [CLI Reference](../docs/guides/CLI.md) - All commands
-- [Configuration](../docs/guides/CONFIGURATION.md) - Profiles and options
+- [Installation Guide](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/INSTALLATION.md) - Binary releases, Docker
+- [Quick Start](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/QUICK_START.md) - Basic workflows
+- [CLI Reference](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CLI.md) - All commands
+- [Configuration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CONFIGURATION.md) - Profiles and options
 
 ### CI/CD Integration
-- [CI/CD Integration](../docs/guides/CICD_INTEGRATION.md) - GitHub, GitLab, Jenkins
-- [MCP Server](../docs/guides/MCP.md) - AI tool integration
+- [CI/CD Integration](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/CICD_INTEGRATION.md) - GitHub, GitLab, Jenkins
+- [MCP Server](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/MCP.md) - AI tool integration
 
 ### Development
-- [Building from Source](../docs/guides/BUILDING.md) - Contributor setup
-- [Adding Patterns](../docs/guides/ADDING_PATTERNS.md) - YAML contribution
-- [Architecture](../docs/architecture/OVERVIEW.md) - System design
-- [Coding Standards](../docs/CODING_STANDARDS.md) - Rust conventions
+- [Building from Source](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/BUILDING.md) - Contributor setup
+- [Adding Patterns](https://github.com/aliasfoxkde/aegis/blob/main/docs/guides/ADDING_PATTERNS.md) - Rust and YAML contribution
+- [Architecture](https://github.com/aliasfoxkde/aegis/blob/main/docs/architecture/OVERVIEW.md) - System design
+- [Coding Standards](https://github.com/aliasfoxkde/aegis/blob/main/docs/CODING_STANDARDS.md) - Rust conventions
 
 ### Pattern Categories
-- [Pattern Catalog](../docs/patterns/README.md) - All 620 patterns
-- [Community Patterns](../community/README.md) - YAML pattern directory
-- [Secrets](../community/secrets/) - API keys, credentials
-- [Security Hardening](../community/security-hardening/) - Security best practices
-- [Web Security](../community/web-security/) - XSS, SQLi, CORS
-- [AI Safety](../community/ai-safety/) - Prompt injection, AI safety
+- [Pattern Catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) - All 633 patterns, one detail page per category
+- [Secrets](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/secrets.md) - API keys, credentials
+- [Security Hardening](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/security-hardening.md) - Security best practices
+- [Web Security](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/web-security.md) - XSS, injection, CORS, SSRF
+- [AI Safety](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/ai-safety.md) - Agentic and LLM safety checks
 
 ### Resources
-- [Project Plan](../docs/PLAN.md) - Roadmap and milestones
-- [Changelog](https://github.com/aliasfoxkde/aegis/releases)
+- [Project Plan](https://github.com/aliasfoxkde/aegis/blob/main/docs/PLAN.md) - Roadmap and milestones
+- [Changelog](https://github.com/aliasfoxkde/aegis/blob/main/CHANGELOG.md)
+- [Releases](https://github.com/aliasfoxkde/aegis/releases)
 
 ### External Links
 - [GitHub Repository](https://github.com/aliasfoxkde/aegis)
