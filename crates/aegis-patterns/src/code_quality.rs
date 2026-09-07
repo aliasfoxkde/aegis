@@ -113,7 +113,18 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["readability".to_string(), "maintainability".to_string()],
             env_var: false,
             binary: false,
-            exclude: Some(r"\A(?:19|20)\d{2}\z".to_string()),
+            // A line-regex rule cannot see naming context, so numeric
+            // constants that are idiomatic in every codebase are excluded:
+            // calendar years and the byte-size / unit-conversion ladder
+            // (1024..16777216, and the 1000 kilo/milli step). Arbitrary
+            // thresholds such as 86400 or 65535-styled ports stay flagged.
+            exclude: Some(concat!(
+                r"\A(?:(?:19|20)\d{2}",
+                r"|1000|1024|2048|4096|8192|16384|32768|65536|131072",
+                r"|262144|524288|1048576|2097152|4194304|8388608|16777216",
+                r")\z"
+            )
+            .to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

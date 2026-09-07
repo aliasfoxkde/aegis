@@ -397,7 +397,11 @@ impl Pattern {
 
         let mut matches = Vec::new();
         for cap in self.inner.regex.captures_iter(content) {
-            let m = cap.get(0).unwrap();
+            // Group 0 is the whole match; `captures_iter` only yields
+            // successful matches, so it is always present.
+            let Some(m) = cap.get(0) else {
+                continue;
+            };
             matches.push(PatternMatch {
                 start: m.start(),
                 end: m.end(),
@@ -509,7 +513,10 @@ impl CategoryScanner {
             }
 
             for cap in pattern.inner.regex.captures_iter(content) {
-                let m = cap.get(0).unwrap();
+                // Group 0 is always present for a successful match.
+                let Some(m) = cap.get(0) else {
+                    continue;
+                };
                 matches.push(AttributedMatch {
                     pattern_index,
                     pattern,

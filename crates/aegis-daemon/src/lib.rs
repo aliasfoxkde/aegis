@@ -525,7 +525,7 @@ mod tests {
 
         let request = serde_json::json!({
             "method": "scan_string",
-            "params": ["aws_key: AKIAIOSFODNN7EXAMPLE", "test.txt"],
+            "params": ["aws_key: AKIAIOSFODNN7EXAMPLE", "test.txt"], // aegis:ignore:aws-access-key
             "id": 2
         });
 

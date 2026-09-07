@@ -94,14 +94,55 @@ workspace suite (651 tests).
 - **Exit criteria:** criterion bench steady state unchanged; startup and
   MCP handshake compile only what they need. ✅
 
-### Phase 3 — Noise audit round two
+### Phase 3 — Noise audit round two — DELIVERED
 
-- Retune or scope `magic-number` (`\b\d{4,}\b` on every line) and
-  `csrf-missing-token`; audit the top-firing rules against the corpus and
-  the aegis self-scan.
+The self-scan ranked every firing rule and each finding was traced to its
+source line before anything was retuned. Self-scan findings: 941 → 817;
+CI-parity scan (`secrets,security-hardening,web-security` at high+) 3 → 0.
+Corpus precision/recall thresholds unchanged and green (651 tests).
+
+What actually caused the noise, and the fix for each:
+
+- `eval-usage` (3 critical-severity findings): the regex fired on the
+  engine's own `contains("eval(")` detection strings while the adjacent
+  suppression directives sat one line off. Suppressions are strictly
+  same-line; the directives now share the flagged line (structured so
+  `cargo fmt` cannot relocate them — a comment after `{` moves into the
+  block, a `let`-line trailing comment stays).
+- `aws-access-key` (12): every hit was `AKIAIOSFODNN7EXAMPLE`, the
+  canonical AWS documentation key, in our own fixtures and doc comments.
+  Rule-level exclusion would break corpus fixtures that deliberately
+  expect it; same-line directives in the 11 fixture sites are the precise
+  tool.
+- `commit-sha-reference` (67): the rule punished
+  `uses: action@<full-sha>` pinning — the recommended supply-chain
+  hardening. Scoped to prose formats (md/rst/adoc/txt), where a bare SHA
+  is unactionable; code and CI files are exempt.
+- `csrf-missing-token`: the old shape flagged *every* client HTTP call
+  (`axios.post`, `requests.post`) and every `Map.delete()`. CSRF is a
+  server-side concern; the rule now requires a route-registration
+  receiver (`app|router|server|express|fastify|koa|route`) and covers
+  `patch` as well.
+- `magic-number` (69 → 31): byte-size and unit-conversion constants
+  (`1024…16777216`, `1000`) joined calendar years in the exclusion — a
+  line-regex rule cannot see naming context, and those constants are
+  idiomatic everywhere.
+- Two `cap.get(0).unwrap()` in the hot path became `let-else` (infallible
+  by construction, but the workspace rule is no `unwrap` in production).
+- Bench fixtures (`pattern_matching.rs`) now name the rule each payload
+  line exercises, so bench noise stays attributable.
+
+Documented-rationale residue (intentionally not silenced): the
+`rust-unwrap-usage`/`rust-expect-usage` family fires almost entirely
+inside inline `#[cfg(test)]` modules — idiomatic Rust test style that a
+line-regex rule cannot distinguish from production code. Aegis does not
+ship AST-scoped test detection for these rules; users with test-heavy
+trees can disable the pair via `aegis disable`. Remaining `magic-number`
+hits are test-fixture constants and config values in manifests.
+
 - **Exit criteria:** CI-parity scan (`secrets,security-hardening,
   web-security` at high+) stays at zero findings; corpus precision stays
-  at 1.00; noisy rules fixed, demoted, or documented with rationale.
+  at 1.00; noisy rules fixed, demoted, or documented with rationale. ✅
 
 ### Phase 4 — CI/CD hardening
 

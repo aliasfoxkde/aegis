@@ -18,7 +18,7 @@
 //! let mut adapter = ControlCenterAdapter::new();
 //! let result = adapter.scan_work_sync(WorkRequest {
 //!     work_request_id: "wr-123".to_string(),
-//!     content: "AKIAIOSFODNN7EXAMPLE".to_string(),
+//!     content: "AKIAIOSFODNN7EXAMPLE".to_string(), // aegis:ignore:aws-access-key
 //!     source: "test.rs".to_string(),
 //! });
 //! ```
@@ -740,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_content_hash_deterministic() {
-        let content = "AKIAIOSFODNN7EXAMPLE";
+        let content = "AKIAIOSFODNN7EXAMPLE"; // aegis:ignore:aws-access-key
         let hash1 = ControlCenterAdapter::compute_content_hash(content);
         let hash2 = ControlCenterAdapter::compute_content_hash(content);
         assert_eq!(hash1, hash2);
@@ -842,7 +842,7 @@ mod tests {
         let mut adapter = ControlCenterAdapter::new();
         let request = WorkRequest {
             work_request_id: "wr-456".to_string(),
-            content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(),
+            content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(), // aegis:ignore:aws-access-key
             source: "config.env".to_string(),
         };
 
@@ -860,7 +860,7 @@ mod tests {
         adapter
             .scan_work_sync(WorkRequest {
                 work_request_id: "wr-persist".to_string(),
-                content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(),
+                content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(), // aegis:ignore:aws-access-key
                 source: "config.env".to_string(),
             })
             .unwrap();
@@ -873,7 +873,7 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert!(records[0].receipt.is_some());
         assert!(json.contains("schema_version"));
-        assert!(!json.contains("AKIAIOSFODNN7EXAMPLE"));
+        assert!(!json.contains("AKIAIOSFODNN7EXAMPLE")); // aegis:ignore:aws-access-key
 
         std::fs::remove_dir_all(root).unwrap();
     }
