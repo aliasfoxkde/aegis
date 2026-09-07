@@ -1,7 +1,12 @@
 //! AI safety patterns - AI system security, model safety, responsible AI
+//!
+//! Spans the attack surface (prompt injection, system prompt leakage, unsafe
+//! output) and the governance artifacts reviewers look for (model cards,
+//! evaluation benchmarks, human-in-the-loop approval).
 
 use crate::Pattern;
 
+/// AI safety rules: prompt-injection surface plus model-governance artifacts.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

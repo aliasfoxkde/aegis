@@ -266,6 +266,8 @@ impl std::fmt::Debug for IgnoreManager {
 /// Pattern error types
 #[derive(Debug, thiserror::Error)]
 pub enum PatternError {
+    /// An `.aegisignore` entry could not be compiled as a glob, or used a
+    /// construct the ignore matcher does not support.
     #[error("Invalid glob pattern: {0}")]
     InvalidPattern(String),
 }

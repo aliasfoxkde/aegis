@@ -29,12 +29,22 @@ pub const DEFAULT_CATEGORY: &str = "custom";
 /// Errors encountered while loading user-defined patterns.
 #[derive(Debug, thiserror::Error)]
 pub enum UserPatternError {
+    /// The file was read but failed validation; `message` names the rule that
+    /// was broken.
     #[error("custom patterns file {path}: {message}")]
-    Invalid { path: String, message: String },
+    Invalid {
+        /// The offending `.aegis.yml`, as it should appear in diagnostics.
+        path: String,
+        /// Human-readable explanation of the first failure.
+        message: String,
+    },
 
+    /// The patterns file exists but could not be read from disk.
     #[error("failed to read custom patterns file {path}: {source}")]
     Io {
+        /// The file that could not be read.
         path: String,
+        /// Underlying read failure.
         source: std::io::Error,
     },
 }
@@ -88,6 +98,8 @@ pub struct UserPattern {
 /// Top-level `.aegis.yml` document.
 #[derive(Debug, serde::Deserialize)]
 pub struct UserPatternFile {
+    /// Entries listed under `patterns:`; an absent key deserializes to an
+    /// empty list, which the loader rejects.
     #[serde(default)]
     pub patterns: Vec<UserPattern>,
 }

@@ -25,11 +25,15 @@ aegis scan . --severity-threshold medium
 aegis scan .
 
 # JSON output for automation
-aegis scan . --format json
+aegis --format json scan .
 
 # SARIF for CI/CD integration
-aegis scan . --format sarif --output results.sarif
+aegis --format sarif scan . --output-file results.sarif
 ```
+
+`--format` is a top-level flag, so it goes before the subcommand. Scan-level
+options such as `--severity-threshold` and `--output-file` come after the
+path.
 
 ## Environment Scanning
 
@@ -50,8 +54,8 @@ aegis list
 # List patterns in a category
 aegis list --category secrets
 
-# Search patterns
-aegis list --search "aws"
+# List only disabled patterns
+aegis list --disabled
 
 # Update pattern bundle
 aegis update
@@ -59,16 +63,15 @@ aegis update
 
 ## Configuration
 
-```bash
-# Use a specific profile
-aegis scan . --profile production
+`-c/--config` is a top-level flag that names a preset profile:
 
-# Available profiles:
-#   - production: High-security production environments
-#   - pipeline: CI/CD pipelines
-#   - development: Local development
-#   - mcp-integration: MCP server mode
+```bash
+aegis --config production scan .
 ```
+
+Available presets: `production`, `pipeline`, `development`, `mcp`.
+JSON copies of the preset documents also ship in `config/profiles/`.
+See [Configuration](CONFIGURATION.md) for the field reference.
 
 ## Ignoring Files
 
@@ -99,11 +102,14 @@ A `!` prefix re-includes a path; later rules override earlier ones.
 ### GitHub Actions
 
 ```yaml
+- name: Install Aegis
+  run: |
+    curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+    tar -xzf aegis-linux-x86_64.tar.gz
+    sudo mv aegis /usr/local/bin/
+
 - name: Run Aegis Scan
-  uses: aliasfoxkde/aegis-action@v1
-  with:
-    severity-threshold: high
-    format: sarif
+  run: aegis --format sarif scan . --severity-threshold high
 ```
 
 ### GitLab CI
@@ -111,7 +117,7 @@ A `!` prefix re-includes a path; later rules override earlier ones.
 ```yaml
 security_scan:
   script:
-    - aegis scan . --format json --severity-threshold medium
+    - aegis --format json scan . --severity-threshold medium
   artifacts:
     reports:
       sast: aegis-results.json
@@ -121,4 +127,4 @@ security_scan:
 
 - [CLI Reference](CLI.md) - Full command documentation
 - [CI/CD Integration](CICD_INTEGRATION.md) - Detailed integration guides
-- [Detection Patterns](../patterns/README.md) - Browse all 638 patterns
+- [Detection Patterns](../patterns/README.md) - Browse all 633 patterns

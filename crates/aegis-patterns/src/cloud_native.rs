@@ -1,7 +1,12 @@
 //! Cloud native patterns - Kubernetes, Docker, serverless, microservices
+//!
+//! Recognition and configuration checks across the cloud-native stack: service
+//! mesh (Istio, Linkerd), serverless functions, pod probes and security
+//! context, resiliency and observability settings, and managed Kubernetes.
 
 use crate::Pattern;
 
+/// Cloud-native stack rules: service mesh, serverless, pod config, observability.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

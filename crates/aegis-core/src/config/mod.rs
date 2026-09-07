@@ -92,64 +92,96 @@ fn default_table_name() -> String {
     "aegis_findings".to_string()
 }
 
+/// One report sink named in a preset's `output_formats` list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YamlOutputFormatConfig {
+    /// Renderer that produces the report.
     pub format: YamlOutputFormatType,
+    /// File the report lands in; `None` means the report has no file target.
     #[serde(default)]
     pub path: Option<String>,
+    /// Add to the existing [`path`][Self::path] file instead of truncating it;
+    /// defaults to `false`.
     #[serde(default)]
     pub append: bool,
 }
 
+/// Report shapes a preset can emit findings in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlOutputFormatType {
+    /// Text laid out for reading in a terminal.
     Human,
+    /// Machine-readable JSON document.
     Json,
+    /// SARIF report for code-scanning integrations.
     Sarif,
+    /// One comma-separated row per finding.
     Csv,
 }
 
+/// An endpoint a preset posts findings to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YamlWebhookConfig {
+    /// Label that identifies this hook among the preset's webhooks.
     pub name: String,
+    /// Delivery adapter used to reach the endpoint, serialized as `type`.
     #[serde(rename = "type")]
     pub webhook_type: YamlWebhookType,
+    /// URL the report is posted to.
     pub url: String,
+    /// Whether the hook fires at all; defaults to `true`.
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Attempts made when a delivery fails; defaults to 3.
     #[serde(default = "default_retries")]
     pub retries: u32,
+    /// Per-request wait limit in seconds; defaults to 30.
     #[serde(default = "default_timeout")]
     pub timeout_secs: u64,
 }
 
+/// Services a webhook can deliver findings to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlWebhookType {
+    /// Unadorned HTTP POST to any endpoint.
     Http,
+    /// Discord channel webhook.
     Discord,
+    /// Slack incoming webhook.
     Slack,
+    /// Microsoft Teams channel webhook.
     Teams,
 }
 
+/// A database a preset persists findings to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct YamlDatabaseOutputConfig {
+    /// Label that identifies this sink among the preset's databases.
     pub name: String,
+    /// Driver used to connect, serialized as `type`.
     #[serde(rename = "type")]
     pub database_type: YamlDatabaseType,
+    /// Connection string, or the database file path for SQLite.
     pub connection: String,
+    /// Table findings are inserted into; defaults to `aegis_findings`.
     #[serde(default = "default_table_name")]
     pub table_name: String,
+    /// Whether this sink receives findings; defaults to `true`.
     #[serde(default = "default_true")]
     pub enabled: bool,
 }
 
+/// Database engines a preset can write findings into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum YamlDatabaseType {
+    /// Embedded SQLite database file.
     Sqlite,
+    /// PostgreSQL server, serialized as `postgresql`.
     PostgreSql,
+    /// MySQL or MariaDB server, serialized as `mysql`.
     MySql,
 }
 
@@ -209,6 +241,7 @@ pub struct YamlPresetRegistry {
 }
 
 impl YamlPresetRegistry {
+    /// Creates an empty registry holding no presets.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -244,15 +277,20 @@ impl YamlPresetRegistry {
         Ok(())
     }
 
+    /// Adds `preset` under its own name, displacing any preset already held
+    /// under that name.
     pub fn register(&mut self, preset: YamlPreset) {
         self.presets.insert(preset.name.clone(), preset);
     }
 
+    /// Returns the preset stored under `name`, or `None` when no preset has
+    /// been registered under it.
     #[must_use]
     pub fn get(&self, name: &str) -> Option<&YamlPreset> {
         self.presets.get(name)
     }
 
+    /// Names every registered preset, in map order.
     #[must_use]
     pub fn list(&self) -> Vec<String> {
         self.presets.keys().cloned().collect()
@@ -319,9 +357,13 @@ fn default_timeout_cfg() -> u64 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StrictMode {
+    /// Relaxed level; applied when a profile leaves `strict_mode` unset.
     #[default]
     Permissive,
+    /// Balanced level chosen by the `pipeline`, `development`, and `mcp`
+    /// presets.
     Standard,
+    /// Tightest level, chosen by the `production` preset.
     Strict,
 }
 
@@ -329,9 +371,14 @@ pub enum StrictMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PerformanceMode {
+    /// Unoptimized profile that favours introspection; the default and the
+    /// `development` preset's choice.
     #[default]
     Debug,
+    /// Middle-of-the-road profile used by `Config::default_config`.
     Standard,
+    /// Fastest profile, picked by the `production`, `pipeline`, and `mcp`
+    /// presets.
     Optimized,
 }
 
@@ -339,9 +386,12 @@ pub enum PerformanceMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
+    /// Text report meant to be read in a terminal; the default.
     #[default]
     Human,
+    /// Machine-readable JSON for tooling and the `pipeline` preset.
     Json,
+    /// SARIF report for code-scanning upload; the `production` preset's choice.
     Sarif,
 }
 
@@ -497,10 +547,14 @@ impl Default for Config {
 /// Config error types
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// A config file could not be read or written; wraps [`io::Error`].
     #[error("I/O error: {0}")]
     IoError(#[from] io::Error),
+    /// The document on disk was not valid config JSON; wraps
+    /// [`serde_json::Error`].
     #[error("Parse error: {0}")]
     ParseError(#[from] serde_json::Error),
+    /// No preset answers to the carried name.
     #[error("Unknown preset: {0}")]
     UnknownPreset(String),
 }

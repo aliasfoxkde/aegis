@@ -4,7 +4,8 @@ This guide is for contributors who want to build Aegis from source.
 
 ## Requirements
 
-- **Rust 1.70+** - Install via [rustup](https://rustup.rs/)
+- **Rust 1.75+** (the workspace `rust-version`) - Install via
+  [rustup](https://rustup.rs/)
 - **Cargo** - Included with Rust
 - **Git**
 
@@ -36,6 +37,23 @@ cargo build -p aegis-cli
 cargo build -p aegis-core
 cargo build -p aegis-mcp
 ```
+
+The CLI binary is named `aegis` and lands at
+`target/release/aegis` (or `target/debug/aegis`). The other binaries are
+`aegis-mcp`, `aegis-daemon`, and `aegis-bundler`; the workspace root
+also defines an `aegis-bootstrap` binary from `src/main.rs`.
+
+### Optional Features
+
+`aegis-cli` exposes an `output-pipeline` feature (which enables
+`aegis-core/output-pipeline`, pulling in `reqwest` and `rusqlite`):
+
+```bash
+cargo build -p aegis-cli --features output-pipeline
+```
+
+`aegis-core` also has a `tree-sitter` feature for AST-based rules, plus
+`tokio` and `jsonschema`, both on by default.
 
 ## Running Tests
 
@@ -121,20 +139,24 @@ aegis/
 │   │       ├── pattern.rs  # Pattern matching
 │   │       ├── entropy.rs  # Entropy detection
 │   │       ├── finding.rs  # Finding structs
+│   │       ├── ignore.rs   # .aegisignore / .gitignore handling
 │   │       └── lib.rs      # Core exports
 │   ├── aegis-cli/         # CLI application
 │   │   └── src/
-│   │       └── main.rs
+│   │       ├── main.rs     # Argument parsing and dispatch
+│   │       ├── scanner.rs  # Scan orchestration and exit codes
+│   │       ├── output.rs   # Report rendering
+│   │       └── config.rs   # Pattern enable/disable helpers
 │   ├── aegis-mcp/         # MCP server
-│   ├── aegis-daemon/      # Daemon mode
+│   ├── aegis-daemon/      # Daemon mode (Unix sockets)
 │   ├── aegis-bundler/     # Pattern bundler
-│   └── aegis-patterns/    # Pattern definitions
+│   └── aegis-patterns/    # 633 pattern definitions
 │       └── src/
 │           ├── secrets.rs
 │           ├── pii.rs
 │           └── ... (category files)
 ├── config/
-│   └── profiles/           # Configuration profiles
+│   └── profiles/           # Configuration profiles (JSON)
 └── docs/                  # Documentation
 ```
 
@@ -142,8 +164,9 @@ aegis/
 
 1. Create `crates/aegis-patterns/src/my_category.rs`
 2. Implement `pub fn get() -> Vec<Pattern>`
-3. Add module declaration to `lib.rs`
-4. Export in `patterns.rs`
+3. Add a `mod my_category;` declaration to `crates/aegis-patterns/src/lib.rs`
+4. Add the module to `all_patterns()` and a `my-category` arm to
+   `by_category()` in that same `lib.rs`
 5. Add tests
 6. Update documentation
 

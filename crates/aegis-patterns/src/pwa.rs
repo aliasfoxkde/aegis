@@ -1,7 +1,13 @@
 //! PWA patterns
+//!
+//! Progressive web app implementation issues: caching strategy choices,
+//! manifest and shortcuts configuration, offline fallback behavior, and
+//! service-worker patterns such as `skipWaiting()` combined with
+//! `clients.claim()`.
 
 use crate::Pattern;
 
+/// PWA implementation issues: caching strategy, manifest config, offline fallbacks.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

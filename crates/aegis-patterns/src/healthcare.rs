@@ -1,7 +1,12 @@
 //! Healthcare patterns
+//!
+//! Clinical and payer identifiers: medical record, patient, prescription,
+//! insurance, and license numbers. Their presence is what turns an ordinary file
+//! into PHI.
 
 use crate::Pattern;
 
+/// Healthcare identifier formats whose presence usually indicates PHI.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

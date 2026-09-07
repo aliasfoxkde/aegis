@@ -1,7 +1,12 @@
 //! Terraform patterns
+//!
+//! Hardening checks on HCL: public database and S3 access, unencrypted storage, ECS
+//! tasks that run privileged or keep secrets in their definition, and credentials
+//! hardcoded in `.tf` files.
 
 use crate::Pattern;
 
+/// Terraform hardening: public access, unencrypted storage, privileged tasks, secrets.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

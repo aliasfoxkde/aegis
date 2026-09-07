@@ -1,7 +1,12 @@
 //! Web development patterns
+//!
+//! Front-end best practices: semantic HTML, form and prop validation, error
+//! boundaries, React and bundler optimization, and SEO metadata. Advisory rules,
+//! mostly low severity.
 
 use crate::Pattern;
 
+/// Front-end best practices: semantic HTML, validation, error boundaries, SEO.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

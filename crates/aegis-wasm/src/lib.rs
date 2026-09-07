@@ -11,20 +11,36 @@ use wasm_bindgen::prelude::*;
 /// Location of a finding
 #[derive(Serialize, Deserialize)]
 pub struct WasmLocation {
+    /// Origin label the caller supplied as `source`, echoed back unchanged so
+    /// JS code can attribute hits to the buffer they came from.
     pub file: String,
+    /// Line holding the match, counted from 1.
     pub line: usize,
+    /// Offset of the first matched character on that line, counted from 0.
     pub column: usize,
 }
 
 /// A finding from the scanner
 #[derive(Serialize, Deserialize)]
 pub struct WasmFinding {
+    /// Stable rule identifier that fired, e.g. `aws-access-key`; this is the
+    /// key JS consumers should branch and filter on.
     pub pattern: String,
+    /// Taxonomy bucket the rule belongs to, such as `secrets` or `security`.
     pub category: String,
+    /// Rule severity as a lowercase name: `low`, `medium`, `high`, or
+    /// `critical`.
     pub severity: String,
+    /// How reliable the shape match is: `low`, `medium`, or `high`.
     pub confidence: String,
+    /// Plain-language explanation of what the rule looks for and why it is a
+    /// problem, suitable for surfacing directly in an editor UI.
     pub description: String,
+    /// Literal source text that matched. The native finding type strips this
+    /// before serializing; the browser binding keeps it because the content
+    /// being scanned never leaves the caller.
     pub matched_text: String,
+    /// Where in the supplied content the match begins.
     pub location: WasmLocation,
 }
 

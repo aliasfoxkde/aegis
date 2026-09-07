@@ -17,19 +17,26 @@ aegis scan [path] [options]
 | `path` | Path to scan | `.` |
 | `-f, --file` | Treat the path as a single file | `false` |
 | `-e, --env` | Scan environment variables | `false` |
-| `--stdin` | Read content to scan from stdin | `false` |
+| `--stdin` | Accepted, but currently scans an empty string rather than reading stdin; pipe content to a file and use `--file` or `--diff` instead | `false` |
 | `--follow-symlinks` | Follow symbolic links | `false` |
 | `--categories` | Comma-separated category list to include | all |
 | `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` | all |
-| `--output-file` | Write results to a file instead of stdout | stdout |
+| `--output-file` | Also write results to this file, rendered in the selected `--format`; stdout output is unaffected | none |
 | `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only | none |
 | `--diff` | Scan only the changed lines of a unified diff file | none |
 | `--staged` | Scan the staged (index) content of the git repository instead of files on disk; `<path>` selects the repository | `false` |
 | `--all` | Include disabled patterns | `false` |
 
-**Global flags** (usable before the subcommand): `-f, --format`
-(`human`, `json`, `sarif`), `--config` (configuration profile),
-`--quiet`, `--verbose`.
+**Global flags:** `-f, --format <human|json|sarif>` and `-c, --config
+<profile>` are top-level options, so they must come **before** the
+subcommand (`aegis --format json scan .`). `-q, --quiet` and
+`-v, --verbose` are marked global and work anywhere.
+
+`--config` is accepted and resolves a preset name (`production`,
+`pipeline`, `development`, `mcp`) or a JSON profile path, but profile
+loading is not wired into the scan path yet: the flag has no effect on
+the run, and `--format` and the scan-level flags remain authoritative.
+See [Configuration](CONFIGURATION.md) for the profile schema.
 
 **Examples:**
 
@@ -72,8 +79,11 @@ aegis list [options]
 | Flag | Description |
 |------|-------------|
 | `--category` | Filter by category |
-| `--search` | Search pattern names/descriptions |
-| `--json` | Output as JSON |
+| `--enabled` | List only enabled patterns |
+| `--disabled` | List only disabled patterns |
+
+`aegis list` prints the rule id, severity, and description for each
+pattern, preceded by a `Total: N patterns` line.
 
 **Examples:**
 
@@ -84,12 +94,22 @@ aegis list
 # List secrets patterns
 aegis list --category secrets
 
-# Search for AWS patterns
-aegis list --search aws
-
-# JSON output
-aegis list --json
+# List only disabled patterns
+aegis list --disabled
 ```
+
+### aegis enable / aegis disable
+
+Report a pattern as enabled or disabled by id.
+
+```bash
+aegis enable <pattern-id>
+aegis disable <pattern-id>
+```
+
+Pattern state is not persisted, so these only print the requested change;
+they do not alter what a later scan loads. Use `scan --all` to include
+disabled patterns in a scan.
 
 ### aegis update
 
@@ -103,22 +123,23 @@ aegis update [options]
 
 | Flag | Description |
 |------|-------------|
-| `--url` | Custom bundle URL |
-| `--force` | Force update even if current |
+| `--force` | Force update even if cached |
 
-### aegis config
+### aegis benchmark
 
-Manage configuration.
+Run a benchmark comparison against a path.
 
 ```bash
-aegis config [subcommand]
+aegis benchmark [path]
 ```
 
-**Subcommands:**
+**Options:**
 
-- `aegis config show` - Display current configuration
-- `aegis config set <key> <value>` - Set a config value
-- `aegis config profile <name>` - Switch profile
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--warmup` | Number of warmup runs | `1` |
+| `--runs` | Number of benchmark runs to average | `3` |
+| `--compare` | Compare with Atheon-Enhanced if available | off |
 
 ## Custom Patterns
 
@@ -165,27 +186,18 @@ for custom patterns exactly as for bundled ones.
 
 | Code | Description |
 |------|-------------|
-| 0 | Scan completed, no issues found |
-| 1 | Scan completed, issues found |
-| 2 | Scan failed (error) |
-| 3 | Invalid arguments |
+| 0 | Scan completed, no findings |
+| 1 | Scan completed with findings. Also used when a scan itself fails (for example an unreadable scan root or an invalid `.aegis.yml`) |
+| 2 | Usage error: unknown subcommand or flag, or an invalid value for a global flag such as `--format` |
 
-## Configuration File
+With `--baseline`, code 1 means the scan produced findings that are not
+in the baseline; findings already recorded there do not affect the exit
+code.
 
-`~/.aegis/config.toml`:
+## Configuration
 
-```toml
-[defaults]
-profile = "development"
-format = "text"
-severity_threshold = "low"
-workers = 4
-
-[profiles.production]
-severity_threshold = "medium"
-workers = 8
-
-[profiles.pipeline]
-severity_threshold = "high"
-format = "sarif"
-```
+There is no global configuration file that Aegis reads automatically.
+A run's settings come from CLI flags, plus optional JSON profile
+documents selected with the top-level `-c/--config` flag. See
+[Configuration](CONFIGURATION.md) for the profile schema and the
+presets shipped in `config/profiles/`.

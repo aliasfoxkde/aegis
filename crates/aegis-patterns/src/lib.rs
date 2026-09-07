@@ -4,24 +4,41 @@
 
 use serde::{Deserialize, Serialize};
 
+/// A bundled rule exactly as serialized in the pattern corpus.
+///
+/// The field set mirrors [`aegis_core::PatternDefinition`]; [`From`] below is
+/// the single place the two are mapped, so wording here describes the same
+/// runtime semantics the scanner applies.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pattern {
+    /// Stable kebab-case rule identifier, e.g. `secrets-aws-access-key`.
     pub name: String,
+    /// Category bucket the rule reports under; drives weighting and grouping.
     pub category: String,
+    /// Regex (Rust `regex` crate syntax) matched against candidate files.
     #[serde(rename = "match")]
     pub match_pattern: String,
+    /// Whether the rule ships active; disabled rules are loaded but never scan.
     pub enabled: bool,
+    /// `critical`/`high`/`medium`/`low`, weighted 40/25/10/3 in risk scoring.
     pub severity: String,
+    /// `high`/`medium`/`low`, applied as a 1.0/0.7/0.4 multiplier to the hit.
     pub confidence: String,
+    /// Minimum Shannon entropy a match must reach; `None` skips the check.
     #[serde(default)]
     pub min_entropy: Option<f64>,
+    /// Human-readable finding text surfaced in reports.
     pub description: String,
+    /// Optional URL to the CWE, standard, or vendor page behind the rule.
     #[serde(default)]
     pub reference: Option<String>,
+    /// Taxonomy tags used for filtering (e.g. `aws`, `wcag-1.1.1`).
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Env-scan-only rule: never matched against file contents.
     #[serde(default)]
     pub env_var: bool,
+    /// Allow the rule to match inside binary files.
     #[serde(default)]
     pub binary: bool,
     /// Regex checked against each candidate match span: when it also matches,

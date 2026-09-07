@@ -1,7 +1,12 @@
 //! Data visualization patterns
+//!
+//! Charting guidance, all of it medium severity: accessible alternatives,
+//! chart-type and palette choice, and responsive sizing for common charting
+//! libraries.
 
 use crate::Pattern;
 
+/// Charting-library guidance: accessibility, chart type, palette, responsive sizing.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

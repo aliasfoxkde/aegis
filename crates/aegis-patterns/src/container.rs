@@ -1,7 +1,11 @@
 //! Container security patterns
+//!
+//! Dockerfile privilege-escape checks: `--privileged`, `--cap-add=ALL`, a mounted
+//! Docker socket, and containers declared with `USER root`.
 
 use crate::Pattern;
 
+/// Dockerfile privilege-escape checks: privileged mode, root user, exposed socket.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

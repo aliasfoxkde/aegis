@@ -1,7 +1,12 @@
 //! Git hygiene patterns - commit quality, branch naming, conflict detection
+//!
+//! Recognizes repository plumbing rather than vulnerabilities: merge markers,
+//! `.gitignore`/`.gitattributes`/`.gitmodules` entries, commit and branch
+//! conventions, and workflow config such as husky hooks and Dependabot.
 
 use crate::Pattern;
 
+/// Repository plumbing and convention rules: merge markers, commit format, hook config.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

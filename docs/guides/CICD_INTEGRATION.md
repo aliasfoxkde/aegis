@@ -15,41 +15,47 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Aegis
         run: |
-          curl -sSL https://get.aegis.dev | sh
-          aegis update
-      
+          curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+          tar -xzf aegis-linux-x86_64.tar.gz
+          sudo mv aegis /usr/local/bin/
+
       - name: Run Scan
-        run: aegis scan . --severity-threshold=medium --json > aegis-results.json
-      
+        run: aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json
+
       - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
           name: aegis-results
           path: aegis-results.json
-      
+
       - name: Fail on Critical
         if: always()
         run: |
-          if grep -q '"severity":"critical"' aegis-results.json; then
+          if grep -q '"severity": "critical"' aegis-results.json; then
             echo "Critical findings detected!"
             exit 1
           fi
 ```
+
+`aegis --format json scan .` writes pretty-printed JSON, so the severity
+key is followed by a space. Because the scan already exits non-zero when
+it produces findings, the "Fail on Critical" step is only needed when you
+want to gate on one severity rather than on any finding.
 
 ## GitLab CI
 
 ```yaml
 security_scan:
   stage: test
-  image: golang:1.21  # or aegis-container
+  image: golang:1.21
   script:
-    - wget https://get.aegis.dev -O aegis
-    - chmod +x aegis
+    - curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+    - tar -xzf aegis-linux-x86_64.tar.gz
     - ./aegis update
-    - ./aegis scan . --json --severity-threshold=medium > aegis-results.json
+    - ./aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json
   artifacts:
     reports:
       sast: aegis-results.json
@@ -65,21 +71,24 @@ security_scan:
 pipeline {
     agent any
     stages {
-        stage('Security Scan') {
+        stage('Install') {
             steps {
                 sh '''
-                    curl -sSL https://get.aegis.dev -o aegis
-                    chmod +x aegis
+                    curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+                    tar -xzf aegis-linux-x86_64.tar.gz
                     ./aegis update
-                    ./aegis scan . --json --severity-threshold=medium > aegis-results.json
                 '''
             }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'aegis-results.json'
-                    insertText: find pattern: '"severity":"critical"', text: readFile('aegis-results.json')
-                }
+        }
+        stage('Security Scan') {
+            steps {
+                sh './aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json'
             }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'aegis-results.json', allowEmptyArchive: true
         }
     }
 }
@@ -100,20 +109,15 @@ steps:
     displayName: 'Aegis Security Scan'
     inputs:
       script: |
-        curl -sSL https://get.aegis.dev -o aegis
-        chmod +x aegis
+        curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+        tar -xzf aegis-linux-x86_64.tar.gz
         ./aegis update
-        ./aegis scan . --json --severity-threshold=medium > aegis-results.json
+        ./aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json
       cwd: '$(System.DefaultWorkingDirectory)'
-  
+
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: 'aegis-results.json'
-  
-  - task: VulnerabilityCheck@0
-    inputs:
-      artifacts: 'aegis-results.json'
-      severityThreshold: 'Medium'
 ```
 
 ## Pre-commit Hook
@@ -141,13 +145,21 @@ pass, so the hook never blocks commits that touch no code.
 
 ## Docker Scan
 
-```bash
-# Scan Docker image
-docker run --rm -v $(pwd):/src aegis scan /src
+Build the image locally first — no image is published to a registry:
 
-# Scan container filesystem
-docker run --rm -v /var/lib/docker/overlay2:/mnt ubuntu aegis scan /mnt
+```bash
+docker build -t aegis:latest -f docker/Dockerfile .
+
+# Scan the current directory
+docker run --rm -v $(pwd):/workspace aegis:latest scan /workspace
+
+# Scan with SARIF output (--format precedes the subcommand)
+docker run --rm -v $(pwd):/workspace aegis:latest \
+  --format sarif scan /workspace --output-file /workspace/aegis-results.sarif
 ```
+
+`docker/docker-compose.yml` wraps these in profiles (`default`, `ci`,
+`test`, `daemon`); see `docker/README.md`.
 
 ## Kubernetes Admission Controller
 
@@ -174,7 +186,7 @@ webhooks:
 
 1. **Baseline**: Record a baseline of current findings once
    ```bash
-   aegis -f json scan . --output-file baseline.json
+   aegis --format json scan . --output-file baseline.json
    ```
 
 2. **Baseline Gate**: Only new findings fail the build. Store the
@@ -195,11 +207,13 @@ webhooks:
    aegis scan . --severity-threshold=critical
    ```
 
-4. **Exit Codes**: Use for pipeline failure
-   - 0: No findings or only low severity
-   - 1: Findings at or above threshold
+5. **Exit Codes**: Use for pipeline failure
+   - 0: no findings
+   - 1: findings present (with `--baseline`, only findings that are new
+     relative to the baseline)
+   - 2: usage error (unknown flag or subcommand)
 
-5. **Cache Bundles**: Don't download on every run
+6. **Cache Bundles**: Don't download on every run
    ```bash
    aegis update  # weekly or on-demand
    ```

@@ -1,7 +1,11 @@
 //! GraphQL patterns
+//!
+//! GraphQL server hardening: debug mode in production, unbounded query depth and
+//! field cost analysis, and introspection explicitly enabled.
 
 use crate::Pattern;
 
+/// GraphQL server hardening: debug mode, unbounded depth and cost, enabled introspection.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

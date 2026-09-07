@@ -19,9 +19,16 @@ pub use tools::*;
 
 /// MCP server state
 pub struct ServerState {
+    /// Scanner served to every tool call; installed by the lazy pattern
+    /// initialization and replaced wholesale by `update_bundle`.
     pub scanner: RwLock<Scanner>,
+    /// Configuration in force for the session, seeded with defaults at
+    /// startup.
     pub config: RwLock<Config>,
+    /// Version of the bundle currently serving scans, `"0.0.0"` until one is
+    /// installed.
     pub bundle_version: RwLock<String>,
+    /// Checksum of the installed bundle, empty until a bundle is installed.
     pub bundle_checksum: RwLock<String>,
     /// Guards the one-time lazy compilation of the bundled patterns. The
     /// JSON-RPC handshake and tool listing never wait on it; the first
@@ -36,6 +43,9 @@ pub struct ServerState {
 }
 
 impl ServerState {
+    /// Build a state with an empty scanner, default configuration, and
+    /// placeholder bundle metadata; patterns compile on the first request
+    /// that needs them, not here.
     #[must_use]
     pub fn new() -> Self {
         let config = Config::default();
@@ -97,9 +107,15 @@ impl Default for ServerState {
 /// Scan response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanResponse {
+    /// Findings that survived the configured filters. Matched source text is
+    /// skipped during serialization, so the payload never carries the secret
+    /// a rule fired on.
     pub findings: Vec<aegis_core::Finding>,
+    /// Count mirroring `findings`, for clients that never inspect the array.
     pub finding_count: usize,
+    /// Human-readable risk band derived from the finding set.
     pub risk_level: String,
+    /// Numeric score backing `risk_level`.
     pub risk_score: i32,
     /// Coverage and completeness evidence for the scan.
     pub stats: ScanStats,
@@ -151,25 +167,35 @@ impl ScanResponse {
 /// List patterns response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ListPatternsResponse {
+    /// Patterns matching the requested category filter, if one was given.
     pub patterns: Vec<PatternInfo>,
+    /// Number of entries returned, mirroring `patterns`.
     pub total: usize,
 }
 
 /// Pattern info
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PatternInfo {
+    /// Registry identifier clients pass to `enable` or `disable`.
     pub name: String,
+    /// Category bucket the pattern belongs to.
     pub category: String,
+    /// Severity label, from `critical` down to `low`.
     pub severity: String,
+    /// How strongly the pattern is trusted to be a true positive.
     pub confidence: String,
+    /// One-line explanation surfaced to the end user.
     pub description: String,
 }
 
 /// Update response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UpdateResponse {
+    /// Whether the newly installed bundle is now serving scans.
     pub success: bool,
+    /// Human-readable summary for the caller's logs.
     pub message: String,
+    /// Number of patterns the installed bundle carries.
     pub pattern_count: usize,
 }
 
@@ -179,6 +205,7 @@ pub struct AegisRpcImpl {
 }
 
 impl AegisRpcImpl {
+    /// Bind the JSON-RPC dispatcher to the shared server state.
     pub fn new(state: Arc<ServerState>) -> Self {
         Self { state }
     }

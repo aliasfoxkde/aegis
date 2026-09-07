@@ -1,7 +1,12 @@
 //! Supply chain patterns - dependencies, package managers, integrity
+//!
+//! Dependency manifests and lockfiles for every supported ecosystem, plus SBOM and
+//! advisory tooling. These are recognition rules: they show what is pinned, not
+//! whether a version is vulnerable.
 
 use crate::Pattern;
 
+/// Dependency manifests, lockfiles, and SBOM/advisory tooling across ecosystems.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

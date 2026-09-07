@@ -11,6 +11,7 @@
 
 use crate::Pattern;
 
+/// Credential shapes; `env_var: true` rules never run against file contents.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

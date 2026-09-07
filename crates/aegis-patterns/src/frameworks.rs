@@ -1,7 +1,12 @@
 //! Framework-specific patterns
+//!
+//! One set per stack: Django, Flask, and Rails debug and raw-SQL checks;
+//! Express and Node pitfalls; React, Vue, and Angular injection sinks; Spring
+//! deserialization; and Rust `unwrap`/`unsafe` usage.
 
 use crate::Pattern;
 
+/// Per-framework rules for Python, Ruby, JS/TS, Java, Go, and Rust stacks.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

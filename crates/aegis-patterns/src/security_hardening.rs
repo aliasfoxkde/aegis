@@ -1,7 +1,12 @@
 //! Security hardening patterns - security best practices and vulnerability detection
+//!
+//! General application hardening kept separate from the secret pack: injection
+//! sinks, weak crypto and randomness, cookie and transport flags, and tokens
+//! placed in URLs.
 
 use crate::Pattern;
 
+/// Application hardening: injection sinks, weak crypto, insecure cookies and transport.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

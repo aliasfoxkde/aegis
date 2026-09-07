@@ -19,8 +19,12 @@ pub const SCAN_RECEIPT_SCHEMA_VERSION: u16 = 1;
 /// Redacted source location retained in a receipt.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReceiptLocation {
+    /// Path as reported by the scan, relative to the scan root; the matched
+    /// line content is never retained alongside it.
     pub file: String,
+    /// Line number, 1-indexed, of the first line of the finding.
     pub line: usize,
+    /// Byte/character column within the line, 0-indexed.
     pub column: usize,
 }
 
@@ -37,12 +41,21 @@ impl From<&Location> for ReceiptLocation {
 /// Redacted finding metadata retained in a receipt.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReceiptFinding {
+    /// Stable deduplication fingerprint; the matched text contributes only
+    /// through a one-way digest, so this never reveals the secret itself.
     pub stable_id: String,
+    /// Name of the pattern that produced the finding, e.g. `aws-access-key`.
     pub pattern: String,
+    /// Category the pattern belongs to, e.g. `secrets` or `pii`.
     pub category: String,
+    /// Severity label, lowercased (`critical`, `high`, `medium`, `low`).
     pub severity: String,
+    /// Confidence label, lowercased (`high`, `medium`, `low`).
     pub confidence: String,
+    /// Analyzer that produced the finding, as the [`crate::FindingKind`]
+    /// display form: `pattern`, `ast`, `clone`, `cfg`, `entropy`, or `taint`.
     pub kind: String,
+    /// Redacted position of the finding in the source.
     pub location: ReceiptLocation,
 }
 
@@ -63,21 +76,51 @@ impl From<&Finding> for ReceiptFinding {
 /// A durable, redacted record of one scan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanReceipt {
+    /// [`SCAN_RECEIPT_SCHEMA_VERSION`] value at creation time; readers use it
+    /// to tell an unsupported future layout from a current one.
     pub schema_version: u16,
+    /// Content-derived identity, `aegis-receipt-<hex>` where `<hex>` is the
+    /// SHA-256 of `source|scope|profile|created_at|stable_id…`; two scans of
+    /// the same inputs at the same second therefore share an id.
     pub receipt_id: String,
+    /// Creation time as whole seconds since the Unix epoch, `0` if the system
+    /// clock reported a time before the epoch.
     pub created_at: u64,
+    /// What was scanned: a filesystem path, or a label such as `string:<name>`
+    /// for in-memory content fed to the scanner.
     pub source: String,
+    /// Short label for the entrypoint that ran the scan, e.g. `cli_scan`.
     pub scope: String,
+    /// Free-form description of the effective scan configuration; the CLI
+    /// encodes file/env/stdin mode, category filter and severity threshold.
     pub profile: String,
+    /// Optional VCS revision of the scanned tree, taken from
+    /// `AEGIS_SOURCE_REVISION` when set. Purely informational: setting it does
+    /// not change [`ScanReceipt::receipt_id`].
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_revision: Option<String>,
+    /// SHA-256 hex digest of the effective profile string, from
+    /// [`ScanReceipt::digest_text`], so a receipt can be tied to the exact
+    /// configuration that produced it without shipping the config itself.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_digest: Option<String>,
+    /// Number of redacted findings embedded below; equals `stats.finding_count`
+    /// after [`ScanReceipt::from_scan`] reconciles the two.
     pub finding_count: usize,
+    /// Aggregate risk level label from [`RiskScore::level`], one of `none`,
+    /// `low`, `medium`, `high`, `critical`.
     pub risk_level: String,
+    /// Aggregate integer risk score behind [`ScanReceipt::risk_level`].
     pub risk_score: i32,
+    /// Findings with all matched source content stripped out.
     pub findings: Vec<ReceiptFinding>,
+    /// Scan statistics. Coverage figures are kept from the caller, but the
+    /// finding-derived counts are recomputed from [`ScanReceipt::findings`] so
+    /// the embedded numbers cannot disagree with the embedded evidence.
     pub stats: ScanStats,
+    /// Record of what the scan did and did not inspect; consulted by
+    /// [`ScanReceipt::allows_safe`] before a caller treats the receipt as a
+    /// clean pass.
     pub inspection_ledger: InspectionLedger,
 }
 

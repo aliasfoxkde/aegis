@@ -1,7 +1,12 @@
 //! Finance patterns - financial data and payment information
+//!
+//! Financial identifier shapes (ABA, IBAN, SWIFT/BIC, BTC and ETH addresses) plus
+//! Stripe publishable keys. A match proves format only, so confirm the surrounding
+//! context before treating it as leaked data.
 
 use crate::Pattern;
 
+/// Financial identifier formats and payment-provider key shapes.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

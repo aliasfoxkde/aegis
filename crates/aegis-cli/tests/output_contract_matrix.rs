@@ -1,3 +1,7 @@
+//! Contract tests for the published report shapes: the CLI `Output`, the core
+//! `FileOutput` writers, and `ScanReceipt` must agree on stable finding
+//! identity, inspection-ledger layout, and SARIF regions, and must never emit
+//! matched source text.
 #![cfg(feature = "output-pipeline")]
 
 use aegis_cli::{Output, OutputFormat};

@@ -14,13 +14,25 @@ use tokio::io::AsyncReadExt;
 /// would force every caller to translate back into per-flag fields.
 #[allow(clippy::struct_excessive_bools)]
 pub struct ScanOptions {
+    /// Target of the scan: the repository or directory root, or the single
+    /// file when `scan_file` is set.
     pub path: PathBuf,
+    /// Scan the single file at `path` instead of walking the tree.
     pub scan_file: bool,
+    /// Scan the process environment for leaked credentials.
     pub scan_env: bool,
+    /// Take the payload to scan from stdin rather than the filesystem.
     pub scan_stdin: bool,
+    /// Descend into symbolic links while walking directories.
     pub follow_symlinks: bool,
+    /// Comma-separated allowlist of pattern categories; `None` selects every
+    /// category the bundle provides.
     pub categories: Option<String>,
+    /// Lowest severity a finding must reach to be reported; `None` keeps all
+    /// severities.
     pub severity_threshold: Option<String>,
+    /// Destination that `run_scan_and_get_exit_code` writes the rendered
+    /// report to; the scan itself only builds the report in memory.
     pub output_file: Option<PathBuf>,
     /// Baseline file (`--format json` output from a previous scan) whose
     /// findings are treated as pre-existing and filtered out
@@ -32,7 +44,9 @@ pub struct ScanOptions {
     /// Scan the staged (index) content of the git repository at `path`
     /// instead of files on disk — pre-commit mode
     pub staged: bool,
+    /// Renderer for the report buffer, mirroring the `--format` flag.
     pub format: OutputFormat,
+    /// Suppress header and stats blocks so the buffer carries findings only.
     pub quiet: bool,
 }
 
@@ -218,10 +232,16 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
 
 /// Result of a scan execution
 pub struct ScanResult {
+    /// Findings that survived category, severity, and baseline filtering.
     pub findings: Vec<Finding>,
+    /// Coverage counters plus the inspection ledger recording what was and
+    /// was not analyzed.
     pub stats: ScanStats,
+    /// Rendered report, exactly as it is echoed to stdout.
     pub output: String,
+    /// Whether any finding survived; it becomes the process exit code.
     pub has_findings: bool,
+    /// Provenance receipt persisted to `AEGIS_RECEIPT_FILE` when set.
     pub receipt: ScanReceipt,
 }
 

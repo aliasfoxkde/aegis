@@ -3,9 +3,11 @@
 ## Overview
 
 Patterns are the core detection units in Aegis. Each pattern is a Rust
-struct in `crates/aegis-patterns/src/<category>.rs`; the full corpus is
-serialized into gzip+JSON bundles for distribution and loaded into a
-`PatternRegistry` at scan time.
+struct in `crates/aegis-patterns/src/<category>.rs`; every surface (CLI,
+MCP, daemon, WASM) builds its `PatternRegistry` from the compiled-in
+corpus via `aegis_patterns::all_patterns()`. The same corpus can be
+serialized into a gzip+JSON bundle, which the MCP `update_bundle` method
+loads and installs in place of the built-in set.
 
 The generated catalog of every shipped pattern lives in
 [docs/patterns/README.md](./patterns/README.md) (regenerate with
@@ -106,7 +108,8 @@ Per-category descriptions and full pattern tables are in the
 | Medium | 0.7 | May have false positives |
 | Low | 0.4 | Experimental pattern |
 
-Risk score per finding = severity weight × confidence multiplier.
+Per-finding risk contribution = severity weight × confidence multiplier ×
+category weight, summed into the scan's risk score.
 
 ---
 

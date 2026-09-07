@@ -33,10 +33,20 @@ pub enum AstInspectionStatus {
 /// Bounded AST inspection result used by scanner and ledger integrations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AstInspection {
+    /// How far structural analysis got for this source unit.
     pub status: AstInspectionStatus,
+    /// Recognized file extension the analysis ran under (for example `"rs"`),
+    /// or `None` when the source had no usable extension.
     pub language: Option<String>,
+    /// Whether the scan receipt treats this unit as mandatory coverage. It is
+    /// `true` whenever a grammar-backed parse was expected, so a failure makes
+    /// [`crate::finding::InspectionLedger::allows_safe`] return `false`.
     pub required: bool,
+    /// Machine-readable explanation for a non-`Parsed` status, such as
+    /// `"tree_sitter_feature_disabled"` or `"unsupported_extension"`.
     pub reason: Option<String>,
+    /// Findings produced by the line-based AST rules; emitted regardless of
+    /// whether a parser-backed parse also succeeded.
     pub findings: Vec<AstFinding>,
 }
 
@@ -83,15 +93,34 @@ pub struct AstAnalyzer {
     language: Language,
 }
 
+/// Languages an [`AstAnalyzer`] can be built for, as recognized by
+/// [`AstAnalyzer::from_extension`].
+///
+/// Only the first five ship rule sets: `Go`, `Rust`, `Python`, `JavaScript`
+/// and `TypeScript` run through the line-based analyzers, and with the
+/// `tree-sitter` feature they also have a grammar for parser-backed coverage.
+/// `Java`, `C` and `Cpp` are recognized so callers get a stable language
+/// label, but analysis over them yields no findings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
+    /// Go sources (`.go`).
     Go,
+    /// Rust sources (`.rs`).
     Rust,
+    /// Python sources (`.py`).
     Python,
+    /// JavaScript sources (`.js`, `.mjs`, `.cjs`); TypeScript shares this
+    /// rule set.
     JavaScript,
+    /// TypeScript sources (`.ts`, `.mts`, `.cts`); parsed with the
+    /// TypeScript grammar, analyzed with the JavaScript rules.
     TypeScript,
+    /// Java sources (`.java`); recognized only, no rules or grammar.
     Java,
+    /// C sources (`.c`, `.h`); recognized only, no rules or grammar.
     C,
+    /// C++ sources (`.cpp`, `.cc`, `.cxx`, `.hpp`, `.hxx`); recognized only,
+    /// no rules or grammar.
     Cpp,
 }
 
@@ -733,9 +762,14 @@ impl AstAnalyzer {
 /// AST error types
 #[derive(Debug, thiserror::Error)]
 pub enum AstError {
+    /// A parse could not be completed: no grammar for the language, the
+    /// parser failed to configure or produced no tree, or the source
+    /// contained a syntax error. Details are in the message.
     #[error("Parse error: {0}")]
     ParseError(String),
 
+    /// Reading the source file failed; the [`std::io::Error`] is carried as
+    /// the source.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 }

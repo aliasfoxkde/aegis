@@ -1,7 +1,12 @@
 //! Web security patterns - OWASP Top 10 and web vulnerabilities
+//!
+//! The core vulnerability pack: XSS, SQL and command injection, SSRF, CSRF, path
+//! traversal, insecure deserialization, missing security headers, and broken
+//! authentication.
 
 use crate::Pattern;
 
+/// Core vulnerability rules: XSS, injection, SSRF, CSRF, deserialization, headers, auth.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

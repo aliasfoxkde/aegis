@@ -10,22 +10,46 @@ use walkdir::WalkDir;
 /// Pattern structure matching YAML format
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pattern {
+    /// Stable identifier written into every finding and used by `aegis:ignore`
+    /// directives, so renaming a rule breaks existing suppressions.
     pub name: String,
+    /// Taxonomy bucket the rule files under, driving category filters and the
+    /// risk rollup reported with a scan.
     pub category: String,
+    /// Regex applied to each inspected line; a value that will not compile
+    /// aborts the bundle build. Serialized under the key `match` since
+    /// `match` is a reserved word in Rust.
     #[serde(rename = "match")]
     pub match_pattern: String,
+    /// Whether the rule ships active; disabled entries stay in the artifact
+    /// for reference but are skipped by the scanner.
     pub enabled: bool,
+    /// Impact rating assigned to hits — `low`, `medium`, `high`, or
+    /// `critical` — which sets their weight in the risk score.
     pub severity: String,
+    /// Expected rate of true positives (`low`, `medium`, `high`); low-
+    /// confidence rules read as signals to review rather than verdicts.
     pub confidence: String,
+    /// Shannon-entropy floor a candidate must clear before it is reported,
+    /// used to cut random-looking false positives in broad secret rules;
+    /// `None` means no entropy gate.
     #[serde(default, alias = "minEntropy")]
     pub min_entropy: Option<f64>,
+    /// Human-readable explanation carried with each hit so consumers can show
+    /// context without consulting the rule source.
     pub description: String,
+    /// Optional link to authoritative documentation for the flagged issue.
     #[serde(default)]
     pub reference: Option<String>,
+    /// Free-form labels used for grouping, reporting, or excluding rules.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Confine the rule to environment-variable scanning so it can never fire
+    /// on file content.
     #[serde(default)]
     pub env_var: bool,
+    /// Let the rule match inside binary files, which the scanner otherwise
+    /// skips entirely.
     #[serde(default)]
     pub binary: bool,
     /// Suppress finding when this regex also matches the matched span
@@ -39,8 +63,14 @@ pub struct Pattern {
 /// Bundle structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bundle {
+    /// Format revision stamped into the artifact; consumers reject a version
+    /// they do not implement, so it only changes with a breaking layout.
     pub schema_version: u32,
+    /// Build time as a decimal count of seconds since the Unix epoch, which
+    /// makes two artifacts of the same input distinguishable.
     pub created_at: String,
+    /// Rules carried by the artifact, in the order the input YAML files were
+    /// walked; this is the payload everything else describes.
     pub patterns: Vec<Pattern>,
 }
 

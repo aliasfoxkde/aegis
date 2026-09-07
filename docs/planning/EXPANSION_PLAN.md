@@ -114,8 +114,8 @@ zero findings in the affected categories).
 
 - `exclude_pattern`, `file_extensions`, attribution fix (engine).
 - Validation suite wired into `cargo test` and CI.
-- Rebuilt `accessibility` (22 → ~45 patterns, WCAG-tagged).
-- New `typescript` category (~20 patterns, file-scoped).
+- Rebuilt `accessibility` (22 → 28 patterns, WCAG-tagged).
+- New `typescript` category (13 patterns, file-scoped).
 - Repaired `code-quality` (kept patterns made precise; un-fixable-in-regex patterns
   removed and documented).
 
@@ -162,13 +162,14 @@ zero findings in the affected categories).
 3. Release automation: tag `vX.Y.Z` → `release.yml` builds artifacts; version bump
    discipline via workspace `Cargo.toml`.
 
-### Phase 5 — Documentation
+### Phase 5 — Documentation (items 1–3 shipped; 4 open)
 
-1. `docs/patterns/` regenerated from source (script counts updated).
-2. `README.md` feature table updated (category count, new fields).
-3. `PATTERNS.md` spec: document `exclude` and `file_extensions` fields.
+1. `docs/patterns/` regenerated from source (script counts updated). ✅
+2. `README.md` feature table updated (category count, new fields). ✅
+3. `PATTERNS.md` spec: document `exclude` and `file_extensions` fields. ✅
 4. `CONTRIBUTING.md`: pattern authoring checklist (tests, tags, references,
-   file scoping, FP self-review fixture).
+   file scoping, FP self-review fixture). Not started — `guides/ADDING_PATTERNS.md`
+   is the current stand-in.
 
 ---
 

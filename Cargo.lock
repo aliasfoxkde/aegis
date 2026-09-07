@@ -135,7 +135,6 @@ dependencies = [
  "futures",
  "jsonrpc-core",
  "jsonrpc-derive",
- "ratelimit",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -2388,15 +2387,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
 dependencies = [
  "rand_core 0.9.5",
-]
-
-[[package]]
-name = "ratelimit"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e78b08065c51c82ff8c4a0d88e3dce3edfce39c375e946c3464210fff3433fb8"
-dependencies = [
- "thiserror",
 ]
 
 [[package]]
