@@ -145,28 +145,11 @@ mod tests {
     use super::*;
 
     fn init_test_scanner() -> Scanner {
-        let patterns = aegis_patterns::all_patterns();
-        let definitions: Vec<PatternDefinition> = patterns
+        // The canonical `From<Pattern>` conversion keeps this harness in
+        // lockstep with the production scanners.
+        let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
             .into_iter()
-            .map(|p| PatternDefinition {
-                name: p.name,
-                category: p.category,
-                match_pattern: p.match_pattern,
-                enabled: p.enabled,
-                severity: aegis_core::Severity::parse(&p.severity)
-                    .unwrap_or(aegis_core::Severity::Medium),
-                confidence: aegis_core::Confidence::parse(&p.confidence)
-                    .unwrap_or(aegis_core::Confidence::Medium),
-                min_entropy: p.min_entropy,
-                description: p.description,
-                reference: p.reference,
-                remediation: None,
-                tags: p.tags,
-                env_var: p.env_var,
-                binary: p.binary,
-                exclude_pattern: p.exclude,
-                file_extensions: p.file_extensions,
-            })
+            .map(Into::into)
             .collect();
         Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
     }
@@ -301,5 +284,66 @@ mod tests {
         assert!(result.is_ok());
         let response = result.unwrap();
         assert_eq!(response.finding_count, 0);
+    }
+
+    #[tokio::test]
+    async fn scan_file_inside_cwd_reports_findings_and_stats() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+
+        // `temp/` is inside the sandbox cwd and gitignored.
+        let fixture_dir = PathBuf::from("temp/mcp-fixtures");
+        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
+        std::fs::write(
+            fixture_dir.join("leak.txt"),
+            concat!("token = \"ghp_", "0123456789abcdefghijklmnopqrstuvwxyzAB\""),
+        )
+        .expect("write fixture");
+
+        let result = AegisTools::scan_file(&state, "temp/mcp-fixtures/leak.txt".to_string()).await;
+        let _ = std::fs::remove_dir_all(&fixture_dir);
+
+        let response = result.expect("scan_file inside cwd must succeed");
+        assert!(response.finding_count > 0, "leaked token must be detected");
+    }
+
+    #[tokio::test]
+    async fn scan_file_missing_file_maps_to_internal_error() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+
+        // Nonexistent but inside cwd: the sandbox allows it, the scan fails.
+        let result = AegisTools::scan_file(&state, "temp/absent-file.txt".to_string()).await;
+        let error = result.expect_err("missing file must surface an error");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InternalError);
+    }
+
+    #[tokio::test]
+    async fn scan_dir_inside_cwd_reports_findings() {
+        let state = create_test_state();
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_test_scanner();
+        }
+
+        let fixture_dir = PathBuf::from("temp/mcp-dir-fixture");
+        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
+        std::fs::write(
+            fixture_dir.join("creds.txt"),
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n",
+        )
+        .expect("write fixture"); // aegis:ignore:aws-secret-key
+
+        let result = AegisTools::scan_dir(&state, "temp/mcp-dir-fixture".to_string()).await;
+        let _ = std::fs::remove_dir_all(&fixture_dir);
+
+        let response = result.expect("scan_dir inside cwd must succeed");
+        assert!(response.finding_count > 0, "nested leak must be found");
     }
 }

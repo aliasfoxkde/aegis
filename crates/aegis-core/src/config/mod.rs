@@ -549,8 +549,7 @@ max_file_size_mb: 15
     fn yaml_preset_file_round_trip_preserves_fields() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("preset.yaml");
-        let yaml = format!(
-            r#"
+        let yaml = r#"
 name: full
 enabled_categories: [secrets, pii]
 webhooks:
@@ -565,8 +564,7 @@ database_outputs:
 output_formats:
   - format: sarif
     path: out.sarif
-"#
-        );
+"#;
         let preset: YamlPreset = yaml.parse().expect("parse preset");
         preset.to_file(&path).expect("write preset");
 

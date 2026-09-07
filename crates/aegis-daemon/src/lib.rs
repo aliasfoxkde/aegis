@@ -214,28 +214,9 @@ impl DaemonState {
 
 /// Initialize scanner with patterns from aegis-patterns
 pub fn init_scanner() -> Scanner {
-    let patterns = aegis_patterns::all_patterns();
-    let definitions: Vec<PatternDefinition> = patterns
+    let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
-        .map(|p| PatternDefinition {
-            name: p.name,
-            category: p.category,
-            match_pattern: p.match_pattern,
-            enabled: p.enabled,
-            severity: aegis_core::Severity::parse(&p.severity)
-                .unwrap_or(aegis_core::Severity::Medium),
-            confidence: aegis_core::Confidence::parse(&p.confidence)
-                .unwrap_or(aegis_core::Confidence::Medium),
-            min_entropy: p.min_entropy,
-            description: p.description,
-            reference: p.reference,
-            tags: p.tags,
-            env_var: p.env_var,
-            binary: p.binary,
-            exclude_pattern: p.exclude,
-            file_extensions: p.file_extensions,
-            remediation: None,
-        })
+        .map(Into::into)
         .collect();
 
     Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
@@ -739,5 +720,147 @@ mod tests {
 
         let response = handle_request(&request, &state).await;
         assert!(!response.success);
+    }
+
+    /// Requests that rely on lazy pattern compilation: none of these tests
+    /// pre-seed the scanner, so `ensure_patterns_loaded` is what populates
+    /// the registry.
+    #[tokio::test]
+    async fn lazy_patterns_load_on_first_request() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+        let request = serde_json::json!({ "method": "scan_env", "params": [], "id": 20 });
+
+        let response = handle_request(&request, &state).await;
+        assert!(response.success, "scan_env: {:?}", response.error);
+        // The registry loaded lazily, so the environment was actually
+        // scanned against the full corpus (the test process env itself may
+        // legitimately contain matches, so only the shape is asserted).
+    }
+
+    #[tokio::test]
+    async fn scan_file_within_root_reports_findings() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("leak.txt"),
+            concat!("token = \"ghp_", "0123456789abcdefghijklmnopqrstuvwxyzAB\""),
+        )
+        .expect("write fixture");
+
+        let state = Arc::new(DaemonState::with_scan_root(
+            PathBuf::from("/tmp/test.sock"),
+            dir.path().to_path_buf(),
+        ));
+        let request = serde_json::json!({
+            "method": "scan_file",
+            "params": "leak.txt",
+            "id": 21
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(response.success, "scan_file: {:?}", response.error);
+        assert!(response.finding_count > 0, "leaked token must be detected");
+    }
+
+    #[tokio::test]
+    async fn scan_file_against_a_directory_errors() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = Arc::new(DaemonState::with_scan_root(
+            PathBuf::from("/tmp/test.sock"),
+            dir.path().to_path_buf(),
+        ));
+        let request = serde_json::json!({
+            "method": "scan_file",
+            "params": ".",
+            "id": 22
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success);
+        assert!(response.error.unwrap().contains("Scan error"));
+    }
+
+    #[tokio::test]
+    async fn scan_dir_within_root_reports_findings() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let nested = dir.path().join("nested");
+        fs::create_dir(&nested).expect("mkdir");
+        fs::write(
+            nested.join("leak.txt"),
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n",
+        )
+        .expect("write");
+        // aegis:ignore:aws-secret-key
+
+        let state = Arc::new(DaemonState::with_scan_root(
+            PathBuf::from("/tmp/test.sock"),
+            dir.path().to_path_buf(),
+        ));
+        let request = serde_json::json!({ "method": "scan_dir", "params": ".", "id": 23 });
+
+        let response = handle_request(&request, &state).await;
+        assert!(response.success, "scan_dir: {:?}", response.error);
+        assert!(response.finding_count > 0, "nested leak must be found");
+    }
+
+    #[tokio::test]
+    async fn scan_string_rejects_malformed_params() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+
+        // params is not an array
+        let not_array = serde_json::json!({ "method": "scan_string", "params": "text" });
+        let response = handle_request(&not_array, &state).await;
+        assert!(response
+            .error
+            .unwrap()
+            .contains("requires [content, source]"));
+
+        // array without a string content element
+        let no_content = serde_json::json!({ "method": "scan_string", "params": [42, "src"] });
+        let response = handle_request(&no_content, &state).await;
+        assert!(response.error.unwrap().contains("Missing content"));
+
+        // array without a source element
+        let no_source = serde_json::json!({ "method": "scan_string", "params": ["text"] });
+        let response = handle_request(&no_source, &state).await;
+        assert!(response.error.unwrap().contains("Missing source"));
+    }
+
+    #[tokio::test]
+    async fn requests_without_a_method_string_are_rejected() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+
+        let no_method = serde_json::json!({ "params": [] });
+        let response = handle_request(&no_method, &state).await;
+        assert!(!response.success);
+        assert_eq!(response.error.as_deref(), Some("Missing method"));
+
+        let method_not_string = serde_json::json!({ "method": 7 });
+        let response = handle_request(&method_not_string, &state).await;
+        assert_eq!(response.error.as_deref(), Some("Missing method"));
+    }
+
+    #[tokio::test]
+    async fn error_responses_carry_the_message_and_defaults() {
+        let response = DaemonResponse::error("boom".to_string());
+        assert!(!response.success);
+        assert_eq!(response.error.as_deref(), Some("boom"));
+        assert_eq!(response.finding_count, 0);
+        assert_eq!(response.risk_level, "unknown");
+        assert_eq!(response.risk_score, 0);
+
+        let from_findings =
+            DaemonResponse::from_findings_with_source(vec![], ScanStats::default(), "unit-test");
+        assert!(from_findings.success);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn allowlist_policy_honors_uid_and_gid_entries() {
+        let policy =
+            DaemonPeerPolicy::from_allowlists(42, None, Some("7,8")).expect("valid allowlists");
+        assert!(policy.allows_credentials(42, 1_000));
+        assert!(policy.allows_credentials(43, 7));
+        assert!(!policy.allows_credentials(43, 9));
+        assert_eq!(policy.socket_mode(), 0o660);
     }
 }
