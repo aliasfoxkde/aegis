@@ -141,7 +141,10 @@ pub fn get() -> Vec<Pattern> {
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
-            min_entropy: Some(4.5),
+            // A 34-char hex-body span holds at most 18 distinct characters,
+            // capping entropy near 4.15 bits — anything higher makes the
+            // rule unreachable.
+            min_entropy: Some(3.5),
             description: "Twilio API Key detected".to_string(),
             reference: Some("https://www.twilio.com/docs/iam/keys".to_string()),
             tags: vec!["twilio".to_string(), "sms".to_string(), "api-key".to_string()],

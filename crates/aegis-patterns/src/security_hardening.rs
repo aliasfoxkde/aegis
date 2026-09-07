@@ -240,11 +240,16 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "security-hardening-aws-access-key".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}"#.to_string(),
+            // AKIA-prefixed keys are owned by the `aws-access-key` rule
+            // (pii); this rule covers the remaining live prefixes so a
+            // single key produces one finding, not two.
+            match_pattern: r"\b(ABIA|ACCA|ASIA)[A-Z0-9]{16}\b".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
-            min_entropy: Some(5.0),
+            // A 20-char span tops out at log2(20) ~ 4.32 bits, so anything
+            // higher (the old 5.0) makes the rule unreachable.
+            min_entropy: Some(3.5),
             description: "AWS access key ID detected".to_string(),
             reference: None,
             tags: vec!["aws".to_string(), "security".to_string(), "secrets".to_string()],

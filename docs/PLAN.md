@@ -40,22 +40,32 @@ fresh by a CI test — do not duplicate counts anywhere.
 
 ## Phase roadmap
 
-### Phase 1 — Rule-liveness harness (highest value)
+### Phase 1 — Rule-liveness harness (highest value) — DELIVERED
 
 Every shipped rule must prove it can fire. The corpus harness caught three
 dead rules on first contact; liveness makes that bug class impossible to
-reintroduce.
+reintroduce. Shipped in this phase: `scripts/generate_examples.py`
+(deterministic, crc32-seeded, reproducible byte-for-byte),
+`crates/aegis-patterns/src/examples.rs` (all 633 enabled patterns), and
+`crates/aegis-core/tests/pattern_liveness.rs` (runs via
+`cargo test --workspace`, so CI covers it).
 
-- Generated examples table: for each bundled pattern, a realistic string
-  the pattern matches under its own entropy gate. Produced by a
-  checked-in generator (`scripts/generate_examples.py`), committed as
-  `crates/aegis-patterns/src/examples.rs`, reviewed by humans.
-- Liveness test: every enabled pattern produces a finding when its example
-  is scanned via `scan_string` (using a filename the pattern's extension
-  filter allows). `env_var`-only patterns are proven by direct regex +
-  entropy validation, matching their env-scan scope.
-- Fix every dead or unreachable rule the harness exposes.
-- **Exit criteria:** liveness test runs in CI; zero unprovable rules.
+Dead and unreachable rules it exposed and fixed on first run:
+
+- `security-hardening-aws-access-key`: min_entropy 5.0 over a 20-char span
+  (ceiling log2(20) ≈ 4.32) — provably dead; lowered to 3.5.
+- `secrets-twilio-api-key`: 4.5 over 34 hex chars (ceiling ≈ 4.15) — dead;
+  lowered to 3.5.
+- `ethereum-address`: 4.5 over 42 hex chars (ceiling ≈ 4.13) — dead;
+  lowered to 3.5.
+- `security-hardening-aws-access-key` also duplicated `aws-access-key`
+  (pii) on every AKIA key, double-reporting each finding; it now owns only
+  the ABIA/ACCA/ASIA prefixes.
+
+Remaining for follow-up phases: hand-polish generator output realism
+(Phase 3 noise audit shares the pass criteria).
+
+- **Exit criteria:** liveness test runs in CI; zero unprovable rules. ✅
 
 ### Phase 2 — Lazy per-extension compilation
 

@@ -51,7 +51,10 @@ pub fn get() -> Vec<Pattern> {
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
-            min_entropy: Some(4.5),
+            // A 42-char hex-body span holds at most 18 distinct characters,
+            // capping entropy near 4.13 bits — anything higher makes the
+            // rule unreachable.
+            min_entropy: Some(3.5),
             description: "Ethereum address detected".to_string(),
             reference: Some("https://ethereum.org/en/developers/docs/accounts/".to_string()),
             tags: vec![
