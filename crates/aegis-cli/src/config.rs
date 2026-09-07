@@ -2,12 +2,24 @@
 
 use std::path::PathBuf;
 
+/// Enable a pattern.
+///
+/// # Errors
+///
+/// None yet: pattern state is not persisted, so this always returns
+/// `Ok(())`.
 #[allow(dead_code)]
 pub fn enable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
     // In real implementation, this would update the pattern state file
     Ok(())
 }
 
+/// Disable a pattern.
+///
+/// # Errors
+///
+/// None yet: pattern state is not persisted, so this always returns
+/// `Ok(())`.
 #[allow(dead_code)]
 pub fn disable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
     // In real implementation, this would update the pattern state file
@@ -15,15 +27,23 @@ pub fn disable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
 }
 
 /// Get the message to display when enabling a pattern
+#[must_use]
 pub fn enable_pattern_message(pattern: &str) -> String {
-    format!("Enabled pattern: {}", pattern)
+    format!("Enabled pattern: {pattern}")
 }
 
 /// Get the message to display when disabling a pattern
+#[must_use]
 pub fn disable_pattern_message(pattern: &str) -> String {
-    format!("Disabled pattern: {}", pattern)
+    format!("Disabled pattern: {pattern}")
 }
 
+/// Load a configuration document from disk.
+///
+/// # Errors
+///
+/// Returns an error when `path` cannot be read or when its contents are not
+/// a valid JSON configuration.
 #[allow(dead_code)]
 pub fn load_config(path: &PathBuf) -> Result<aegis_core::Config, anyhow::Error> {
     let content = std::fs::read_to_string(path)?;
@@ -31,6 +51,12 @@ pub fn load_config(path: &PathBuf) -> Result<aegis_core::Config, anyhow::Error> 
     Ok(config)
 }
 
+/// Write a configuration document to disk.
+///
+/// # Errors
+///
+/// Returns an error when `config` cannot be serialized or when `path`
+/// cannot be written.
 #[allow(dead_code)]
 pub fn save_config(config: &aegis_core::Config, path: &PathBuf) -> Result<(), anyhow::Error> {
     let content = serde_json::to_string_pretty(config)?;

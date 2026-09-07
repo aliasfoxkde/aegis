@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-s3-no-encryption".to_string(),
             category: "cloudformation".to_string(),
-            match_pattern: r#"ServerSideEncryptionByDefault\s*:\s*(?:NOT\s*DEFINED|false|null)"#.to_string(),
+            match_pattern: r"ServerSideEncryptionByDefault\s*:\s*(?:NOT\s*DEFINED|false|null)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-s3-public-access".to_string(),
             category: "cloudformation".to_string(),
-            match_pattern: r#"(PublicAccessBlockConfiguration|BucketPublicAccessBlock)\s*:\s*(?:false|~\s*-\s*true)"#.to_string(),
+            match_pattern: r"(PublicAccessBlockConfiguration|BucketPublicAccessBlock)\s*:\s*(?:false|~\s*-\s*true)".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),

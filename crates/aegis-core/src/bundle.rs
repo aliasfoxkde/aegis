@@ -42,6 +42,7 @@ impl Default for Bundle {
 
 impl Bundle {
     /// Create a new bundle
+    #[must_use]
     pub fn new(patterns: Vec<PatternDefinition>) -> Self {
         Self {
             schema_version: BUNDLE_VERSION,
@@ -51,6 +52,11 @@ impl Bundle {
     }
 
     /// Load a bundle from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BundleError::IoError`] if the file cannot be opened or
+    /// read, and any error from [`Bundle::from_gzip`] while decoding it.
     pub fn load(path: &Path) -> Result<Self, BundleError> {
         let mut file = File::open(path).map_err(BundleError::IoError)?;
         let mut buffer = Vec::new();
@@ -61,11 +67,16 @@ impl Bundle {
     }
 
     /// Load a bundle from gzip-compressed bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BundleError::DecompressError`] if the data is not valid
+    /// gzip, and [`BundleError::ParseError`] if the decompressed bytes are
+    /// not a valid JSON bundle.
     pub fn from_gzip(data: &[u8]) -> Result<Self, BundleError> {
         use flate2::read::GzDecoder;
         let mut decoder = GzDecoder::new(data);
         let mut decompressed = Vec::new();
-        use std::io::Read;
         decoder
             .read_to_end(&mut decompressed)
             .map_err(|e| BundleError::DecompressError(e.to_string()))?;
@@ -75,6 +86,11 @@ impl Bundle {
     }
 
     /// Save bundle to a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BundleError::IoError`] if encoding fails, the staging file
+    /// cannot be created or flushed, or the rename into place fails.
     pub fn save(&self, path: &Path) -> Result<(), BundleError> {
         let data = self.to_gzip()?;
 
@@ -90,13 +106,17 @@ impl Bundle {
     }
 
     /// Convert bundle to gzip-compressed bytes
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BundleError::SerializeError`] if the bundle cannot be
+    /// serialized or the gzip stream cannot be finished.
     pub fn to_gzip(&self) -> Result<Vec<u8>, BundleError> {
         use flate2::write::GzEncoder;
         use flate2::Compression;
         let json =
             serde_json::to_string(self).map_err(|e| BundleError::SerializeError(e.to_string()))?;
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        use std::io::Write;
         encoder
             .write_all(json.as_bytes())
             .map_err(|e| BundleError::SerializeError(e.to_string()))?;
@@ -106,16 +126,26 @@ impl Bundle {
     }
 
     /// Get the number of patterns
+    #[must_use]
     pub fn len(&self) -> usize {
         self.patterns.len()
     }
 
     /// Check if bundle is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.patterns.is_empty()
     }
 
     /// Validate the bundle
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BundleError::InvalidVersion`] when the schema version is
+    /// not [`BUNDLE_VERSION`], [`BundleError::DuplicatePattern`] when two
+    /// patterns share a name, and [`BundleError::InvalidPattern`] or
+    /// [`BundleError::InvalidRegex`] when a pattern has no match expression
+    /// or a match expression that does not compile.
     pub fn validate(&self) -> Result<(), BundleError> {
         if self.schema_version != BUNDLE_VERSION {
             return Err(BundleError::InvalidVersion(self.schema_version));
@@ -142,6 +172,7 @@ impl Bundle {
     }
 
     /// Get metadata
+    #[must_use]
     pub fn metadata(&self) -> BundleMetadata {
         BundleMetadata {
             version: self.schema_version,
@@ -152,6 +183,7 @@ impl Bundle {
     }
 
     /// Calculate SHA-256 checksum
+    #[must_use]
     pub fn checksum(&self) -> String {
         use sha2::{Digest, Sha256};
         let data = serde_json::to_vec(&self.patterns).unwrap_or_default();
@@ -168,7 +200,7 @@ fn chrono_now() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     let secs = duration.as_secs();
-    format!("{}", secs)
+    format!("{secs}")
 }
 
 /// Bundle error types
@@ -352,7 +384,7 @@ mod tests {
         let patterns = vec![PatternDefinition {
             name: "empty-pattern".to_string(),
             category: "test".to_string(),
-            match_pattern: "".to_string(),
+            match_pattern: String::new(),
             exclude_pattern: None,
             file_extensions: Vec::new(),
             enabled: true,
@@ -390,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_bundle_load_not_found() {
-        let result = Bundle::load(std::path::Path::new("/nonexistent/bundle.json.gz"));
+        let result = Bundle::load(Path::new("/nonexistent/bundle.json.gz"));
         assert!(result.is_err());
     }
 

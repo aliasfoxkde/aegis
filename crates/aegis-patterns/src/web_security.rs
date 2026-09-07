@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "reflected-xss".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(request\.params|request\.query|request\.body|req\.params)\.[\w_]+\s*\+"#.to_string(),
+            match_pattern: r"(?i)(request\.params|request\.query|request\.body|req\.params)\.[\w_]+\s*\+".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "sql-injection".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)query\s*\([^)]*\+[^)]*\)"#.to_string(),
+            match_pattern: r"(?i)query\s*\([^)]*\+[^)]*\)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cors-misconfiguration".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(Access-Control-Allow-Origin.*\*|allow.*origin.*\*)"#.to_string(),
+            match_pattern: r"(?i)(Access-Control-Allow-Origin.*\*|allow.*origin.*\*)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "stored-xss".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)innerHTML\s*=|outerHTML\s*="#.to_string(),
+            match_pattern: r"(?i)innerHTML\s*=|outerHTML\s*=".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dom-xss".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(?:document\.write(?:ln)?\s*\(|\beval\s*\(|new\s+Function\s*\()"#.to_string(),
+            match_pattern: r"(?i)(?:document\.write(?:ln)?\s*\(|\beval\s*\(|new\s+Function\s*\()".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -81,7 +82,7 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["xss".to_string(), "security".to_string(), "dom".to_string()],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\bexample\.(?:com|org|net)\b"#.to_string()),
+            exclude: Some(r"(?i)\bexample\.(?:com|org|net)\b".to_string()),
             file_extensions: vec![
                 "js".to_string(),
                 "mjs".to_string(),
@@ -99,7 +100,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "xss-via-url".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(window\.location|document\.URL|document\.referrer)[^\;]*\+"#.to_string(),
+            match_pattern: r"(?i)(window\.location|document\.URL|document\.referrer)[^\;]*\+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -120,7 +121,7 @@ pub fn get() -> Vec<Pattern> {
             // method-only shape flagged every client HTTP call
             // (axios.post, requests.post) and every Map/dict `.delete()`
             // in the codebase, which is noise, not signal.
-            match_pattern: r#"(?i)\b(?:app|router|server|express|fastify|koa|route)\s*\.\s*(?:post|put|delete|patch)\s*\([^)]*\)"#.to_string(),
+            match_pattern: r"(?i)\b(?:app|router|server|express|fastify|koa|route)\s*\.\s*(?:post|put|delete|patch)\s*\([^)]*\)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -136,7 +137,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "csrf-token-header".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)X-CSRF-Token|XSRF-TOKEN|csrf-token"#.to_string(),
+            match_pattern: r"(?i)X-CSRF-Token|XSRF-TOKEN|csrf-token".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -152,7 +153,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "command-injection".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(exec|spawn|system|popen)\s*\([^)]*\+"#.to_string(),
+            match_pattern: r"(?i)(exec|spawn|system|popen)\s*\([^)]*\+".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -168,7 +169,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "path-traversal".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(readFile|readFileSync|open|fs\.).*\+.*(?:user|input|param|query)"#.to_string(),
+            match_pattern: r"(?i)(readFile|readFileSync|open|fs\.).*\+.*(?:user|input|param|query)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -184,7 +185,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "directory-traversal".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(?:%2e%2e(?:%2f|%5c)|\.\.%2f|\.\.%5c)"#.to_string(),
+            match_pattern: r"(?i)(?:%2e%2e(?:%2f|%5c)|\.\.%2f|\.\.%5c)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -200,7 +201,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ssrf".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(fetch|axios|request|httpClient)\s*\(.*(?:url|uri|href|src).*\)"#.to_string(),
+            match_pattern: r"(?i)(fetch|axios|request|httpClient)\s*\(.*(?:url|uri|href|src).*\)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -216,7 +217,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ssrf-localhost".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(localhost|127\.0\.0\.1|0\.0\.0\.0|metadata\.google)"#.to_string(),
+            match_pattern: r"(?i)(localhost|127\.0\.0\.1|0\.0\.0\.0|metadata\.google)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -232,7 +233,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-security-headers".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)X-Content-Type-Options|X-XSS-Protection|Content-Security-Policy"#.to_string(),
+            match_pattern: r"(?i)X-Content-Type-Options|X-XSS-Protection|Content-Security-Policy".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -248,7 +249,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hsts-missing".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)Strict-Transport-Security"#.to_string(),
+            match_pattern: r"(?i)Strict-Transport-Security".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -264,7 +265,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "x-frame-options".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)X-Frame-Options"#.to_string(),
+            match_pattern: r"(?i)X-Frame-Options".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -280,7 +281,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "x-content-type-options".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)X-Content-Type-Options.*nosniff"#.to_string(),
+            match_pattern: r"(?i)X-Content-Type-Options.*nosniff".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -296,7 +297,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "content-security-policy".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)Content-Security-Policy"#.to_string(),
+            match_pattern: r"(?i)Content-Security-Policy".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -328,7 +329,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "weak-password-hash".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(md5|sha1|des|crypt)\s*\(.*password"#.to_string(),
+            match_pattern: r"(?i)(md5|sha1|des|crypt)\s*\(.*password".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -360,7 +361,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "session-fixation".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)session\s*=\s*request\.getParameter|sessionId.*getParameter"#.to_string(),
+            match_pattern: r"(?i)session\s*=\s*request\.getParameter|sessionId.*getParameter".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -376,7 +377,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "xxe".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(DocumentBuilder|SAXParser|XMLReader|XMLInputFactory).*disabled"#.to_string(),
+            match_pattern: r"(?i)(DocumentBuilder|SAXParser|XMLReader|XMLInputFactory).*disabled".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -408,7 +409,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "insecure-deserialization".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\("#.to_string(),
+            match_pattern: r"(?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\(".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -424,7 +425,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "unrestricted-file-upload".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(multipart|fileUpload|uploadFile).*without.*validation"#.to_string(),
+            match_pattern: r"(?i)(multipart|fileUpload|uploadFile).*without.*validation".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -440,7 +441,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "executable-file-upload".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)\.(exe|sh|php|asp|jsp)\s*.*upload|move_uploaded_file"#.to_string(),
+            match_pattern: r"(?i)\.(exe|sh|php|asp|jsp)\s*.*upload|move_uploaded_file".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -456,7 +457,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "open-redirect".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(redirect|forward|location)\s*\([^)]*request\.(params|query|body)"#.to_string(),
+            match_pattern: r"(?i)(redirect|forward|location)\s*\([^)]*request\.(params|query|body)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -472,7 +473,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "redirect-to-relative".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)redirect\s*\(\s*\/[^\)]"#.to_string(),
+            match_pattern: r"(?i)redirect\s*\(\s*\/[^\)]".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -515,7 +516,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "stack-trace-exposure".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)stack\s*trace|exception.*print|printStackTrace"#.to_string(),
+            match_pattern: r"(?i)stack\s*trace|exception.*print|printStackTrace".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -533,7 +534,7 @@ pub fn get() -> Vec<Pattern> {
             category: "web-security".to_string(),
             // Match the header form only ("Server: nginx"), not the bare word
             // "server" which appears in prose, identifiers, and configs.
-            match_pattern: r#"(?im)^\s*(?:server|x-powered-by|x-aspnet-version|x-aspnetmvc-version|x-generator)\s*:\s*\S[^\n]{0,80}$"#.to_string(),
+            match_pattern: r"(?im)^\s*(?:server|x-powered-by|x-aspnet-version|x-aspnetmvc-version|x-generator)\s*:\s*\S[^\n]{0,80}$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -561,7 +562,7 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rate-limiting".to_string(), "security".to_string(), "api".to_string()],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)rate[_-]?limit|throttle|brute|slowdown"#.to_string()),
+            exclude: Some(r"(?i)rate[_-]?limit|throttle|brute|slowdown".to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {
@@ -583,7 +584,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-authentication".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(@GetMapping|@PostMapping|@RequestMapping)"#.to_string(),
+            match_pattern: r"(?i)(@GetMapping|@PostMapping|@RequestMapping)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -599,7 +600,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "graphql-introspection".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)introspection.*true|__schema"#.to_string(),
+            match_pattern: r"(?i)introspection.*true|__schema".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -615,7 +616,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "graphql-batch-limit".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)query\s*depth|maxDepth|batch.*limit"#.to_string(),
+            match_pattern: r"(?i)query\s*depth|maxDepth|batch.*limit".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "dockerfile-cap-add-all".to_string(),
             category: "container".to_string(),
-            match_pattern: r#"(--cap-add\s*=\s*ALL|cap_add:\s*-\s*ALL)"#.to_string(),
+            match_pattern: r"(--cap-add\s*=\s*ALL|cap_add:\s*-\s*ALL)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -28,7 +29,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-exposed-socket".to_string(),
             category: "container".to_string(),
-            match_pattern: r#"(-v|--mount)(?:=|\s+)(?:/var/run/docker\.sock|var/run/docker\.sock)"#
+            match_pattern: r"(-v|--mount)(?:=|\s+)(?:/var/run/docker\.sock|var/run/docker\.sock)"
                 .to_string(),
             enabled: true,
             severity: "critical".to_string(),
@@ -50,7 +51,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-privileged-mode".to_string(),
             category: "container".to_string(),
-            match_pattern: r#"(--privileged|privileged:\s*true)"#.to_string(),
+            match_pattern: r"(--privileged|privileged:\s*true)".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -72,7 +73,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-running-as-root".to_string(),
             category: "container".to_string(),
-            match_pattern: r#"(?i)^(?:USER|user)\s*(?::\s*|=|\s+)(?:root|0)$"#.to_string(),
+            match_pattern: r"(?i)^(?:USER|user)\s*(?::\s*|=|\s+)(?:root|0)$".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

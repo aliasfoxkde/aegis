@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "caching-strategy".to_string(),
             category: "pwa".to_string(),
-            match_pattern: r#"cache.*first.*network|network.*first.*cache|stale.*while.*revalidate"#.to_string(),
+            match_pattern: r"cache.*first.*network|network.*first.*cache|stale.*while.*revalidate".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "manifest".to_string(),
             category: "pwa".to_string(),
-            match_pattern: r#"manifest.*name.*short_name.*different|display.*standalone.*theme_color.*different|icons.*192.*512"#.to_string(),
+            match_pattern: r"manifest.*name.*short_name.*different|display.*standalone.*theme_color.*different|icons.*192.*512".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "offline-support".to_string(),
             category: "pwa".to_string(),
-            match_pattern: r#"offline.*html.*503|navigator\.onLine.*false|fallback.*page.*offline"#.to_string(),
+            match_pattern: r"offline.*html.*503|navigator\.onLine.*false|fallback.*page.*offline".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "service-worker".to_string(),
             category: "pwa".to_string(),
-            match_pattern: r#"cache.*addAll.*urls.*100\+|fetch.*respondWith.*cache.*match.*network|skipWaiting\(\).*clients\.claim"#.to_string(),
+            match_pattern: r"cache.*addAll.*urls.*100\+|fetch.*respondWith.*cache.*match.*network|skipWaiting\(\).*clients\.claim".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "shortcuts".to_string(),
             category: "pwa".to_string(),
-            match_pattern: r#"shortcuts.*name.*url|icons.*shortcuts.*manifest|app.*shortcuts.*home.*screen"#.to_string(),
+            match_pattern: r"shortcuts.*name.*url|icons.*shortcuts.*manifest|app.*shortcuts.*home.*screen".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

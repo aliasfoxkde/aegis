@@ -88,13 +88,13 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
 /// Default number of workers
+#[must_use]
 pub fn default_workers() -> usize {
-    std::thread::available_parallelism()
-        .map(|n| std::cmp::min(n.get() * 2, 64))
-        .unwrap_or(4)
+    std::thread::available_parallelism().map_or(4, |n| std::cmp::min(n.get() * 2, 64))
 }
 
 /// Get the default bundle path
+#[must_use]
 pub fn default_bundle_path() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -103,6 +103,7 @@ pub fn default_bundle_path() -> PathBuf {
 }
 
 /// Get the default cache directory
+#[must_use]
 pub fn default_cache_dir() -> PathBuf {
     dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))

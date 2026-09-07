@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "prompt-injection".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(ignore\s+(previous|above|all)|disregard\s+(previous|your)|you\s+are\s+now|forget\s+everything)"#.to_string(),
+            match_pattern: r"(?i)(ignore\s+(previous|above|all)|disregard\s+(previous|your)|you\s+are\s+now|forget\s+everything)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "system-prompt-leak".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)system\s*prompt|instruction\s*manual|foundation\s*prompt"#.to_string(),
+            match_pattern: r"(?i)system\s*prompt|instruction\s*manual|foundation\s*prompt".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "low".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "unsafe-model-output".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(unsafe|harmful|inappropriate)\s+(output|response|content)"#.to_string(),
+            match_pattern: r"(?i)(unsafe|harmful|inappropriate)\s+(output|response|content)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hallucination-risk".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(hallucin|confabula|fabricat).*\b(fact|information|data)"#.to_string(),
+            match_pattern: r"(?i)(hallucin|confabula|fabricat).*\b(fact|information|data)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "bias-in-training".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(training\s+data|bias|discriminat).*\b(contain|include|inject)"#.to_string(),
+            match_pattern: r"(?i)(training\s+data|bias|discriminat).*\b(contain|include|inject)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "reward-hacking-risk".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(reward\s+hack|optimize\s+wrong|goal\s+mis-spec)"#.to_string(),
+            match_pattern: r"(?i)(reward\s+hack|optimize\s+wrong|goal\s+mis-spec)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "mesa-optimization".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(mesa.?optim|inner.?optim|acquisit|power.?seek)"#.to_string(),
+            match_pattern: r"(?i)(mesa.?optim|inner.?optim|acquisit|power.?seek)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "low".to_string(),
@@ -119,7 +120,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "model-card-missing".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)model\s*card|model\s*sheet|model\s*document"#.to_string(),
+            match_pattern: r"(?i)model\s*card|model\s*sheet|model\s*document".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -135,7 +136,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ai-bias-report".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(ai\s+bias|fairness\s+report|impact\s+assessment)"#.to_string(),
+            match_pattern: r"(?i)(ai\s+bias|fairness\s+report|impact\s+assessment)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -151,7 +152,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "model-version-tracking".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(model\s+version|model\s+hash|snapshot)"#.to_string(),
+            match_pattern: r"(?i)(model\s+version|model\s+hash|snapshot)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -167,7 +168,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "evaluation-benchmark".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(MMLU|BIG-Bench|GLUE|HELM|TruthfulQA)"#.to_string(),
+            match_pattern: r"(?i)(MMLU|BIG-Bench|GLUE|HELM|TruthfulQA)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -183,7 +184,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "adversarial-testing".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(adversarial|red\s+team|attack\s+testing)"#.to_string(),
+            match_pattern: r"(?i)(adversarial|red\s+team|attack\s+testing)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -199,7 +200,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "interpretability-tool".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(SHAP|LIME|feature\s+importance|attribution)"#.to_string(),
+            match_pattern: r"(?i)(SHAP|LIME|feature\s+importance|attribution)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -215,7 +216,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "attention-visualization".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(attention\s+map|activation\s+map|gradient\s+viz)"#.to_string(),
+            match_pattern: r"(?i)(attention\s+map|activation\s+map|gradient\s+viz)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -231,7 +232,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "training-data-audit".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(training\s+data\s+audit|data\s+lineage|data\s+provenance)"#.to_string(),
+            match_pattern: r"(?i)(training\s+data\s+audit|data\s+lineage|data\s+provenance)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -247,7 +248,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "consent-for-training".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(consent|opt.?in|permission)\s.*\b(train|use\s+data)"#.to_string(),
+            match_pattern: r"(?i)(consent|opt.?in|permission)\s.*\b(train|use\s+data)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -263,7 +264,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "data-augmentation".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(augment|synthesiz|generate\s+data)"#.to_string(),
+            match_pattern: r"(?i)(augment|synthesiz|generate\s+data)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -279,7 +280,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "noise-injection".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(noise|inject|fuzz)\s.*\b(input|data|training)"#.to_string(),
+            match_pattern: r"(?i)(noise|inject|fuzz)\s.*\b(input|data|training)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -295,7 +296,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "human-in-the-loop".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(human.?in.?the.?loop|HITL|human\s+oversight)"#.to_string(),
+            match_pattern: r"(?i)(human.?in.?the.?loop|HITL|human\s+oversight)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -311,7 +312,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "human-approval-required".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(require.*human|human.*approval|human.*sign.?off)"#.to_string(),
+            match_pattern: r"(?i)(require.*human|human.*approval|human.*sign.?off)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -327,7 +328,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rlhf-reference".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(RLHF|reinforcement\s+learning\s+from\s+human\s+feedback)"#.to_string(),
+            match_pattern: r"(?i)(RLHF|reinforcement\s+learning\s+from\s+human\s+feedback)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -343,7 +344,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "rlhf-reward-model".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(reward\s+model|train\s+reward|preference\s+model)"#.to_string(),
+            match_pattern: r"(?i)(reward\s+model|train\s+reward|preference\s+model)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -359,7 +360,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "constitutional-ai".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(constitutional\s+ai|CAI|principle.?based)"#.to_string(),
+            match_pattern: r"(?i)(constitutional\s+ai|CAI|principle.?based)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -375,7 +376,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ai-incident-response".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(ai\s+incident|model\s+fail|incident\s+report)"#.to_string(),
+            match_pattern: r"(?i)(ai\s+incident|model\s+fail|incident\s+report)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -391,7 +392,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "model-rollback".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r#"(?i)(rollback|revert|previous\s+version)\s.*\b(model|ai)"#.to_string(),
+            match_pattern: r"(?i)(rollback|revert|previous\s+version)\s.*\b(model|ai)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

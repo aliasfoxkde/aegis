@@ -57,7 +57,11 @@ fn distinct_patterns(findings: &[Finding]) -> usize {
 }
 
 /// Scan options
+///
+/// The booleans mirror the CLI's flag set one-to-one; a settings enum
+/// would force every caller to translate back to per-option flags.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ScanOptions {
     /// Maximum file size to scan
     pub max_file_size: u64,
@@ -102,9 +106,7 @@ impl Default for ScanOptions {
 }
 
 fn num_cpus() -> usize {
-    std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(4)
+    std::thread::available_parallelism().map_or(4, std::num::NonZeroUsize::get)
 }
 
 /// Main scanner
@@ -124,11 +126,11 @@ pub struct Scanner {
     /// `.aegis.yml` files already merged into the registry, keyed by
     /// canonical path so repeated scans of a root (long-lived MCP server)
     /// do not re-register the same rules
-    loaded_user_pattern_files: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
+    loaded_user_pattern_files: std::sync::Mutex<HashSet<PathBuf>>,
     /// Baseline fingerprints loaded once when options are set. `Some(Err)`
     /// records a load failure so it can be reported instead of silently
     /// scanning unfiltered.
-    baseline_cache: std::sync::OnceLock<Result<std::collections::HashSet<String>, String>>,
+    baseline_cache: std::sync::OnceLock<Result<HashSet<String>, String>>,
 }
 
 /// Load the set of finding fingerprints recorded in a baseline file.
@@ -138,14 +140,13 @@ pub struct Scanner {
 /// findings array. `Finding::matched_content` is `#[serde(skip)]`, so a
 /// baseline never contains the flagged text itself — only its one-way
 /// digest — and baseline files are safe to commit or share.
-pub fn load_baseline_fingerprints(
-    path: &Path,
-) -> Result<std::collections::HashSet<String>, BaselineError> {
-    let content = std::fs::read_to_string(path).map_err(|e| BaselineError {
-        path: path.display().to_string(),
-        message: format!("failed to read: {e}"),
-    })?;
-
+///
+/// # Errors
+///
+/// Returns [`BaselineError`] when the file cannot be read, or when its
+/// content is neither a `{findings, stats}` document nor a bare findings
+/// array of fingerprints.
+pub fn load_baseline_fingerprints(path: &Path) -> Result<HashSet<String>, BaselineError> {
     #[derive(serde::Deserialize)]
     struct BaselineFinding {
         fingerprint: String,
@@ -154,6 +155,11 @@ pub fn load_baseline_fingerprints(
     struct BaselineDocument {
         findings: Vec<BaselineFinding>,
     }
+
+    let content = std::fs::read_to_string(path).map_err(|e| BaselineError {
+        path: path.display().to_string(),
+        message: format!("failed to read: {e}"),
+    })?;
 
     if let Ok(document) = serde_json::from_str::<BaselineDocument>(&content) {
         return Ok(document
@@ -192,6 +198,7 @@ impl std::error::Error for BaselineError {}
 
 impl Scanner {
     /// Create a new scanner
+    #[must_use]
     pub fn new() -> Self {
         Self {
             registry: Arc::new(PatternRegistry::new()),
@@ -200,12 +207,17 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
+            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
         }
     }
 
     /// Create a scanner with a bundle
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError`](crate::pattern::PatternError) when a bundle
+    /// pattern has an invalid regex or duplicates another pattern name.
     pub fn from_bundle(bundle: &Bundle) -> Result<Self, crate::pattern::PatternError> {
         let registry = PatternRegistry::from_definitions(bundle.patterns.clone())?;
         Ok(Self {
@@ -215,12 +227,17 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
+            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
         })
     }
 
     /// Create a scanner from pattern definitions
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError`](crate::pattern::PatternError) when a
+    /// definition has an invalid regex or its name is already registered.
     pub fn from_definitions(
         definitions: Vec<PatternDefinition>,
     ) -> Result<Self, crate::pattern::PatternError> {
@@ -232,12 +249,18 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
+            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
         })
     }
 
     /// Create a scanner with config
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError`](crate::pattern::PatternError) when the
+    /// bundle cannot be loaded (invalid regex, duplicate name) or when
+    /// `enabled_categories` names a category absent from the registry.
     pub fn from_config(config: &Config) -> Result<Self, crate::pattern::PatternError> {
         let mut scanner = Self::from_bundle(&config.bundle)?;
 
@@ -266,11 +289,22 @@ impl Scanner {
     }
 
     /// Initialize ignore manager with a root directory
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] when a `.gitignore` or `.aegisignore` at
+    /// `root` exists but cannot be read.
     pub fn init_ignore_root(&self, root: &Path) -> std::io::Result<()> {
         self.ignore_manager.set_root(root)
     }
 
     /// Update options and rebuild category scanners if needed
+    ///
+    /// # Panics
+    ///
+    /// Panics if the extension-scanner lock was poisoned by a panic in
+    /// another thread.
+    #[must_use]
     pub fn with_options(mut self, options: ScanOptions) -> Self {
         // Track include_disabled so a changed flag re-reads the registry
         // (extension scanner caches are always cleared below).
@@ -281,10 +315,15 @@ impl Scanner {
         self.options = options;
         if let Some(path) = baseline {
             // Load once here so scans pay no per-file I/O and a broken
-            // baseline is reported instead of silently ignored.
-            let _ = self
+            // baseline is reported instead of silently ignored. `set` only
+            // reports `Err` when a baseline is already cached; that first
+            // load wins and the rejected value is dropped.
+            let cached = self
                 .baseline_cache
                 .set(load_baseline_fingerprints(&path).map_err(|e| e.to_string()));
+            if cached.is_err() {
+                tracing::debug!("baseline already cached; keeping the earlier load");
+            }
         }
         self
     }
@@ -331,6 +370,7 @@ impl Scanner {
     /// Parse a diff file and extract only the changed lines
     /// Returns a tuple of (file_path, line_content) for each added line
     #[allow(clippy::collapsible_if)]
+    #[must_use]
     pub fn parse_diff(diff_content: &str) -> Vec<(String, String)> {
         let mut results = Vec::new();
         let mut current_file = String::new();
@@ -378,7 +418,7 @@ impl Scanner {
             let mut findings = self.scan_string(&content, &file);
             // Update source to reflect the actual file
             for finding in &mut findings {
-                finding.location.file = file.clone();
+                finding.location.file.clone_from(&file);
             }
             all_findings.extend(findings);
         }
@@ -397,7 +437,7 @@ impl Scanner {
         Path::new(source)
             .extension()
             .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
+            .map(str::to_lowercase)
     }
 
     fn scan_string_with_inspection(
@@ -433,7 +473,7 @@ impl Scanner {
             scanners
                 .par_iter()
                 .flat_map(|scanner| {
-                    self.process_category_scanner(
+                    Self::process_category_scanner(
                         scanner,
                         content,
                         source,
@@ -446,7 +486,7 @@ impl Scanner {
             // Sequential for smaller content
             let mut findings = Vec::new();
             for scanner in &scanners {
-                findings.extend(self.process_category_scanner(
+                findings.extend(Self::process_category_scanner(
                     scanner,
                     content,
                     source,
@@ -465,8 +505,10 @@ impl Scanner {
                 .filter(|finding| {
                     // Inline directives must reach AST-emitted findings
                     // just as they do regex-path findings.
-                    if suppression_mgr.is_suppressed(&finding.pattern, finding.location.line as u32)
-                    {
+                    if suppression_mgr.is_suppressed(
+                        &finding.pattern,
+                        u32::try_from(finding.location.line).unwrap_or(u32::MAX),
+                    ) {
                         return false;
                     }
                     self.options.categories.is_empty()
@@ -538,7 +580,6 @@ impl Scanner {
 
     /// Process a category scanner and return findings
     fn process_category_scanner(
-        &self,
         scanner: &crate::pattern::CategoryScanner,
         content: &str,
         source: &str,
@@ -573,7 +614,7 @@ impl Scanner {
                 continue;
             }
 
-            let line_num = line_index.get_line_number(m.start) as u32;
+            let line_num = u32::try_from(line_index.get_line_number(m.start)).unwrap_or(u32::MAX);
             if suppression_mgr.is_suppressed(pattern.name(), line_num) {
                 continue;
             }
@@ -608,6 +649,12 @@ impl Scanner {
     }
 
     /// Scan a single file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScanError::FileNotFound`] when `path` does not exist and
+    /// [`ScanError::IoError`] when metadata or content cannot be read, or
+    /// the file is not valid UTF-8.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
         let io_start = Instant::now();
@@ -675,7 +722,7 @@ impl Scanner {
             Err(e) => return Err(ScanError::IoError(e)),
         };
 
-        let io_time = io_start.elapsed().as_millis() as u64;
+        let io_time = u64::try_from(io_start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         // Scan content through the regular pattern pipeline and the AST
         // pipeline. AST coverage is recorded separately so a fallback or
@@ -684,7 +731,7 @@ impl Scanner {
         let (findings, ast_inspection, suppressed_count) =
             self.scan_string_with_inspection(&content, &source);
 
-        let scan_time = start.elapsed().as_millis() as u64;
+        let scan_time = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let mut stats = ScanStats {
             files_scanned: 1,
@@ -698,7 +745,7 @@ impl Scanner {
         };
         stats
             .inspection_ledger
-            .record(source.to_string(), InspectionStatus::Analyzed, true, None);
+            .record(source.clone(), InspectionStatus::Analyzed, true, None);
 
         let ast_status = match ast_inspection.status {
             AstInspectionStatus::Parsed | AstInspectionStatus::Fallback => {
@@ -758,6 +805,12 @@ impl Scanner {
     }
 
     /// Scan a directory recursively
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScanError::CustomPatterns`] when a `.aegis.yml` at `root`
+    /// is invalid, and [`ScanError::AllRequiredFilesFailed`] when required
+    /// work existed but no required unit was successfully inspected.
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
 
@@ -790,10 +843,10 @@ impl Scanner {
                 Ok(entry) if entry.file_type().is_file() => entries.push(entry),
                 Ok(_) => {}
                 Err(error) => {
-                    let unit_id = error
-                        .path()
-                        .map(|path| path.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| format!("{}#walk-error-{index}", root.display()));
+                    let unit_id = error.path().map_or_else(
+                        || format!("{}#walk-error-{index}", root.display()),
+                        |path| path.to_string_lossy().into_owned(),
+                    );
                     merged_stats.files_failed += 1;
                     merged_stats.inspection_ledger.record(
                         unit_id,
@@ -854,7 +907,7 @@ impl Scanner {
             })
             .count();
 
-        merged_stats.scan_time_ms = start.elapsed().as_millis() as u64;
+        merged_stats.scan_time_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         // An empty directory has no required work and remains a valid empty
         // scan. If required work existed but none completed, return a
@@ -886,7 +939,7 @@ impl Scanner {
                 }
 
                 if pattern.matches(&value) {
-                    let location = Location::new("[env]", 1, 0, format!("{}={}", key, value));
+                    let location = Location::new("[env]", 1, 0, format!("{key}={value}"));
                     let finding = Finding::new(
                         pattern.name(),
                         pattern.category(),
@@ -1032,14 +1085,14 @@ mod tests {
     fn test_scan_file_io_error() {
         // Create a file we can read, then make it unreadable by using a path we can't access
         let scanner = Scanner::new();
-        // Use a valid file path but which causes issues - the scanner should handle it
-        let result = scanner.scan_file(Path::new("/root/.shakey")); // typically root-only
-                                                                    // Should not panic - either FileNotFound or PermissionDenied
-        match result {
-            Err(ScanError::IoError(_))
-            | Err(ScanError::PermissionDenied(_))
-            | Err(ScanError::FileNotFound(_)) => {}
-            _ => {} // Other results are acceptable too
+        // Use a valid file path but which causes issues - the scanner should
+        // handle it (typically root-only). It must not panic; FileNotFound,
+        // PermissionDenied, and plain I/O errors are all acceptable here.
+        if let Err(error) = scanner.scan_file(Path::new("/root/.shakey")) {
+            assert!(matches!(
+                error,
+                ScanError::IoError(_) | ScanError::PermissionDenied(_) | ScanError::FileNotFound(_)
+            ));
         }
     }
 
@@ -1093,13 +1146,13 @@ mod tests {
             .unwrap();
 
         // Use pattern that matches "content"
-        let patterns = vec![crate::pattern::PatternDefinition {
+        let patterns = vec![PatternDefinition {
             name: "test-content".to_string(),
             category: "test".to_string(),
             match_pattern: "content".to_string(),
             exclude_pattern: None,
             file_extensions: Vec::new(),
-            severity: crate::pattern::Severity::Medium,
+            severity: Severity::Medium,
             confidence: crate::pattern::Confidence::Medium,
             description: "Test pattern".to_string(),
             enabled: true,
@@ -1135,13 +1188,13 @@ mod tests {
             .write_all(b"let secret = 'abc123'; // aegis:ignore:hardcoded-password")
             .unwrap();
 
-        let patterns = vec![crate::pattern::PatternDefinition {
+        let patterns = vec![PatternDefinition {
             name: "test-secret".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret".to_string(),
             exclude_pattern: None,
             file_extensions: Vec::new(),
-            severity: crate::pattern::Severity::High,
+            severity: Severity::High,
             confidence: crate::pattern::Confidence::High,
             description: "Test pattern".to_string(),
             enabled: true,
@@ -1402,13 +1455,13 @@ mod tests {
     #[test]
     fn test_category_filter_limits_findings_to_selected_categories() {
         let definitions = vec![
-            crate::pattern::PatternDefinition {
+            PatternDefinition {
                 name: "selected-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "selected-value".to_string(),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
-                severity: crate::pattern::Severity::High,
+                severity: Severity::High,
                 confidence: crate::pattern::Confidence::High,
                 description: "Selected category fixture".to_string(),
                 enabled: true,
@@ -1419,13 +1472,13 @@ mod tests {
                 binary: false,
                 remediation: None,
             },
-            crate::pattern::PatternDefinition {
+            PatternDefinition {
                 name: "excluded-pattern".to_string(),
                 category: "excluded".to_string(),
                 match_pattern: "excluded-value".to_string(),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
-                severity: crate::pattern::Severity::Critical,
+                severity: Severity::Critical,
                 confidence: crate::pattern::Confidence::High,
                 description: "Excluded category fixture".to_string(),
                 enabled: true,
@@ -1456,13 +1509,13 @@ mod tests {
     #[test]
     fn test_severity_threshold_filters_lower_severity_findings() {
         let definitions = vec![
-            crate::pattern::PatternDefinition {
+            PatternDefinition {
                 name: "high-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "high-value".to_string(),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
-                severity: crate::pattern::Severity::High,
+                severity: Severity::High,
                 confidence: crate::pattern::Confidence::High,
                 description: "High severity fixture".to_string(),
                 enabled: true,
@@ -1473,13 +1526,13 @@ mod tests {
                 binary: false,
                 remediation: None,
             },
-            crate::pattern::PatternDefinition {
+            PatternDefinition {
                 name: "low-pattern".to_string(),
                 category: "selected".to_string(),
                 match_pattern: "low-value".to_string(),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
-                severity: crate::pattern::Severity::Low,
+                severity: Severity::Low,
                 confidence: crate::pattern::Confidence::High,
                 description: "Low severity fixture".to_string(),
                 enabled: true,
@@ -1530,24 +1583,24 @@ mod tests {
     #[test]
     fn test_scan_error_display() {
         let error = ScanError::FileNotFound(PathBuf::from("/path/to/file"));
-        let display = format!("{}", error);
+        let display = format!("{error}");
         assert!(display.contains("File not found"));
 
         let error = ScanError::PermissionDenied(PathBuf::from("/path/to/file"));
-        let display = format!("{}", error);
+        let display = format!("{error}");
         assert!(display.contains("Permission denied"));
     }
 
     #[test]
     fn test_suppression_integration() {
         // Test that suppressions work - scan without suppressions
-        let patterns = vec![crate::pattern::PatternDefinition {
+        let patterns = vec![PatternDefinition {
             name: "test-secret".to_string(),
             category: "secrets".to_string(),
             match_pattern: "secret".to_string(),
             exclude_pattern: None,
             file_extensions: Vec::new(),
-            severity: crate::pattern::Severity::High,
+            severity: Severity::High,
             confidence: crate::pattern::Confidence::High,
             description: "Test pattern".to_string(),
             enabled: true,
@@ -1610,9 +1663,8 @@ mod tests {
             bundle: Bundle::new(vec![def("known-pattern", "secrets", "secret")]),
             ..Default::default()
         };
-        let err = match Scanner::from_config(&config) {
-            Err(err) => err,
-            Ok(_) => panic!("phantom category must fail config validation"),
+        let Err(err) = Scanner::from_config(&config) else {
+            panic!("phantom category must fail config validation")
         };
         let msg = err.to_string();
         assert!(
@@ -1635,16 +1687,16 @@ mod tests {
         let mut patterns = Vec::new();
         for i in 0..55 {
             patterns.push(PatternDefinition {
-                name: format!("pattern-{}", i),
+                name: format!("pattern-{i}"),
                 category: "test".to_string(),
-                match_pattern: format!("secret{}", i),
+                match_pattern: format!("secret{i}"),
                 exclude_pattern: None,
                 file_extensions: Vec::new(),
                 enabled: true,
-                severity: crate::Severity::Low,
+                severity: Severity::Low,
                 confidence: crate::Confidence::Low,
                 min_entropy: None,
-                description: format!("Test pattern {}", i),
+                description: format!("Test pattern {i}"),
                 reference: None,
                 tags: vec![],
                 env_var: false,
@@ -1711,7 +1763,7 @@ mod tests {
             exclude_pattern: None,
             file_extensions: Vec::new(),
             enabled: true,
-            severity: crate::Severity::Critical,
+            severity: Severity::Critical,
             confidence: crate::Confidence::High,
             min_entropy: None, // Disable entropy check for testing
             description: "AWS Access Key ID detected".to_string(),
@@ -1728,8 +1780,7 @@ mod tests {
         let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs");
         assert!(
             !findings.is_empty(),
-            "Should detect AWS access key, got: {:?}",
-            findings
+            "Should detect AWS access key, got: {findings:?}"
         );
 
         // Use fingerprints for stable baseline matching
@@ -1826,8 +1877,7 @@ mod tests {
         let findings = scanner.scan_string("val = 'example_placeholder_key'", "a.js");
         assert!(
             findings.is_empty(),
-            "excluded spans must not be reported: {:?}",
-            findings
+            "excluded spans must not be reported: {findings:?}"
         );
 
         let findings = scanner.scan_string("val = 'hunter2'", "a.js");
@@ -1891,7 +1941,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         std::fs::write(
             temp.path().join(".aegis.yml"),
-            r#"
+            r"
 patterns:
   - name: internal-token
     category: secrets
@@ -1899,7 +1949,7 @@ patterns:
     match: 'INTT_[A-Za-z0-9]{24,}'
     description: Internal service token committed to source
     remediation: Load the token from an environment variable
-"#,
+",
         )
         .unwrap();
         std::fs::write(
@@ -1929,21 +1979,20 @@ patterns:
         let temp = TempDir::new().unwrap();
         std::fs::write(
             temp.path().join(".aegis.yml"),
-            r#"
+            r"
 patterns:
   - name: broken
     severity: high
     match: '[unclosed'
     description: Broken regex
-"#,
+",
         )
         .unwrap();
         std::fs::write(temp.path().join("fixture.txt"), "nothing to see\n").unwrap();
 
         let scanner = Scanner::from_definitions(Vec::new()).unwrap();
-        let err = match scanner.scan_dir(temp.path()) {
-            Err(err) => err,
-            Ok(_) => panic!("invalid custom patterns must abort the scan"),
+        let Err(err) = scanner.scan_dir(temp.path()) else {
+            panic!("invalid custom patterns must abort the scan")
         };
         assert!(
             err.to_string().contains("invalid `match` regex"),
@@ -2051,7 +2100,7 @@ patterns:
         // A bare findings array (without the stats wrapper) is accepted.
         std::fs::write(&path, r#"[{"fingerprint":"fp-1"},{"fingerprint":"fp-2"}]"#).unwrap();
         let fingerprints = load_baseline_fingerprints(&path).unwrap();
-        let expected: HashSet<String> = ["fp-1", "fp-2"].iter().map(|s| s.to_string()).collect();
+        let expected: HashSet<String> = ["fp-1", "fp-2"].iter().map(|s| (*s).to_string()).collect();
         assert_eq!(fingerprints, expected);
 
         // Malformed content produces a descriptive error.

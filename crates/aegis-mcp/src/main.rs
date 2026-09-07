@@ -8,7 +8,9 @@ mod tools;
 use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
@@ -23,11 +25,18 @@ pub struct ServerState {
     pub bundle_checksum: RwLock<String>,
     /// Guards the one-time lazy compilation of the bundled patterns. The
     /// JSON-RPC handshake and tool listing never wait on it; the first
-    /// request that needs the scanner does.
-    patterns_init: tokio::sync::OnceCell<()>,
+    /// request that needs the scanner does. The memoized outcome keeps a
+    /// failed compilation sticky — a scanner that silently holds zero
+    /// patterns would approve everything, so requests must keep failing.
+    patterns_init: tokio::sync::OnceCell<std::result::Result<(), String>>,
+    /// Set by `update_bundle` after it installs a compiled scanner, so the
+    /// lazy init is skipped entirely (and cannot clobber the bundle) even
+    /// if a previous lazy compilation failed.
+    bundle_swapped: AtomicBool,
 }
 
 impl ServerState {
+    #[must_use]
     pub fn new() -> Self {
         let config = Config::default();
         Self {
@@ -36,6 +45,7 @@ impl ServerState {
             bundle_version: RwLock::new(String::from("0.0.0")),
             bundle_checksum: RwLock::new(String::new()),
             patterns_init: tokio::sync::OnceCell::const_new(),
+            bundle_swapped: AtomicBool::new(false),
         }
     }
 
@@ -43,17 +53,38 @@ impl ServerState {
     ///
     /// Compiling 600+ regexes is CPU-bound; `spawn_blocking` keeps it off
     /// the reactor, and the `OnceCell` makes concurrent first requests
-    /// share one compilation. `update_bundle` marks the cell as done so an
-    /// eager bundle swap is never clobbered by a later lazy init.
-    pub async fn ensure_patterns_loaded(&self) {
+    /// share one compilation. Fails closed: a compilation error surfaces on
+    /// every request instead of degrading to a scanner with no patterns.
+    ///
+    /// # Errors
+    /// Returns `InternalError` when the pattern compilation task fails or
+    /// panics, and keeps returning that same error for later requests.
+    pub async fn ensure_patterns_loaded(&self) -> Result<()> {
+        if self.bundle_swapped.load(Ordering::Acquire) {
+            return Ok(());
+        }
         self.patterns_init
             .get_or_init(|| async {
-                let scanner = tokio::task::spawn_blocking(init_scanner)
-                    .await
-                    .expect("init_scanner must not panic; it falls back to Scanner::new on error");
-                *self.scanner.write().await = scanner;
+                let compiled: std::result::Result<Scanner, String> =
+                    tokio::task::spawn_blocking(init_scanner)
+                        .await
+                        .map_err(|error| format!("pattern compilation task failed: {error}"))
+                        .and_then(|result| result.map_err(|error| error.to_string()));
+                match compiled {
+                    Ok(scanner) => {
+                        *self.scanner.write().await = scanner;
+                        Ok(())
+                    }
+                    Err(message) => Err(message),
+                }
             })
-            .await;
+            .await
+            .clone()
+            .map_err(|message| jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::InternalError,
+                message: format!("scanner patterns are unavailable: {message}"),
+                data: None,
+            })
     }
 }
 
@@ -83,7 +114,7 @@ impl ScanResponse {
         source: impl Into<String>,
     ) -> Self {
         let risk_score =
-            aegis_core::RiskScore::new(&findings, &Default::default(), &Default::default());
+            aegis_core::RiskScore::new(&findings, &HashMap::default(), &HashMap::default());
         let profile = "mcp-default";
         let receipt = ScanReceipt::from_scan(
             source,
@@ -157,7 +188,7 @@ impl AegisRpcImpl {
     fn scan_string(&self, content: String, source: String) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_string(&content, &source);
 
@@ -179,17 +210,18 @@ impl AegisRpcImpl {
                 });
             }
 
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
-            let (findings, stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
-                code: jsonrpc_core::ErrorCode::InternalError,
-                message: e.to_string(),
-                data: None,
-            })?;
+            let (findings, scan_stats) =
+                scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: e.to_string(),
+                    data: None,
+                })?;
 
             Ok(ScanResponse::from_parts(
                 findings,
-                stats,
+                scan_stats,
                 path.to_string_lossy().to_string(),
             ))
         })
@@ -209,17 +241,18 @@ impl AegisRpcImpl {
                 });
             }
 
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
-            let (findings, stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
-                code: jsonrpc_core::ErrorCode::InternalError,
-                message: e.to_string(),
-                data: None,
-            })?;
+            let (findings, scan_stats) =
+                scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: e.to_string(),
+                    data: None,
+                })?;
 
             Ok(ScanResponse::from_parts(
                 findings,
-                stats,
+                scan_stats,
                 path.to_string_lossy().to_string(),
             ))
         })
@@ -228,7 +261,7 @@ impl AegisRpcImpl {
     fn scan_env(&self) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
 
@@ -239,7 +272,7 @@ impl AegisRpcImpl {
     fn list_patterns(&self, category: Option<String>) -> BoxFuture<Result<ListPatternsResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
 
@@ -270,7 +303,7 @@ impl AegisRpcImpl {
     fn list_categories(&self) -> BoxFuture<Result<Vec<String>>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await;
+            state.ensure_patterns_loaded().await?;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
             Ok(registry.categories())
@@ -300,32 +333,14 @@ impl AegisRpcImpl {
                 // Load bundle from file
                 Bundle::load(&path).map_err(|e| jsonrpc_core::Error {
                     code: jsonrpc_core::ErrorCode::InternalError,
-                    message: format!("Failed to load bundle: {}", e),
+                    message: format!("Failed to load bundle: {e}"),
                     data: None,
                 })?
             } else {
                 // Use embedded patterns from aegis-patterns crate
                 let patterns: Vec<PatternDefinition> = aegis_patterns::all_patterns()
                     .into_iter()
-                    .map(|p| PatternDefinition {
-                        name: p.name,
-                        category: p.category,
-                        match_pattern: p.match_pattern,
-                        enabled: p.enabled,
-                        severity: aegis_core::Severity::parse(&p.severity)
-                            .unwrap_or(aegis_core::Severity::Medium),
-                        confidence: aegis_core::Confidence::parse(&p.confidence)
-                            .unwrap_or(aegis_core::Confidence::Medium),
-                        min_entropy: p.min_entropy,
-                        description: p.description,
-                        reference: p.reference,
-                        tags: p.tags,
-                        env_var: p.env_var,
-                        binary: p.binary,
-                        exclude_pattern: p.exclude,
-                        file_extensions: p.file_extensions,
-                        remediation: None,
-                    })
+                    .map(Into::into)
                     .collect();
                 Bundle::new(patterns)
             };
@@ -333,24 +348,25 @@ impl AegisRpcImpl {
             // Validate bundle
             bundle.validate().map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
-                message: format!("Invalid bundle: {}", e),
+                message: format!("Invalid bundle: {e}"),
                 data: None,
             })?;
 
             // Create scanner from bundle
             let new_scanner = Scanner::from_bundle(&bundle).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
-                message: format!("Failed to create scanner: {}", e),
+                message: format!("Failed to create scanner: {e}"),
                 data: None,
             })?;
 
-            // Update state. The lazy-init cell is marked done so a later
-            // `ensure_patterns_loaded` cannot overwrite this bundle.
+            // Update state. The swap flag makes later `ensure_patterns_loaded`
+            // calls no-ops so they cannot overwrite this bundle, and it also
+            // clears a previously failed lazy compilation.
             {
                 let mut scanner = state.scanner.write().await;
                 *scanner = new_scanner;
             }
-            state.patterns_init.set(()).ok();
+            state.bundle_swapped.store(true, Ordering::Release);
             {
                 let mut version = state.bundle_version.write().await;
                 *version = bundle.metadata().version.to_string();
@@ -363,7 +379,7 @@ impl AegisRpcImpl {
             let pattern_count = bundle.len();
             Ok(UpdateResponse {
                 success: true,
-                message: format!("Bundle updated with {} patterns", pattern_count),
+                message: format!("Bundle updated with {pattern_count} patterns"),
                 pattern_count,
             })
         })
@@ -371,32 +387,12 @@ impl AegisRpcImpl {
 }
 
 /// Initialize scanner with patterns from aegis-patterns
-fn init_scanner() -> Scanner {
-    let patterns = aegis_patterns::all_patterns();
-    let definitions: Vec<PatternDefinition> = patterns
+fn init_scanner() -> anyhow::Result<Scanner> {
+    let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
-        .map(|p| PatternDefinition {
-            name: p.name,
-            category: p.category,
-            match_pattern: p.match_pattern,
-            enabled: p.enabled,
-            severity: aegis_core::Severity::parse(&p.severity)
-                .unwrap_or(aegis_core::Severity::Medium),
-            confidence: aegis_core::Confidence::parse(&p.confidence)
-                .unwrap_or(aegis_core::Confidence::Medium),
-            min_entropy: p.min_entropy,
-            description: p.description,
-            reference: p.reference,
-            tags: p.tags,
-            env_var: p.env_var,
-            binary: p.binary,
-            exclude_pattern: p.exclude,
-            file_extensions: p.file_extensions,
-            remediation: None,
-        })
+        .map(Into::into)
         .collect();
-
-    Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
+    Scanner::from_definitions(definitions).map_err(anyhow::Error::from)
 }
 
 fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {
@@ -452,9 +448,11 @@ fn parse_optional_string_param(params: jsonrpc_core::Params) -> Result<Option<St
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    use tokio::io::AsyncWriteExt;
+
     // Route tracing output to stderr so it cannot corrupt the stdout JSON-RPC stream.
     // use try_init: multiple initializations in tests are silent no-ops.
-    let _ = tracing_subscriber::fmt()
+    let _log_init = tracing_subscriber::fmt()
         .with_env_filter("aegis=info")
         .with_writer(std::io::stderr)
         .try_init();
@@ -554,7 +552,6 @@ async fn main() -> anyhow::Result<()> {
                     },
                     "id": Value::Null
                 });
-                use tokio::io::AsyncWriteExt;
                 writer.write_all(response.to_string().as_bytes()).await.ok();
                 writer.write_all(b"\n").await.ok();
                 writer.flush().await.ok();
@@ -565,7 +562,6 @@ async fn main() -> anyhow::Result<()> {
         // Handle JSON-RPC request
         let response = io.handle_request(line).await;
         if let Some(resp) = response {
-            use tokio::io::AsyncWriteExt;
             writer.write_all(resp.as_bytes()).await.ok();
             writer.write_all(b"\n").await.ok();
             writer.flush().await.ok();
@@ -581,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_init_scanner_has_patterns() {
-        let scanner = init_scanner();
+        let scanner = init_scanner().expect("bundled patterns compile");
         let registry = scanner.registry();
         let patterns = registry.all();
         assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
@@ -605,7 +601,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let scanner = state.scanner.read().await;
         let registry = scanner.registry();
@@ -688,12 +684,10 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
-        let result = rpc
-            .scan_string("".to_string(), "test.txt".to_string())
-            .await;
+        let result = rpc.scan_string(String::new(), "test.txt".to_string()).await;
         assert!(result.is_ok());
         let response = result.unwrap();
         assert_eq!(response.finding_count, 0);
@@ -704,7 +698,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc
@@ -721,7 +715,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.scan_env().await;
@@ -733,7 +727,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_patterns(None).await;
@@ -747,7 +741,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_patterns(Some("secrets".to_string())).await;
@@ -761,7 +755,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_categories().await;

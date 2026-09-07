@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // Terraform patterns
@@ -72,7 +73,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "terraform-sensitive-variable".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)sensitive\s*=\s*true"#.to_string(),
+            match_pattern: r"(?i)sensitive\s*=\s*true".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -168,7 +169,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "terraform-locals".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)locals\s*\{"#.to_string(),
+            match_pattern: r"(?i)locals\s*\{".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -200,7 +201,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "terraform-for-each".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)for_each\s*="#.to_string(),
+            match_pattern: r"(?i)for_each\s*=".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -216,7 +217,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "terraform-count".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)count\s*="#.to_string(),
+            match_pattern: r"(?i)count\s*=".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -233,7 +234,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-deployment".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Deployment"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Deployment".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -249,7 +250,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-service".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Service"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Service".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -265,7 +266,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-configmap".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*ConfigMap"#.to_string(),
+            match_pattern: r"(?i)kind:\s*ConfigMap".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -281,7 +282,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-secret".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Secret"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Secret".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -297,7 +298,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-ingress".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Ingress"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Ingress".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -313,7 +314,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-pod".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Pod"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Pod".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -329,7 +330,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-statefulset".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*StatefulSet"#.to_string(),
+            match_pattern: r"(?i)kind:\s*StatefulSet".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -345,7 +346,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-daemonset".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*DaemonSet"#.to_string(),
+            match_pattern: r"(?i)kind:\s*DaemonSet".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -361,7 +362,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-job".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Job"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Job".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -377,7 +378,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-cronjob".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*CronJob"#.to_string(),
+            match_pattern: r"(?i)kind:\s*CronJob".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -393,7 +394,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-persistentvolume".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*PersistentVolume"#.to_string(),
+            match_pattern: r"(?i)kind:\s*PersistentVolume".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -409,7 +410,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-namespace".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Namespace"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Namespace".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -425,7 +426,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-serviceaccount".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*ServiceAccount"#.to_string(),
+            match_pattern: r"(?i)kind:\s*ServiceAccount".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -441,7 +442,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-role".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*Role"#.to_string(),
+            match_pattern: r"(?i)kind:\s*Role".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -457,7 +458,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-clusterrole".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*ClusterRole"#.to_string(),
+            match_pattern: r"(?i)kind:\s*ClusterRole".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -473,7 +474,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-networkpolicy".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*NetworkPolicy"#.to_string(),
+            match_pattern: r"(?i)kind:\s*NetworkPolicy".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -489,7 +490,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-resource-quota".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*ResourceQuota"#.to_string(),
+            match_pattern: r"(?i)kind:\s*ResourceQuota".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -505,7 +506,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-limitrange".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*LimitRange"#.to_string(),
+            match_pattern: r"(?i)kind:\s*LimitRange".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -521,7 +522,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-hpa".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*HorizontalPodAutoscaler"#.to_string(),
+            match_pattern: r"(?i)kind:\s*HorizontalPodAutoscaler".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -537,7 +538,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-pdb".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*PodDisruptionBudget"#.to_string(),
+            match_pattern: r"(?i)kind:\s*PodDisruptionBudget".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -553,7 +554,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "kubernetes-priorityclass".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)kind:\s*PriorityClass"#.to_string(),
+            match_pattern: r"(?i)kind:\s*PriorityClass".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -570,7 +571,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-from".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^FROM\s+"#.to_string(),
+            match_pattern: r"(?i)^FROM\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -586,7 +587,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-run".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^RUN\s+"#.to_string(),
+            match_pattern: r"(?i)^RUN\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -602,7 +603,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-cmd".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^CMD\s+"#.to_string(),
+            match_pattern: r"(?i)^CMD\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -618,7 +619,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-expose".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^EXPOSE\s+"#.to_string(),
+            match_pattern: r"(?i)^EXPOSE\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -634,7 +635,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-env".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^ENV\s+"#.to_string(),
+            match_pattern: r"(?i)^ENV\s+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -650,7 +651,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-add".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^ADD\s+"#.to_string(),
+            match_pattern: r"(?i)^ADD\s+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -666,7 +667,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-copy".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^COPY\s+"#.to_string(),
+            match_pattern: r"(?i)^COPY\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -682,7 +683,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-workdir".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^WORKDIR\s+"#.to_string(),
+            match_pattern: r"(?i)^WORKDIR\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -698,7 +699,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-volume".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^VOLUME\s+"#.to_string(),
+            match_pattern: r"(?i)^VOLUME\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -714,7 +715,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-user".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^USER\s+"#.to_string(),
+            match_pattern: r"(?i)^USER\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -730,7 +731,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "dockerfile-healthcheck".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)^HEALTHCHECK\s+"#.to_string(),
+            match_pattern: r"(?i)^HEALTHCHECK\s+".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -747,7 +748,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-resources".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)Resources:"#.to_string(),
+            match_pattern: r"(?i)Resources:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -763,7 +764,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-parameters".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)Parameters:"#.to_string(),
+            match_pattern: r"(?i)Parameters:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -779,7 +780,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-mappings".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)Mappings:"#.to_string(),
+            match_pattern: r"(?i)Mappings:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -795,7 +796,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-outputs".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)Outputs:"#.to_string(),
+            match_pattern: r"(?i)Outputs:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -811,7 +812,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-conditions".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"(?i)Conditions:"#.to_string(),
+            match_pattern: r"(?i)Conditions:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -827,7 +828,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "cloudformation-template-format-version".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"AWSTemplateFormatVersion:"#.to_string(),
+            match_pattern: r"AWSTemplateFormatVersion:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -844,7 +845,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "helm-chart".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"apiVersion:\s*v2"#.to_string(),
+            match_pattern: r"apiVersion:\s*v2".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -860,7 +861,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "helm-values".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"^values:"#.to_string(),
+            match_pattern: r"^values:".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -876,7 +877,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "helm-templates".to_string(),
             category: "infrastructure".to_string(),
-            match_pattern: r#"templates/[^/]+\.ya?ml"#.to_string(),
+            match_pattern: r"templates/[^/]+\.ya?ml".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

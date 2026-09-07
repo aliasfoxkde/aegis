@@ -64,10 +64,13 @@ fn bundled_scanner() -> Result<&'static aegis_core::Scanner, JsError> {
 /// * `content` - The text content to scan
 /// * `source` - The source name/identifier for findings
 ///
+/// # Errors
+/// Returns a `JsError` if the bundled patterns cannot be compiled — a broken
+/// bundle is a setup error, not an empty result — or if the findings cannot be
+/// serialized to JSON.
+///
 /// # Returns
-/// JSON string containing an array of findings. Throws a `JsError` if the
-/// bundled patterns cannot be compiled — a broken bundle is a setup error,
-/// not an empty result.
+/// JSON string containing an array of findings.
 #[wasm_bindgen]
 pub fn scan_content(content: &str, source: &str) -> Result<String, JsError> {
     let scanner = bundled_scanner()?;
@@ -97,7 +100,8 @@ pub fn scan_content(content: &str, source: &str) -> Result<String, JsError> {
 
 /// Get the number of available patterns
 ///
-/// Throws a `JsError` if the bundled patterns cannot be compiled.
+/// # Errors
+/// Returns a `JsError` if the bundled patterns cannot be compiled.
 #[wasm_bindgen]
 pub fn get_pattern_count() -> Result<usize, JsError> {
     let scanner = bundled_scanner()?;

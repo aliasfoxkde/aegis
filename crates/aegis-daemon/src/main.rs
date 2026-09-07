@@ -41,7 +41,7 @@ async fn handle_client(
     stream: UnixStream,
     state: Arc<DaemonState>,
     peer_policy: Arc<DaemonPeerPolicy>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let credentials = stream.peer_cred().map_err(|error| {
         anyhow::anyhow!("cannot determine Unix peer credentials; refusing client: {error}")
     })?;
@@ -78,7 +78,7 @@ async fn handle_client(
         let request: serde_json::Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(e) => {
-                let response = DaemonResponse::error(format!("Parse error: {}", e));
+                let response = DaemonResponse::error(format!("Parse error: {e}"));
                 let resp_json = serde_json::to_string(&response).unwrap_or_default();
                 wr.write_all(resp_json.as_bytes()).await.ok();
                 wr.write_all(b"\n").await.ok();
@@ -144,7 +144,7 @@ fn configured_path(env_name: &str, default: &str) -> std::io::Result<PathBuf> {
 fn remove_socket_if_present(path: &Path) {
     if let Ok(metadata) = fs::symlink_metadata(path) {
         if metadata.file_type().is_socket() {
-            let _ = fs::remove_file(path);
+            drop(fs::remove_file(path));
         }
     }
 }
@@ -164,7 +164,7 @@ async fn main() -> Result<()> {
 
     let state = Arc::new(DaemonState::try_with_scan_root(
         socket_path.clone(),
-        scan_root,
+        &scan_root,
     )?);
 
     // Patterns compile lazily on the first request that needs them (see
@@ -352,7 +352,7 @@ mod tests {
         // the socket. Both prove that no response bytes were emitted.
         match read_result {
             Ok(0) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+            Err(error) if error.kind() == ErrorKind::ConnectionReset => {}
             Ok(n) => panic!("unauthorized peer received {n} response bytes"),
             Err(error) => panic!("unexpected read error: {error}"),
         }
@@ -378,7 +378,7 @@ mod tests {
             .await
             .expect("write blank lines");
         write_half
-            .write_all(br#"{definitely not json"#)
+            .write_all(br"{definitely not json")
             .await
             .expect("write malformed line");
         write_half.write_all(b"\n").await.expect("write delimiter");

@@ -42,6 +42,7 @@ pub struct RiskScore {
 
 impl RiskScore {
     /// Create a new risk score from findings
+    #[must_use]
     pub fn new(
         findings: &[super::Finding],
         severity_weights: &HashMap<String, i32>,
@@ -105,7 +106,7 @@ impl RiskScore {
                     _ => 0.5,
                 };
 
-                cat_score += (sev_weight as f64) * confidence_mult * cat_weight;
+                cat_score += f64::from(sev_weight) * confidence_mult * cat_weight;
 
                 // Track highest severity
                 if let Some((weight, _)) = highest_severity {
@@ -117,7 +118,11 @@ impl RiskScore {
                 }
             }
 
-            total_score += cat_score as i32;
+            // Category scores are fractional by design; round to whole risk
+            // points instead of silently truncating.
+            #[allow(clippy::cast_possible_truncation)]
+            let points = cat_score.round() as i32;
+            total_score += points;
 
             category_breakdown.insert(
                 category.clone(),
@@ -143,6 +148,7 @@ impl RiskScore {
     }
 
     /// Get risk score description
+    #[must_use]
     pub fn description(&self) -> String {
         match self.level {
             RiskLevel::None => "No risk detected".to_string(),
@@ -174,7 +180,7 @@ impl fmt::Display for RiskScore {
         writeln!(f, "  Findings: {}", self.finding_count)?;
 
         if let Some(ref sev) = self.highest_severity {
-            writeln!(f, "  Highest Severity: {}", sev)?;
+            writeln!(f, "  Highest Severity: {sev}")?;
         }
 
         if !self.by_category.is_empty() {
@@ -403,7 +409,7 @@ mod tests {
     fn test_risk_score_display_none() {
         // RiskLevel::None when no findings
         let score = RiskScore::new(&[], &HashMap::new(), &HashMap::new());
-        let display = format!("{}", score);
+        let display = format!("{score}");
         assert!(display.contains("Risk Assessment"));
     }
 
@@ -417,7 +423,7 @@ mod tests {
             )
         }];
         let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
-        let display = format!("{}", score);
+        let display = format!("{score}");
         assert!(display.contains("Risk Assessment"));
         assert!(display.contains("Findings:"));
     }
@@ -441,7 +447,7 @@ mod tests {
         ];
         let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
         assert!(score.by_category.contains_key("secrets"));
-        let display = format!("{}", score);
+        let display = format!("{score}");
         // Should show category breakdown when there are findings
         assert!(display.contains("By Category"));
     }
@@ -453,13 +459,13 @@ mod tests {
         for i in 0..10 {
             let loc = super::super::Location::new("test.rs", i, 0, "secret");
             findings.push(super::super::Finding::new(
-                format!("secret{}", i),
+                format!("secret{i}"),
                 "secrets",
                 "high",
                 "high",
                 loc,
                 "secret",
-                format!("Secret {}", i),
+                format!("Secret {i}"),
             ));
         }
         let score = RiskScore::new(&findings, &HashMap::new(), &HashMap::new());
@@ -481,7 +487,7 @@ mod tests {
         let low_score = RiskScore::new(&low_findings, &HashMap::new(), &HashMap::new());
         let low_desc = low_score.description();
         assert!(low_desc.contains("Low") || low_desc.contains("findings"));
-        assert_eq!(low_score.level, super::RiskLevel::Low);
+        assert_eq!(low_score.level, RiskLevel::Low);
 
         // Test with Medium severity (3 medium findings: 3 * 10 * 1.0 = 30, which is Medium 20-50)
         let med_findings = vec![
@@ -525,7 +531,7 @@ mod tests {
         let med_score = RiskScore::new(&med_findings, &HashMap::new(), &HashMap::new());
         let med_desc = med_score.description();
         assert!(med_desc.contains("Medium") || med_desc.contains("findings"));
-        assert_eq!(med_score.level, super::RiskLevel::Medium);
+        assert_eq!(med_score.level, RiskLevel::Medium);
 
         // Test with High severity (2 findings with high severity in secrets: 2 * 25 * 1.5 = 75 >= 50)
         let high_findings = vec![
@@ -545,7 +551,7 @@ mod tests {
         let high_score = RiskScore::new(&high_findings, &HashMap::new(), &HashMap::new());
         let high_desc = high_score.description();
         assert!(high_desc.contains("High") || high_desc.contains("findings"));
-        assert_eq!(high_score.level, super::RiskLevel::High);
+        assert_eq!(high_score.level, RiskLevel::High);
 
         // Test with Critical (1 critical + 5 high findings in secrets: 1*40 + 5*25 * 1.5 = 232.5 >= 150)
         // Order high findings first, then critical to test the highest_severity tracking branch (line 113)
@@ -554,13 +560,13 @@ mod tests {
         for i in 0..5 {
             let loc = super::super::Location::new("test.rs", i, 0, "secret");
             crit_findings.push(super::super::Finding::new(
-                format!("secret{}", i),
+                format!("secret{i}"),
                 "secrets",
                 "high",
                 "high",
                 loc,
                 "secret",
-                format!("Secret {}", i),
+                format!("Secret {i}"),
             ));
         }
         // Then add critical finding (weight 40) to trigger the sev_weight > weight branch
@@ -581,7 +587,7 @@ mod tests {
         assert!(crit_desc.contains("CRITICAL") || crit_desc.contains("findings"));
 
         // Also test Display trait via format!() macro to cover category breakdown
-        let crit_display = format!("{}", crit_score);
+        let crit_display = format!("{crit_score}");
         assert!(crit_display.contains("secrets"));
     }
 }

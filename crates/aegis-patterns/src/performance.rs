@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -34,7 +35,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "n-plus-one-query".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)for\s*\([^)]*\)\s*\{[^}]*query|for\s*\([^)]*\)\s*\{[^}]*db\. "#
+            match_pattern: r"(?i)for\s*\([^)]*\)\s*\{[^}]*query|for\s*\([^)]*\)\s*\{[^}]*db\. "
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -78,7 +79,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "box-inside-loop".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)for\s*\{[^}]*Box::new"#.to_string(),
+            match_pattern: r"(?i)for\s*\{[^}]*Box::new".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -98,7 +99,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-database-index".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)CREATE\s+TABLE"#.to_string(),
+            match_pattern: r"(?i)CREATE\s+TABLE".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "low".to_string(),
@@ -118,7 +119,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "select-star".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)SELECT\s+\*"#.to_string(),
+            match_pattern: r"(?i)SELECT\s+\*".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -138,7 +139,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "missing-limit".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)LIMIT\s+"#.to_string(),
+            match_pattern: r"(?i)LIMIT\s+".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -158,7 +159,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "no-cache-headers".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)Cache-Control|CacheDirectives"#.to_string(),
+            match_pattern: r"(?i)Cache-Control|CacheDirectives".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -178,7 +179,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "unsized-image".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)<img\b[^>]*(?:/>|>)"#.to_string(),
+            match_pattern: r"(?i)<img\b[^>]*(?:/>|>)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -192,7 +193,7 @@ pub fn get() -> Vec<Pattern> {
             ],
             env_var: false,
             binary: false,
-            exclude: Some(r#"(?i)\bwidth\s*=|\bheight\s*=|aspect-ratio"#.to_string()),
+            exclude: Some(r"(?i)\bwidth\s*=|\bheight\s*=|aspect-ratio".to_string()),
             file_extensions: vec![
                 "html".to_string(),
                 "htm".to_string(),
@@ -205,7 +206,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "document-write".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"document\.write"#.to_string(),
+            match_pattern: r"document\.write".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -225,7 +226,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "synchronous-xmlhttprequest".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"new\s+XMLHttpRequest\(\).*send\(null\)"#.to_string(),
+            match_pattern: r"new\s+XMLHttpRequest\(\).*send\(null\)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -245,7 +246,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "inner-html-assignment".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)innerHTML\s*="#.to_string(),
+            match_pattern: r"(?i)innerHTML\s*=".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -266,7 +267,7 @@ pub fn get() -> Vec<Pattern> {
             name: "force-reflow".to_string(),
             category: "performance".to_string(),
             match_pattern:
-                r#"(?i)(offsetHeight|offsetWidth|scrollTop|scrollLeft|clientTop|clientLeft)\s*="#
+                r"(?i)(offsetHeight|offsetWidth|scrollTop|scrollLeft|clientTop|clientLeft)\s*="
                     .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -287,7 +288,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "gzip-not-enabled".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)Accept-Encoding"#.to_string(),
+            match_pattern: r"(?i)Accept-Encoding".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -307,7 +308,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "expensive-computation-loop".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)for\s*\(.*\)\s*\{[^}]*(Math\.|pow\(|sqrt\(|cos\(|sin\()"#
+            match_pattern: r"(?i)for\s*\(.*\)\s*\{[^}]*(Math\.|pow\(|sqrt\(|cos\(|sin\()"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -329,7 +330,7 @@ pub fn get() -> Vec<Pattern> {
             name: "regex-in-loop".to_string(),
             category: "performance".to_string(),
             match_pattern:
-                r#"(?i)for\s*\{[^}]*new\s+RegExp|for\s*\{[^}]*\.\.match\(|for\s*\{[^}]*\.\.test\("#
+                r"(?i)for\s*\{[^}]*new\s+RegExp|for\s*\{[^}]*\.\.match\(|for\s*\{[^}]*\.\.test\("
                     .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -350,7 +351,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "no-connection-pool".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)db\.connect|new\s+Connection\(.*\)"#.to_string(),
+            match_pattern: r"(?i)db\.connect|new\s+Connection\(.*\)".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -370,7 +371,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "event-listener-leak".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)addEventListener"#.to_string(),
+            match_pattern: r"(?i)addEventListener".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "medium".to_string(),
@@ -390,7 +391,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "global-variable".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)^var\s+\w+\s*=|window\.\w+\s*="#.to_string(),
+            match_pattern: r"(?i)^var\s+\w+\s*=|window\.\w+\s*=".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),
@@ -410,7 +411,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "console-log-production".to_string(),
             category: "performance".to_string(),
-            match_pattern: r#"(?i)console\.(log|debug|info).*\/|\s*\(.*\).*eslint"#.to_string(),
+            match_pattern: r"(?i)console\.(log|debug|info).*\/|\s*\(.*\).*eslint".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

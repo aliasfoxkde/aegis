@@ -89,7 +89,7 @@ fn categories_are_consistently_dispatchable() {
         let selected = by_category(category);
         let mut selected_names: Vec<&str> = selected.iter().map(|p| p.name.as_str()).collect();
         selected_names.sort_unstable();
-        let mut expected: Vec<&str> = expected_names.to_vec();
+        let mut expected: Vec<&str> = expected_names.clone();
         expected.sort_unstable();
         if selected_names != expected {
             failures.push(format!(
@@ -173,7 +173,7 @@ fn tags_and_extensions_are_well_formed() {
                 .tags
                 .iter()
                 .filter(|t| !is_well_formed_tag(t))
-                .map(|t| t.as_str())
+                .map(String::as_str)
                 .collect();
             let bad_exts: Vec<_> = p
                 .file_extensions
@@ -183,7 +183,7 @@ fn tags_and_extensions_are_well_formed() {
                         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
                         || e.is_empty()
                 })
-                .map(|e| e.as_str())
+                .map(String::as_str)
                 .collect();
             if bad_tags.is_empty() && bad_exts.is_empty() {
                 None

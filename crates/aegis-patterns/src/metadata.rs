@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -23,8 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ide-config-leak".to_string(),
             category: "metadata".to_string(),
-            match_pattern: r#"\.(idea|vscode|vscodium|settings\.json|workspace\.json)$"#
-                .to_string(),
+            match_pattern: r"\.(idea|vscode|vscodium|settings\.json|workspace\.json)$".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -41,7 +41,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "os-cache-file".to_string(),
             category: "metadata".to_string(),
-            match_pattern: r#"\.(DS_Store|Thumbs\.db|desktop\.ini|\.AppleDouble|\.LSOverride)$"#
+            match_pattern: r"\.(DS_Store|Thumbs\.db|desktop\.ini|\.AppleDouble|\.LSOverride)$"
                 .to_string(),
             enabled: true,
             severity: "low".to_string(),
@@ -59,7 +59,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "temporary-file".to_string(),
             category: "metadata".to_string(),
-            match_pattern: r#"\.(tmp|temp|cache|swp|swo)$"#.to_string(),
+            match_pattern: r"\.(tmp|temp|cache|swp|swo)$".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

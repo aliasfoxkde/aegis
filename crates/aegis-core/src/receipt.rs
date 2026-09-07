@@ -7,6 +7,7 @@
 use crate::{Finding, InspectionLedger, Location, RiskScore, ScanStats};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -82,6 +83,7 @@ pub struct ScanReceipt {
 
 impl ScanReceipt {
     /// Return a redacted SHA-256 digest for an effective profile/config string.
+    #[must_use]
     pub fn digest_text(value: &str) -> String {
         hex::encode(Sha256::digest(value.as_bytes()))
     }
@@ -98,15 +100,14 @@ impl ScanReceipt {
         let source = source.into();
         let scope = scope.into();
         let profile = profile.into();
-        let risk = RiskScore::new(findings, &Default::default(), &Default::default());
+        let risk = RiskScore::new(findings, &HashMap::default(), &HashMap::default());
         let redacted_findings = findings
             .iter()
             .map(ReceiptFinding::from)
             .collect::<Vec<_>>();
         let created_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |duration| duration.as_secs());
         let identity_material = format!(
             "{}|{}|{}|{}|{}",
             source,
@@ -161,22 +162,34 @@ impl ScanReceipt {
     }
 
     /// Attach an optional source revision without changing the receipt identity inputs.
+    #[must_use]
     pub fn with_source_revision(mut self, source_revision: Option<String>) -> Self {
         self.source_revision = source_revision;
         self
     }
 
     /// Whether the receipt has enough inspection evidence for a safe result.
+    #[must_use]
     pub fn allows_safe(&self) -> bool {
         self.inspection_ledger.allows_safe()
     }
 
     /// Serialize this receipt as stable, human-readable JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`serde_json::Error`] if the receipt cannot be serialized.
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
     }
 
     /// Atomically persist this receipt, replacing an existing file.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if serialization fails, the parent directory
+    /// cannot be created, the staged temporary file cannot be written, or
+    /// the final rename fails.
     pub fn write_atomic(&self, path: &Path) -> io::Result<()> {
         let json = self
             .to_json()
@@ -194,13 +207,20 @@ impl ScanReceipt {
         let temp_path = path.with_file_name(format!(".{file_name}.tmp-{}", std::process::id()));
         fs::write(&temp_path, json.as_bytes())?;
         if let Err(error) = fs::rename(&temp_path, path) {
-            let _ = fs::remove_file(&temp_path);
+            // Roll back the staged file; a failed cleanup is not fatal.
+            let _cleanup = fs::remove_file(&temp_path);
             return Err(error);
         }
         Ok(())
     }
 
     /// Read and validate a serialized receipt.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if the file cannot be read, and an error of
+    /// kind [`io::ErrorKind::InvalidData`] if the content is not a valid
+    /// receipt.
     pub fn read_json(path: &Path) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
         serde_json::from_str(&content)
@@ -267,7 +287,7 @@ mod tests {
             serde_json::to_string(&receipt.inspection_ledger).unwrap()
         );
         assert!(path.exists());
-        std::fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

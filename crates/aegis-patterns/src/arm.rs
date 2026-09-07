@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -24,7 +25,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "arm-azure-storage-enable-https".to_string(),
             category: "arm".to_string(),
-            match_pattern: r#"enableHttpsTrafficOnly\s*[:=]\s*(?:false|0|no)"#.to_string(),
+            match_pattern: r"enableHttpsTrafficOnly\s*[:=]\s*(?:false|0|no)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

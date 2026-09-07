@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "clinical-trial-id".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\bNCT[0-9]{8}\b"#.to_string(),
+            match_pattern: r"\bNCT[0-9]{8}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "healthcare-code".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\b(?:CPT|HCPCS|ICD-10)[A-Z0-9]{5,8}\b"#.to_string(),
+            match_pattern: r"\b(?:CPT|HCPCS|ICD-10)[A-Z0-9]{5,8}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -39,7 +40,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "insurance-number".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\b(?:INS|INSURANCE)[0-9]{9,11}\b"#.to_string(),
+            match_pattern: r"\b(?:INS|INSURANCE)[0-9]{9,11}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -55,7 +56,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "medical-license-number".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\b(?:MD|DO|RN|LPN|PA|NP)[0-9]{8,12}\b"#.to_string(),
+            match_pattern: r"\b(?:MD|DO|RN|LPN|PA|NP)[0-9]{8,12}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -71,7 +72,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "healthcare-medical-record-number".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\bMRN[0-9]{8,12}\b"#.to_string(),
+            match_pattern: r"\bMRN[0-9]{8,12}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -87,7 +88,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "patient-id".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\b(?:PATIENT|PT)[0-9]{8,12}\b"#.to_string(),
+            match_pattern: r"\b(?:PATIENT|PT)[0-9]{8,12}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -103,7 +104,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "healthcare-prescription-number".to_string(),
             category: "healthcare".to_string(),
-            match_pattern: r#"\bRX[0-9]{7,10}\b"#.to_string(),
+            match_pattern: r"\bRX[0-9]{7,10}\b".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

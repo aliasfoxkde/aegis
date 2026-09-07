@@ -2,12 +2,13 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "git-ops-force-push-detected".to_string(),
             category: "git-ops".to_string(),
-            match_pattern: r#"(?i)(git\s+push\s+--force|git\s+push\s+-f\s+origin|push\s+--force-with-lease|--force-with-lease)"#.to_string(),
+            match_pattern: r"(?i)(git\s+push\s+--force|git\s+push\s+-f\s+origin|push\s+--force-with-lease|--force-with-lease)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -23,7 +24,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "git-credential-leak".to_string(),
             category: "git-ops".to_string(),
-            match_pattern: r#"(?i)(git\s+config\s+--local\s+credential\.helper|git\s+clone\s+https?://[^@]+@|url\s*=\s*https?://[^:]+:[^@]+@)"#.to_string(),
+            match_pattern: r"(?i)(git\s+config\s+--local\s+credential\.helper|git\s+clone\s+https?://[^@]+@|url\s*=\s*https?://[^:]+:[^@]+@)".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),

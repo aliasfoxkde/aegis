@@ -90,3 +90,6 @@ harness = false
 [[bench]]
 name = "scanner_init"
 harness = false
+
+[lints]
+workspace = true

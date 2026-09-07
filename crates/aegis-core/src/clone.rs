@@ -44,6 +44,7 @@ pub enum CloneType {
 
 impl CloneType {
     /// Get description
+    #[must_use]
     pub fn description(&self) -> &'static str {
         match self {
             CloneType::Type1 => "Identical code (whitespace differences only)",
@@ -64,6 +65,7 @@ pub struct CloneDetector {
 
 impl CloneDetector {
     /// Create a new detector
+    #[must_use]
     pub fn new() -> Self {
         Self {
             min_similarity: 0.75,
@@ -72,37 +74,48 @@ impl CloneDetector {
     }
 
     /// Set minimum similarity threshold
+    #[must_use]
     pub fn with_min_similarity(mut self, similarity: f64) -> Self {
         self.min_similarity = similarity;
         self
     }
 
     /// Set minimum token count
+    #[must_use]
     pub fn with_min_tokens(mut self, tokens: usize) -> Self {
         self.min_tokens = tokens;
         self
     }
 
     /// Detect clones in a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CloneError::IoError`] if the file cannot be read.
     pub fn detect_file(&self, path: &Path) -> Result<Vec<CodeClone>, CloneError> {
         let content = std::fs::read_to_string(path)?;
         self.detect_content(&content, path.to_str().unwrap_or("unknown"))
     }
 
     /// Detect clones in content
+    ///
+    /// # Errors
+    ///
+    /// Never returns `Err` today: detection over in-memory content cannot
+    /// fail. The `Result` keeps parity with [`CloneDetector::detect_file`].
     pub fn detect_content(
         &self,
         content: &str,
         source: &str,
     ) -> Result<Vec<CodeClone>, CloneError> {
-        let tokens = self.tokenize(content);
+        let tokens = Self::tokenize(content);
         let blocks = self.create_blocks(&tokens, content.lines().count());
 
-        self.find_clones(blocks, source.to_string())
+        Ok(self.find_clones(&blocks, source))
     }
 
     /// Simple tokenizer
-    fn tokenize(&self, content: &str) -> Vec<Token> {
+    fn tokenize(content: &str) -> Vec<Token> {
         let mut tokens = Vec::new();
         let mut chars = content.char_indices().peekable();
         let _lines: Vec<(usize, &str)> = content.lines().enumerate().collect();
@@ -125,7 +138,7 @@ impl CloneDetector {
                     }
                 }
                 let text = &content[start..end];
-                let kind = if self.is_keyword(text) {
+                let kind = if Self::is_keyword(text) {
                     TokenKind::Keyword
                 } else {
                     TokenKind::Identifier
@@ -204,7 +217,7 @@ impl CloneDetector {
     }
 
     /// Check if text is a keyword
-    fn is_keyword(&self, text: &str) -> bool {
+    fn is_keyword(text: &str) -> bool {
         matches!(
             text,
             "fn" | "let"
@@ -263,8 +276,8 @@ impl CloneDetector {
             }
 
             // Find line number for this block
-            let _start_pos = block_tokens.first().map(|t| t.start).unwrap_or(0);
-            let _end_pos = block_tokens.last().map(|t| t.end).unwrap_or(0);
+            let _start_pos = block_tokens.first().map_or(0, |t| t.start);
+            let _end_pos = block_tokens.last().map_or(0, |t| t.end);
 
             // Count newlines to get line numbers
             let start_line = tokens[..i].iter().filter(|t| t.text == "\n").count() + 1;
@@ -276,7 +289,7 @@ impl CloneDetector {
                 end_token: end,
                 start_line,
                 end_line,
-                normalized: self.normalize(block_tokens),
+                normalized: Self::normalize(block_tokens),
                 original: block_tokens.iter().map(|t| t.text.clone()).collect(),
             });
         }
@@ -285,7 +298,7 @@ impl CloneDetector {
     }
 
     /// Normalize a block for comparison (remove variable names, literals)
-    fn normalize(&self, tokens: &[Token]) -> String {
+    fn normalize(tokens: &[Token]) -> String {
         tokens
             .iter()
             .map(|t| match t.kind {
@@ -299,30 +312,26 @@ impl CloneDetector {
     }
 
     /// Find clones between blocks
-    fn find_clones(
-        &self,
-        blocks: Vec<CodeBlock>,
-        source: String,
-    ) -> Result<Vec<CodeClone>, CloneError> {
+    fn find_clones(&self, blocks: &[CodeBlock], source: &str) -> Vec<CodeClone> {
         let mut clones = Vec::new();
 
         for i in 0..blocks.len() {
             for j in (i + 1)..blocks.len() {
-                let similarity = self.calculate_similarity(&blocks[i], &blocks[j]);
+                let similarity = Self::calculate_similarity(&blocks[i], &blocks[j]);
 
                 if similarity >= self.min_similarity {
-                    let clone_type = self.classify_clone(&blocks[i], &blocks[j], similarity);
+                    let clone_type = Self::classify_clone(&blocks[i], &blocks[j], similarity);
 
                     clones.push(CodeClone {
                         clone_type,
                         location1: CloneLocation {
-                            file: source.clone(),
+                            file: source.to_string(),
                             start_line: blocks[i].start_line,
                             end_line: blocks[i].end_line,
                             function: None,
                         },
                         location2: CloneLocation {
-                            file: source.clone(),
+                            file: source.to_string(),
                             start_line: blocks[j].start_line,
                             end_line: blocks[j].end_line,
                             function: None,
@@ -341,11 +350,11 @@ impl CloneDetector {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        Ok(clones)
+        clones
     }
 
     /// Calculate similarity between two blocks
-    fn calculate_similarity(&self, a: &CodeBlock, b: &CodeBlock) -> f64 {
+    fn calculate_similarity(a: &CodeBlock, b: &CodeBlock) -> f64 {
         let a_tokens: HashSet<_> = a.normalized.split_whitespace().collect();
         let b_tokens: HashSet<_> = b.normalized.split_whitespace().collect();
 
@@ -360,7 +369,7 @@ impl CloneDetector {
     }
 
     /// Classify clone type based on similarity
-    fn classify_clone(&self, _a: &CodeBlock, _b: &CodeBlock, similarity: f64) -> CloneType {
+    fn classify_clone(_a: &CodeBlock, _b: &CodeBlock, similarity: f64) -> CloneType {
         if similarity >= 0.98 {
             CloneType::Type1
         } else if similarity >= 0.85 {
@@ -430,7 +439,7 @@ mod tests {
     #[test]
     fn test_detector_creation() {
         let detector = CloneDetector::new();
-        assert_eq!(detector.min_similarity, 0.75);
+        assert!((detector.min_similarity - 0.75).abs() < f64::EPSILON);
         let _ = detector;
     }
 
@@ -439,7 +448,7 @@ mod tests {
         let detector = CloneDetector::new()
             .with_min_similarity(0.9)
             .with_min_tokens(5);
-        assert_eq!(detector.min_similarity, 0.9);
+        assert!((detector.min_similarity - 0.9).abs() < f64::EPSILON);
         let _ = detector;
     }
 
@@ -472,13 +481,13 @@ fn bar() {
         let identical: Vec<CodeClone> = vec![CodeClone {
             clone_type: CloneType::Type1,
             location1: CloneLocation {
-                file: "".to_string(),
+                file: String::new(),
                 start_line: 1,
                 end_line: 1,
                 function: None,
             },
             location2: CloneLocation {
-                file: "".to_string(),
+                file: String::new(),
                 start_line: 1,
                 end_line: 1,
                 function: None,
@@ -538,13 +547,13 @@ fn bar() {
     #[test]
     fn test_clone_detector_with_low_similarity() {
         let detector = CloneDetector::new().with_min_similarity(0.5);
-        assert_eq!(detector.min_similarity, 0.5);
+        assert!((detector.min_similarity - 0.5).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_clone_detector_default() {
         let detector = CloneDetector::default();
-        assert_eq!(detector.min_similarity, 0.75);
+        assert!((detector.min_similarity - 0.75).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -566,7 +575,7 @@ fn bar() {
             similarity: 0.85,
             token_count: 50,
         };
-        let debug_str = format!("{:?}", clone);
+        let debug_str = format!("{clone:?}");
         assert!(!debug_str.is_empty());
     }
 
@@ -587,7 +596,7 @@ fn bar() {
     #[test]
     fn test_detect_file_nonexistent() {
         let detector = CloneDetector::new();
-        let result = detector.detect_file(std::path::Path::new("/nonexistent/file.txt"));
+        let result = detector.detect_file(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
     }
 

@@ -33,3 +33,6 @@ jsonrpc-derive = "18.0"
 [[bin]]
 name = "aegis-mcp"
 path = "src/main.rs"
+
+[lints]
+workspace = true

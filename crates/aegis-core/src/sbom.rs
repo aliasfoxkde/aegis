@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
 /// SBOM document
@@ -172,13 +173,13 @@ impl SbomGenerator {
     }
 
     /// Add a dependency
-    pub fn add_dependency(&mut self, name: impl Into<String>, version: Option<String>) {
+    pub fn add_dependency(&mut self, name: impl Into<String>, version: Option<&str>) {
         let name = name.into();
-        let purl = Self::create_purl(&name, version.as_deref());
+        let purl = Self::create_purl(&name, version);
 
         self.components.push(SbomComponent {
             name: name.clone(),
-            version: version.clone(),
+            version: version.map(str::to_string),
             purl: Some(purl),
             cpe: None,
             license_info: LicenseInfo {
@@ -219,7 +220,7 @@ impl SbomGenerator {
                 reference_locator: "cargo".to_string(),
                 comment: None,
             }],
-            download_location: Some(format!("https://crates.io/api/v1/crates/{}", name)),
+            download_location: Some(format!("https://crates.io/api/v1/crates/{name}")),
             primary_purpose: Some("dependency".to_string()),
         });
     }
@@ -247,7 +248,7 @@ impl SbomGenerator {
                 reference_locator: "npm".to_string(),
                 comment: None,
             }],
-            download_location: Some(format!("https://www.npmjs.com/package/{}", name)),
+            download_location: Some(format!("https://www.npmjs.com/package/{name}")),
             primary_purpose: Some("dependency".to_string()),
         });
     }
@@ -278,7 +279,7 @@ impl SbomGenerator {
                 reference_locator: "pip".to_string(),
                 comment: None,
             }],
-            download_location: Some(format!("https://pypi.org/project/{}", name)),
+            download_location: Some(format!("https://pypi.org/project/{name}")),
             primary_purpose: Some("dependency".to_string()),
         });
     }
@@ -286,12 +287,12 @@ impl SbomGenerator {
     /// Add a Docker/OCI image dependency
     pub fn add_container_dep(&mut self, image: &str, digest: Option<&str>) {
         let (name, tag) = image.split_once(':').unwrap_or((image, "latest"));
-        let digest_suffix = digest.map(|d| format!("@sha256:{}", d)).unwrap_or_default();
+        let digest_suffix = digest.map(|d| format!("@sha256:{d}")).unwrap_or_default();
 
         self.components.push(SbomComponent {
             name: name.to_string(),
             version: Some(tag.to_string()),
-            purl: Some(format!("pkg:docker/{}?tag={}", name, tag)),
+            purl: Some(format!("pkg:docker/{name}?tag={tag}")),
             cpe: None,
             license_info: LicenseInfo {
                 declared: vec!["NOASSERTION".to_string()],
@@ -311,7 +312,7 @@ impl SbomGenerator {
                 .unwrap_or_default(),
             external_refs: vec![ExternalRef {
                 reference_type: "purl".to_string(),
-                reference_locator: format!("pkg:docker/{}{}", image, digest_suffix),
+                reference_locator: format!("pkg:docker/{image}{digest_suffix}"),
                 comment: None,
             }],
             download_location: None,
@@ -343,6 +344,7 @@ impl SbomGenerator {
     }
 
     /// Generate SPDX tag-value format
+    #[must_use]
     pub fn generate_spdx_tv(&self) -> String {
         let mut output = String::new();
 
@@ -350,51 +352,52 @@ impl SbomGenerator {
         output.push_str("SPDXVersion: SPDX-2.3\n");
         output.push_str("DataLicense: CC0-1.0\n");
         output.push_str("SPDXID: SPDXRef-DOCUMENT\n");
-        output.push_str(&format!("DocumentName: {}\n", self.root_name));
-        output.push_str(&format!(
-            "DocumentNamespace: https://aegis.io/spdx/{}/{}\n",
+        let _ = writeln!(output, "DocumentName: {}", self.root_name);
+        let _ = writeln!(
+            output,
+            "DocumentNamespace: https://aegis.io/spdx/{}/{}",
             self.root_name,
             uuid_v4()
-        ));
+        );
 
         // Creation info
         output.push_str("\n# Creation Information\n");
         output.push_str("Creator: Tool: aegis-sbom\n");
-        output.push_str(&format!("Created: {}\n", chrono_now()));
+        let _ = writeln!(output, "Created: {}", chrono_now());
 
         // Packages
         for (i, comp) in self.components.iter().enumerate() {
             output.push_str("\nPackageName: ");
             output.push_str(&comp.name);
             output.push('\n');
-            output.push_str(&format!("SPDXID: SPDXRef-Package-{}\n", i + 1));
+            let _ = writeln!(output, "SPDXID: SPDXRef-Package-{}", i + 1);
 
             if let Some(ref v) = comp.version {
-                output.push_str(&format!("PackageVersion: {}\n", v));
+                let _ = writeln!(output, "PackageVersion: {v}");
             }
 
             if let Some(ref p) = comp.purl {
-                output.push_str(&format!("PackageDownloadLocation: {}\n", p));
+                let _ = writeln!(output, "PackageDownloadLocation: {p}");
             } else {
                 output.push_str("PackageDownloadLocation: NOASSERTION\n");
             }
 
             // License
             let declared = comp.license_info.declared.join(" AND ");
-            output.push_str(&format!("PackageLicenseDeclared: {}\n", declared));
+            let _ = writeln!(output, "PackageLicenseDeclared: {declared}");
             output.push_str("PackageLicenseConcluded: NOASSERTION\n");
 
             if let Some(ref sup) = comp.supplier {
-                output.push_str(&format!("PackageSupplier: {}", sup));
+                let _ = write!(output, "PackageSupplier: {sup}");
             }
 
             if let Some(ref cp) = comp.copyright {
-                output.push_str(&format!("PackageCopyrightText: {}", cp));
+                let _ = write!(output, "PackageCopyrightText: {cp}");
             }
 
             // Primary purpose
             if let Some(ref pp) = comp.primary_purpose {
-                output.push_str(&format!("PrimaryPackagePurpose: {}\n", pp));
+                let _ = writeln!(output, "PrimaryPackagePurpose: {pp}");
             }
         }
 
@@ -402,26 +405,29 @@ impl SbomGenerator {
         output.push_str("\n# Relationships\n");
         output.push_str("Relationship: SPDXRef-DOCUMENT DESCRIBES SPDXRef-Package-1\n");
         for i in 1..=self.components.len() {
-            output.push_str(&format!(
-                "Relationship: SPDXRef-Package-1 CONTAINS SPDXRef-Package-{}\n",
-                i
-            ));
+            let _ = writeln!(
+                output,
+                "Relationship: SPDXRef-Package-1 CONTAINS SPDXRef-Package-{i}"
+            );
         }
 
         output
     }
 
     /// Generate SPDX JSON format
+    #[must_use]
     pub fn generate_spdx_json(&self) -> String {
         serde_json::to_string_pretty(&self.to_spdx_json()).unwrap_or_default()
     }
 
     /// Generate CycloneDX JSON format
+    #[must_use]
     pub fn generate_cyclonedx_json(&self) -> String {
         serde_json::to_string_pretty(&self.to_cyclonedx()).unwrap_or_default()
     }
 
     /// Generate SBOM in specified format
+    #[must_use]
     pub fn generate(&self, format: SbomFormat) -> String {
         match format {
             SbomFormat::Spdx => self.generate_spdx_json(),
@@ -539,8 +545,8 @@ impl SbomGenerator {
     /// Create a Package URL (PURL)
     fn create_purl(name: &str, version: Option<&str>) -> String {
         match version {
-            Some(v) => format!("pkg:cargo/{}@{}", name, v),
-            None => format!("pkg:cargo/{}", name),
+            Some(v) => format!("pkg:cargo/{name}@{v}"),
+            None => format!("pkg:cargo/{name}"),
         }
     }
 }
@@ -552,7 +558,7 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{:032x}", timestamp)
+    format!("{timestamp:032x}")
 }
 
 /// Get current timestamp in ISO 8601 format
@@ -563,7 +569,7 @@ fn chrono_now() -> String {
         .unwrap_or_default();
     let secs = now.as_secs();
     // Simplified - in production use chrono crate
-    format!("2024-01-01T00:00:00Z (timestamp: {})", secs)
+    format!("2024-01-01T00:00:00Z (timestamp: {secs})")
 }
 
 #[cfg(test)]
@@ -644,7 +650,7 @@ mod tests {
     #[test]
     fn add_dependency_defaults_to_noassertion_license() {
         let mut sbom = SbomGenerator::new("root", None);
-        sbom.add_dependency("left-pad", Some("1.3.0".to_string()));
+        sbom.add_dependency("left-pad", Some("1.3.0"));
         assert_eq!(sbom.components.len(), 1);
         let component = &sbom.components[0];
         assert_eq!(component.name, "left-pad");

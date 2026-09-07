@@ -3,14 +3,14 @@
 //! Tool to create pattern bundles from YAML definitions.
 
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::Path;
 
 pub use aegis_bundler::{create_bundle_from_dir, read_patterns_from_dir, Bundle, Pattern};
 
 /// Build a bundle from `input_dir` and write the compressed artifact to
 /// `output_file`. Split out of `main` so the argument handling is testable.
-fn run(input_dir: &PathBuf, output_file: &PathBuf) -> Result<()> {
-    println!("Building bundle from {:?}...", input_dir);
+fn run(input_dir: &Path, output_file: &Path) -> Result<()> {
+    println!("Building bundle from {}...", input_dir.display());
 
     let patterns = read_patterns_from_dir(input_dir)?;
     println!("  Found {} valid patterns", patterns.len());
@@ -21,8 +21,8 @@ fn run(input_dir: &PathBuf, output_file: &PathBuf) -> Result<()> {
     std::fs::write(output_file, &compressed)?;
 
     println!(
-        "Bundle written to {:?} ({} bytes)",
-        output_file,
+        "Bundle written to {} ({} bytes)",
+        output_file.display(),
         compressed.len()
     );
 
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    run(&PathBuf::from(&args[1]), &PathBuf::from(&args[2]))
+    run(Path::new(&args[1]), Path::new(&args[2]))
 }
 
 #[cfg(test)]
@@ -61,15 +61,14 @@ mod tests {
 "#;
 
     #[test]
-    fn builds_and_writes_a_bundle_from_a_pattern_directory() -> Result<()> {
+    fn builds_and_writes_a_bundle_from_a_pattern_directory() {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(dir.path().join("sample.yaml"), SAMPLE_PATTERN).expect("write pattern");
         let output = dir.path().join("sample.bundle");
 
-        run(&dir.path().to_path_buf(), &output).expect("bundle build");
+        run(dir.path(), &output).expect("bundle build");
         let bytes = std::fs::read(&output).expect("bundle bytes");
         assert!(!bytes.is_empty(), "bundle artifact must not be empty");
-        Ok(())
     }
 
     #[test]

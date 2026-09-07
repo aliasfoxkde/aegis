@@ -31,6 +31,7 @@ pub struct IgnoreManager {
 
 impl IgnoreManager {
     /// Create a new ignore manager
+    #[must_use]
     pub fn new() -> Self {
         Self {
             aegis_rules: RwLock::new(Vec::new()),
@@ -41,6 +42,10 @@ impl IgnoreManager {
     }
 
     /// Set the root directory and load all ignore files
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] if an ignore file exists but cannot be read.
     pub fn set_root(&self, root: &Path) -> std::io::Result<()> {
         self.set_root_with(root, true, true)
     }
@@ -50,6 +55,11 @@ impl IgnoreManager {
     /// Disabling a source re-scans from a clean slate for that source: a
     /// previously loaded file's rules are dropped, so toggling options
     /// between scans cannot leave stale rules behind.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`std::io::Error`] if an enabled ignore file exists but
+    /// cannot be read. Unparseable glob lines are skipped, not reported.
     pub fn set_root_with(
         &self,
         root: &Path,
@@ -143,10 +153,14 @@ impl IgnoreManager {
     }
 
     /// Add a pattern directly
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PatternError::InvalidPattern`] if the glob does not compile.
     pub fn add_pattern(&self, pattern: &str) -> Result<(), PatternError> {
         compile_rule(pattern)
             .map(|rule| self.explicit_rules.write().push(rule))
-            .map_err(|_| PatternError::InvalidPattern(pattern.to_string()))
+            .map_err(|()| PatternError::InvalidPattern(pattern.to_string()))
     }
 
     /// Clear all patterns
@@ -163,9 +177,9 @@ impl IgnoreManager {
 fn meaningful_lines(content: &str) -> Vec<String> {
     content
         .lines()
-        .map(|l| l.trim())
+        .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(|l| l.to_string())
+        .map(ToString::to_string)
         .collect()
 }
 
@@ -244,6 +258,7 @@ impl std::fmt::Debug for IgnoreManager {
             .field("aegis_rule_count", &self.aegis_rules.read().len())
             .field("explicit_rule_count", &self.explicit_rules.read().len())
             .field("gitignore_rule_count", &self.gitignore_rules.read().len())
+            .field("root", &*self.root.read())
             .finish()
     }
 }
@@ -480,7 +495,7 @@ mod tests {
     fn test_debug_trait() {
         let manager = IgnoreManager::new();
         manager.add_pattern("*.log").unwrap();
-        let debug_str = format!("{:?}", manager);
+        let debug_str = format!("{manager:?}");
         assert!(debug_str.contains("IgnoreManager"));
         assert!(debug_str.contains("aegis_rule_count"));
     }
@@ -496,7 +511,7 @@ mod tests {
     #[test]
     fn test_ignore_manager_default() {
         // Test Default trait
-        let manager: IgnoreManager = Default::default();
+        let manager = IgnoreManager::default();
         // Default manager should not ignore regular files
         assert!(!manager.should_ignore(Path::new("src/main.rs")));
     }

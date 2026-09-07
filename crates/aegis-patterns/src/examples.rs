@@ -5,6 +5,13 @@
 //! aegis-core asserts every enabled pattern fires on its example.
 
 /// Returns a realistic example the named pattern provably matches.
+///
+/// `clippy::match_same_arms` is allowed because the generator emits exactly
+/// one arm per pattern name in alphabetical order, so unrelated rule names
+/// legitimately share the same example text; merging arms would desync this
+/// file from `scripts/generate_examples.py`.
+#[must_use]
+#[allow(clippy::match_same_arms)]
 pub fn example_for(name: &str) -> Option<&'static str> {
     match name {
         "aba-routing-number" => Some(concat!("routing_ -_ -- _no", ": =:= : = 735982468")),

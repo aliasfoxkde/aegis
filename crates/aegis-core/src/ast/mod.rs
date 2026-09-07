@@ -97,11 +97,13 @@ pub enum Language {
 
 impl AstAnalyzer {
     /// Create a new analyzer
+    #[must_use]
     pub fn new(language: Language) -> Self {
         Self { language }
     }
 
     /// Detect language from file extension
+    #[must_use]
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext.to_lowercase().as_str() {
             "go" => Some(Self {
@@ -133,18 +135,30 @@ impl AstAnalyzer {
     }
 
     /// Analyze a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AstError::IoError`] if the file cannot be read.
     pub fn analyze_file(&self, path: &Path) -> Result<AstAnalysis, AstError> {
         let content = std::fs::read_to_string(path)?;
         self.analyze_content(&content, path.to_str().unwrap_or("unknown"))
     }
 
     /// Analyze content
+    ///
+    /// # Errors
+    ///
+    /// Never returns `Err` today: every language path is line-based and
+    /// infallible. The `Result` leaves room for parser-backed analysis to
+    /// report [`AstError::ParseError`].
     pub fn analyze_content(&self, content: &str, source: &str) -> Result<AstAnalysis, AstError> {
         match self.language {
-            Language::Go => self.analyze_go(content, source),
-            Language::Rust => self.analyze_rust(content, source),
-            Language::Python => self.analyze_python(content, source),
-            Language::JavaScript | Language::TypeScript => self.analyze_javascript(content, source),
+            Language::Go => Ok(Self::analyze_go(content, source)),
+            Language::Rust => Ok(Self::analyze_rust(content, source)),
+            Language::Python => Ok(Self::analyze_python(content, source)),
+            Language::JavaScript | Language::TypeScript => {
+                Ok(Self::analyze_javascript(content, source))
+            }
             _ => Ok(AstAnalysis {
                 findings: Vec::new(),
                 complexity: ComplexityMetrics::default(),
@@ -155,6 +169,7 @@ impl AstAnalyzer {
     /// Run the configured AST rules and report whether parser-backed coverage
     /// was actually available. This keeps fallback analysis useful without
     /// allowing a scan receipt to claim parser coverage it did not perform.
+    #[must_use]
     pub fn inspect_source(content: &str, source: &str) -> AstInspection {
         let extension = Path::new(source)
             .extension()
@@ -217,7 +232,7 @@ impl AstAnalyzer {
     }
 
     /// Analyze Python code
-    fn analyze_python(&self, content: &str, source: &str) -> Result<AstAnalysis, AstError> {
+    fn analyze_python(content: &str, source: &str) -> AstAnalysis {
         let mut findings = Vec::new();
         let mut complexity = ComplexityMetrics::default();
 
@@ -379,14 +394,14 @@ impl AstAnalyzer {
 
         complexity.loc = content.lines().count();
 
-        Ok(AstAnalysis {
+        AstAnalysis {
             findings,
             complexity,
-        })
+        }
     }
 
     /// Analyze JavaScript/TypeScript code
-    fn analyze_javascript(&self, content: &str, source: &str) -> Result<AstAnalysis, AstError> {
+    fn analyze_javascript(content: &str, source: &str) -> AstAnalysis {
         let mut findings = Vec::new();
         let mut complexity = ComplexityMetrics::default();
 
@@ -504,19 +519,19 @@ impl AstAnalyzer {
             complexity.cyclomatic += line.matches("while ").count();
             complexity.cyclomatic += line.matches("&&").count();
             complexity.cyclomatic += line.matches("||").count();
-            complexity.cyclomatic += line.matches("?").count();
+            complexity.cyclomatic += line.matches('?').count();
         }
 
         complexity.loc = content.lines().count();
 
-        Ok(AstAnalysis {
+        AstAnalysis {
             findings,
             complexity,
-        })
+        }
     }
 
     /// Analyze Go code
-    fn analyze_go(&self, content: &str, source: &str) -> Result<AstAnalysis, AstError> {
+    fn analyze_go(content: &str, source: &str) -> AstAnalysis {
         let mut findings = Vec::new();
         let mut complexity = ComplexityMetrics::default();
 
@@ -558,7 +573,7 @@ impl AstAnalyzer {
             }
 
             // Check for unchecked errors
-            if line.contains("_") && line.contains("=") && !line.contains("_ =") {
+            if line.contains('_') && line.contains('=') && !line.contains("_ =") {
                 // '_' as left-hand side of assignment might be unchecked error
             }
 
@@ -577,14 +592,14 @@ impl AstAnalyzer {
 
         complexity.loc = content.lines().count();
 
-        Ok(AstAnalysis {
+        AstAnalysis {
             findings,
             complexity,
-        })
+        }
     }
 
     /// Analyze Rust code
-    fn analyze_rust(&self, content: &str, source: &str) -> Result<AstAnalysis, AstError> {
+    fn analyze_rust(content: &str, source: &str) -> AstAnalysis {
         let mut findings = Vec::new();
         let mut complexity = ComplexityMetrics::default();
 
@@ -645,13 +660,14 @@ impl AstAnalyzer {
 
         complexity.loc = content.lines().count();
 
-        Ok(AstAnalysis {
+        AstAnalysis {
             findings,
             complexity,
-        })
+        }
     }
 
     /// Check for common patterns across languages
+    #[must_use]
     pub fn check_common_patterns(&self, content: &str, source: &str) -> Vec<AstFinding> {
         let mut findings = Vec::new();
 
@@ -679,7 +695,7 @@ impl AstAnalyzer {
             if trimmed.contains("localhost") || trimmed.contains("127.0.0.1") {
                 // Only flag if not in comments and part of actual code
                 if !trimmed.starts_with("//")
-                    && !trimmed.starts_with("#")
+                    && !trimmed.starts_with('#')
                     && !trimmed.starts_with("/*")
                     && trimmed.len() > 5
                 {
@@ -828,13 +844,13 @@ fn complex(a: bool, b: bool, c: bool) {
     #[test]
     fn test_rust_unsafe_detection() {
         let analyzer = AstAnalyzer::new(Language::Rust);
-        let content = r#"
+        let content = r"
 fn main() {
     unsafe {
         do_thing();
     }
 }
-"#;
+";
         let result = analyzer.analyze_content(content, "test.rs").unwrap();
         assert!(result.findings.iter().any(|f| f.pattern == "unsafe-code"));
     }
@@ -860,11 +876,11 @@ func main() {
     #[test]
     fn test_go_todo_detection() {
         let analyzer = AstAnalyzer::new(Language::Go);
-        let content = r#"
+        let content = r"
 package main
 // TODO: fix this
 func main() {}
-"#;
+";
         let result = analyzer.analyze_content(content, "test.go").unwrap();
         assert!(result.complexity.has_todo);
     }
@@ -872,11 +888,11 @@ func main() {}
     #[test]
     fn test_go_fixme_detection() {
         let analyzer = AstAnalyzer::new(Language::Go);
-        let content = r#"
+        let content = r"
 package main
 // FIXME: fix this
 func main() {}
-"#;
+";
         let result = analyzer.analyze_content(content, "test.go").unwrap();
         assert!(result.complexity.has_todo);
     }
@@ -1077,7 +1093,7 @@ func main() {}
     #[test]
     fn test_analyze_file_nonexistent() {
         let analyzer = AstAnalyzer::new(Language::Rust);
-        let result = analyzer.analyze_file(std::path::Path::new("/nonexistent/file.rs"));
+        let result = analyzer.analyze_file(Path::new("/nonexistent/file.rs"));
         assert!(result.is_err());
     }
 
@@ -1239,11 +1255,13 @@ pub struct AstNode {
 
 impl AstNode {
     /// Check if this node matches a type pattern
+    #[must_use]
     pub fn is_type(&self, node_type: &str) -> bool {
         self.node_type == node_type
     }
 
     /// Get all descendant nodes of a specific type
+    #[must_use]
     pub fn descendants_of_type(&self, node_type: &str) -> Vec<&AstNode> {
         let mut results = Vec::new();
         self.collect_descendants_of_type(node_type, &mut results);
@@ -1288,6 +1306,7 @@ pub struct TaintTracker {
 
 impl TaintTracker {
     /// Create a new taint tracker
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -1303,6 +1322,7 @@ impl TaintTracker {
     }
 
     /// Check if a variable is tainted
+    #[must_use]
     pub fn is_tainted(&self, var: &str) -> bool {
         self.tainted_vars.contains(var) && !self.sanitized_vars.contains(var)
     }
@@ -1311,16 +1331,16 @@ impl TaintTracker {
 /// Enhanced AST analyzer with tree-sitter support
 #[cfg(feature = "tree-sitter")]
 pub mod tree_sitter_analysis {
-    use super::*;
+    use super::{AstError, AstNode, Language};
     use tree_sitter::{Language as TsLanguage, Parser};
 
-    fn grammar(language: super::Language) -> Option<TsLanguage> {
+    fn grammar(language: Language) -> Option<TsLanguage> {
         Some(match language {
-            super::Language::Go => tree_sitter_go::LANGUAGE.into(),
-            super::Language::Rust => tree_sitter_rust::LANGUAGE.into(),
-            super::Language::Python => tree_sitter_python::LANGUAGE.into(),
-            super::Language::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
-            super::Language::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            Language::Go => tree_sitter_go::LANGUAGE.into(),
+            Language::Rust => tree_sitter_rust::LANGUAGE.into(),
+            Language::Python => tree_sitter_python::LANGUAGE.into(),
+            Language::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+            Language::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             _ => return None,
         })
     }
@@ -1347,10 +1367,13 @@ pub mod tree_sitter_analysis {
 
     /// Parse source code and preserve parser failures for callers that need a
     /// fail-closed quality/security decision.
-    pub fn parse_source_checked(
-        content: &str,
-        language: super::Language,
-    ) -> Result<AstNode, AstError> {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AstError::ParseError`] when no grammar is available for the
+    /// language, the parser cannot be configured or produces no tree, or the
+    /// source contains a syntax error.
+    pub fn parse_source_checked(content: &str, language: Language) -> Result<AstNode, AstError> {
         let grammar = grammar(language).ok_or_else(|| {
             AstError::ParseError(format!("tree-sitter grammar unavailable for {language:?}"))
         })?;
@@ -1371,7 +1394,8 @@ pub mod tree_sitter_analysis {
     }
 
     /// Parse source code using tree-sitter
-    pub fn parse_source(content: &str, language: super::Language) -> Option<AstNode> {
+    #[must_use]
+    pub fn parse_source(content: &str, language: Language) -> Option<AstNode> {
         parse_source_checked(content, language).ok()
     }
 }
@@ -1404,6 +1428,7 @@ mod tree_sitter_tests {
 }
 
 /// Built-in security patterns
+#[must_use]
 pub fn get_security_patterns() -> Vec<SecurityPattern> {
     vec![
         SecurityPattern {

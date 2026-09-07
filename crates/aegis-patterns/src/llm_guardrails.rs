@@ -2,13 +2,14 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
             name: "harmful-content-marker".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(harmful|illegal|malicious|attack|exploit)\s+(content|instruct|guide)"#
+                r"(?i)(harmful|illegal|malicious|attack|exploit)\s+(content|instruct|guide)"
                     .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -30,7 +31,7 @@ pub fn get() -> Vec<Pattern> {
             name: "pii-leak-risk".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(extract|leak|share)\s+(personal|private|confidential)\s+(data|information)"#
+                r"(?i)(extract|leak|share)\s+(personal|private|confidential)\s+(data|information)"
                     .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -51,7 +52,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "llm-guardrails-prompt-injection".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(ignore|disregard|bypass)\s+(previous|above|initial|system)"#
+            match_pattern: r"(?i)(ignore|disregard|bypass)\s+(previous|above|initial|system)"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -94,7 +95,7 @@ pub fn get() -> Vec<Pattern> {
             name: "role-play-override".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(you\s+are\s+now|act\s+as|pretend\s+to\s+be|imagine\s+you\s+are)"#
+                r"(?i)(you\s+are\s+now|act\s+as|pretend\s+to\s+be|imagine\s+you\s+are)"
                     .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -115,7 +116,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "profanity-detected".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)\b(fuck|shit|ass|damn|bitch)\b"#.to_string(),
+            match_pattern: r"(?i)\b(fuck|shit|ass|damn|bitch)\b".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -136,7 +137,7 @@ pub fn get() -> Vec<Pattern> {
             name: "hate-speech-marker".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(hate|slur|discriminat|racist|sexist)\s+(speech|content|language)"#
+                r"(?i)(hate|slur|discriminat|racist|sexist)\s+(speech|content|language)"
                     .to_string(),
             enabled: true,
             severity: "critical".to_string(),
@@ -157,7 +158,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "violence-glorification".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(glorif|celebrat|justif).*\b(violence|attack|murder|kill)"#
+            match_pattern: r"(?i)(glorif|celebrat|justif).*\b(violence|attack|murder|kill)"
                 .to_string(),
             enabled: true,
             severity: "critical".to_string(),
@@ -179,7 +180,7 @@ pub fn get() -> Vec<Pattern> {
             name: "data-exfiltration-attempt".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(extract|reveal|share|leak)\s+(password|credential|secret|key|token)"#
+                r"(?i)(extract|reveal|share|leak)\s+(password|credential|secret|key|token)"
                     .to_string(),
             enabled: true,
             severity: "critical".to_string(),
@@ -201,7 +202,7 @@ pub fn get() -> Vec<Pattern> {
             name: "sql-injection-request".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(give|writ|show|explain).*(sql\s+injection|drop\s+table|delete\s+from)"#
+                r"(?i)(give|writ|show|explain).*(sql\s+injection|drop\s+table|delete\s+from)"
                     .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -222,7 +223,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "code-injection-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(give|writ|show|explain).*(malicious|exploit|rce|payload)"#
+            match_pattern: r"(?i)(give|writ|show|explain).*(malicious|exploit|rce|payload)"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -245,7 +246,7 @@ pub fn get() -> Vec<Pattern> {
             category: "llm-guardrails".to_string(),
             // Word boundaries are essential: without them "DAN" matched inside
             // "abundant" and "unlock" inside ordinary prose.
-            match_pattern: r#"(?i)\b(?:jailbreak|jail_break|do\s+any\s*thing\s+now|developer\s+mode|dan\s+mode|ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions)\b"#.to_string(),
+            match_pattern: r"(?i)\b(?:jailbreak|jail_break|do\s+any\s*thing\s+now|developer\s+mode|dan\s+mode|ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions)\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -265,7 +266,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hypothetical-malware".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(hypothetical|theoretical|imagine).*(malware|virus|ransomware)"#
+            match_pattern: r"(?i)(hypothetical|theoretical|imagine).*(malware|virus|ransomware)"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -286,7 +287,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "medical-advice-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(medical|health|doctor|diagnosis|treatment)\s+advice"#
+            match_pattern: r"(?i)(medical|health|doctor|diagnosis|treatment)\s+advice"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -307,7 +308,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "legal-advice-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(legal|lawyer|law\s+advice|attorney)\s+advice"#.to_string(),
+            match_pattern: r"(?i)(legal|lawyer|law\s+advice|attorney)\s+advice".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),
@@ -327,7 +328,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "financial-advice-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(financial|investment|stock\s+market|crypto)\s+advice"#
+            match_pattern: r"(?i)(financial|investment|stock\s+market|crypto)\s+advice"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -349,7 +350,7 @@ pub fn get() -> Vec<Pattern> {
             name: "toxicity-marker".to_string(),
             category: "llm-guardrails".to_string(),
             match_pattern:
-                r#"(?i)(toxic|harmful|offensive|inappropriate)\s+(content|language|behavior)"#
+                r"(?i)(toxic|harmful|offensive|inappropriate)\s+(content|language|behavior)"
                     .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -370,7 +371,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "self-harm-content".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(self.?harm|suicide|self.?injury|cut\s+yourself)"#.to_string(),
+            match_pattern: r"(?i)(self.?harm|suicide|self.?injury|cut\s+yourself)".to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -390,7 +391,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "privacy-breach-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(spy|surveill|track|monitor)\s+(user|customer|employee)"#
+            match_pattern: r"(?i)(spy|surveill|track|monitor)\s+(user|customer|employee)"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -411,7 +412,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "bias-detection".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(bias|discriminat|prejudic|stereotyp)\s+(in|against|between)"#
+            match_pattern: r"(?i)(bias|discriminat|prejudic|stereotyp)\s+(in|against|between)"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -432,7 +433,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "output-filtering-enabled".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(content.?filter|output.?filter|moderation.?api)"#.to_string(),
+            match_pattern: r"(?i)(content.?filter|output.?filter|moderation.?api)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -452,7 +453,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "token-limit-warning".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(max.?token|token.?limit|context.?window)"#.to_string(),
+            match_pattern: r"(?i)(max.?token|token.?limit|context.?window)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),
@@ -472,7 +473,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "pii-output-marker".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(ssn|social\s*security|credit\s*card|bank\s+account)"#
+            match_pattern: r"(?i)(ssn|social\s*security|credit\s*card|bank\s+account)"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -493,7 +494,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "copyright-material".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(copyright|©|\(c\))\s*\d{4}.*(material|work|content)"#
+            match_pattern: r"(?i)(copyright|©|\(c\))\s*\d{4}.*(material|work|content)"
                 .to_string(),
             enabled: true,
             severity: "medium".to_string(),
@@ -514,7 +515,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "trademark-reference".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r#"(?i)(trademark|registered\s+trademark)"#.to_string(),
+            match_pattern: r"(?i)(trademark|registered\s+trademark)".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "medium".to_string(),

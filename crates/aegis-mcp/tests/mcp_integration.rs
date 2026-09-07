@@ -54,10 +54,10 @@ fn send_mcp_request_with_deadline(request: &str, deadline_duration: std::time::D
         match child.try_wait().expect("Failed to poll MCP server") {
             Some(_) => break,
             None if std::time::Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = reader.join();
-                panic!("MCP server did not exit within {:?}", deadline_duration);
+                let _killed = child.kill();
+                let _reaped = child.wait();
+                let _joined = reader.join();
+                panic!("MCP server did not exit within {deadline_duration:?}");
             }
             None => std::thread::sleep(std::time::Duration::from_millis(25)),
         }
@@ -72,22 +72,22 @@ fn send_mcp_request_with_deadline(request: &str, deadline_duration: std::time::D
 fn test_mcp_scan_string() {
     let request = r#"{"jsonrpc":"2.0","method":"scan_string","params":["AKIAIOSFODNN7EXAMPLE","test.rs"],"id":1}"#;
     let response = send_mcp_request(request);
-    assert!(response.contains("jsonrpc"), "Response: {}", response);
-    assert!(response.contains("findings"), "Response: {}", response);
+    assert!(response.contains("jsonrpc"), "Response: {response}");
+    assert!(response.contains("findings"), "Response: {response}");
 }
 
 #[test]
 fn test_mcp_list_patterns() {
     let request = r#"{"jsonrpc":"2.0","method":"list_patterns","params":null,"id":2}"#;
     let response = send_mcp_request(request);
-    assert!(response.contains("patterns"), "Response: {}", response);
+    assert!(response.contains("patterns"), "Response: {response}");
 }
 
 #[test]
 fn test_mcp_list_categories() {
     let request = r#"{"jsonrpc":"2.0","method":"list_categories","params":[],"id":3}"#;
     let response = send_mcp_request(request);
-    assert!(response.contains("secrets"), "Response: {}", response);
+    assert!(response.contains("secrets"), "Response: {response}");
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn test_mcp_update_bundle() {
     // Rebuilding the scanner compiles every bundled pattern synchronously,
     // which can exceed the default deadline on a loaded runner.
     let response = send_mcp_request_with_deadline(request, UPDATE_BUNDLE_DEADLINE);
-    assert!(response.contains("success"), "Response: {}", response);
+    assert!(response.contains("success"), "Response: {response}");
 }
 
 #[test]
@@ -131,22 +131,22 @@ fn test_mcp_scan_dir() {
         fixture_dir.to_string_lossy()
     );
     let response = send_mcp_request_in_dir(&request, &fixture_dir);
-    let _ = std::fs::remove_dir_all(fixture_dir);
-    assert!(response.contains("jsonrpc"), "Response: {}", response);
+    let _removed = std::fs::remove_dir_all(fixture_dir);
+    assert!(response.contains("jsonrpc"), "Response: {response}");
 }
 
 #[test]
 fn test_mcp_scan_env() {
     let request = r#"{"jsonrpc":"2.0","method":"scan_env","params":[],"id":6}"#;
     let response = send_mcp_request(request);
-    assert!(response.contains("jsonrpc"), "Response: {}", response);
+    assert!(response.contains("jsonrpc"), "Response: {response}");
 }
 
 #[test]
 fn test_mcp_list_patterns_with_category() {
     let request = r#"{"jsonrpc":"2.0","method":"list_patterns","params":["secrets"],"id":7}"#;
     let response = send_mcp_request(request);
-    assert!(response.contains("patterns"), "Response: {}", response);
+    assert!(response.contains("patterns"), "Response: {response}");
 }
 
 /// Decode the single JSON-RPC response line on stdout.
@@ -202,7 +202,7 @@ fn test_mcp_scan_file_documented_positional_params_accepted() {
         fixture_file.to_string_lossy()
     );
     let response = send_mcp_request_in_dir(&request, &fixture_dir);
-    let _ = std::fs::remove_dir_all(&fixture_dir);
+    let _removed = std::fs::remove_dir_all(&fixture_dir);
 
     let value = parse_single_response(&response);
     assert_eq!(value["jsonrpc"], "2.0", "Response: {response}");
@@ -288,7 +288,7 @@ fn test_mcp_scan_dir_documented_positional_params_accepted() {
         fixture_dir.to_string_lossy()
     );
     let response = send_mcp_request_in_dir(&request, &fixture_dir);
-    let _ = std::fs::remove_dir_all(&fixture_dir);
+    let _removed = std::fs::remove_dir_all(&fixture_dir);
 
     let value = parse_single_response(&response);
     assert_eq!(value["jsonrpc"], "2.0", "Response: {response}");
@@ -373,8 +373,8 @@ fn send_mcp_request_with_stderr_capture(request: &str) -> (String, String) {
         match child.try_wait().expect("Failed to poll MCP server") {
             Some(_) => break,
             None if std::time::Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
+                let _killed = child.kill();
+                let _reaped = child.wait();
                 panic!("MCP server did not exit before the 30-second deadline");
             }
             None => std::thread::sleep(std::time::Duration::from_millis(25)),
@@ -382,8 +382,8 @@ fn send_mcp_request_with_stderr_capture(request: &str) -> (String, String) {
     }
 
     let _ = child.wait().expect("Failed to collect MCP server status");
-    let stdout = stdout_rx.into_iter().collect::<Vec<_>>().join("");
-    let stderr = stderr_rx.into_iter().collect::<Vec<_>>().join("");
+    let stdout = stdout_rx.into_iter().collect::<String>();
+    let stderr = stderr_rx.into_iter().collect::<String>();
     (stdout, stderr)
 }
 

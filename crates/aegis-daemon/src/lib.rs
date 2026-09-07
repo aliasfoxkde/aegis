@@ -4,7 +4,7 @@
 
 use aegis_core::{Config, Finding, PatternDefinition, RiskScore, ScanReceipt, ScanStats, Scanner};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::fs;
 use std::io;
@@ -28,13 +28,19 @@ pub struct DaemonPeerPolicy {
 
 impl DaemonPeerPolicy {
     /// Build the policy from the socket owner and process environment.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `InvalidInput` I/O error when `AEGIS_DAEMON_ALLOWED_UIDS` or
+    /// `AEGIS_DAEMON_ALLOWED_GIDS` is set but holds an empty or non-numeric
+    /// entry.
     pub fn from_env(socket_owner_uid: u32) -> io::Result<Self> {
-        let allowed_uids = env::var(ALLOWED_UIDS_ENV).ok();
-        let allowed_gids = env::var(ALLOWED_GIDS_ENV).ok();
+        let user_id_allowlist = env::var(ALLOWED_UIDS_ENV).ok();
+        let group_id_allowlist = env::var(ALLOWED_GIDS_ENV).ok();
         Self::from_allowlists(
             socket_owner_uid,
-            allowed_uids.as_deref(),
-            allowed_gids.as_deref(),
+            user_id_allowlist.as_deref(),
+            group_id_allowlist.as_deref(),
         )
     }
 
@@ -43,22 +49,27 @@ impl DaemonPeerPolicy {
     /// The socket owner is always included. This is public so service
     /// managers and embedding applications can construct the same policy
     /// without mutating process-global environment variables.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `InvalidInput` I/O error when either list contains an empty
+    /// entry or a value that is not a valid numeric ID.
     pub fn from_allowlists(
         socket_owner_uid: u32,
-        allowed_uids: Option<&str>,
-        allowed_gids: Option<&str>,
+        allowed_user_ids: Option<&str>,
+        allowed_group_ids: Option<&str>,
     ) -> io::Result<Self> {
         let mut policy = Self {
             allowed_uids: BTreeSet::from([socket_owner_uid]),
             allowed_gids: BTreeSet::new(),
         };
 
-        if let Some(value) = allowed_uids {
+        if let Some(value) = allowed_user_ids {
             policy
                 .allowed_uids
                 .extend(parse_allowlist(ALLOWED_UIDS_ENV, value)?);
         }
-        if let Some(value) = allowed_gids {
+        if let Some(value) = allowed_group_ids {
             policy
                 .allowed_gids
                 .extend(parse_allowlist(ALLOWED_GIDS_ENV, value)?);
@@ -67,6 +78,7 @@ impl DaemonPeerPolicy {
         Ok(policy)
     }
 
+    #[must_use]
     pub fn owner_only(socket_owner_uid: u32) -> Self {
         Self {
             allowed_uids: BTreeSet::from([socket_owner_uid]),
@@ -75,6 +87,7 @@ impl DaemonPeerPolicy {
     }
 
     /// Return true when a peer's effective credentials match the policy.
+    #[must_use]
     pub fn allows_credentials(&self, uid: u32, gid: u32) -> bool {
         self.allowed_uids.contains(&uid) || self.allowed_gids.contains(&gid)
     }
@@ -83,6 +96,7 @@ impl DaemonPeerPolicy {
     ///
     /// Group access is exposed only when a group allowlist is explicitly
     /// configured; the application-level peer check remains authoritative.
+    #[must_use]
     pub fn socket_mode(&self) -> u32 {
         if self.allowed_gids.is_empty() {
             0o600
@@ -92,6 +106,7 @@ impl DaemonPeerPolicy {
     }
 
     #[cfg(unix)]
+    #[must_use]
     pub fn allows(&self, credentials: &tokio::net::unix::UCred) -> bool {
         self.allows_credentials(credentials.uid(), credentials.gid())
     }
@@ -124,14 +139,18 @@ pub struct DaemonState {
     pub socket_path: PathBuf,
     scan_root: PathBuf,
     /// Guards the one-time lazy compilation of the bundled patterns; the
-    /// first scan request pays for it, startup does not.
-    patterns_init: tokio::sync::OnceCell<()>,
+    /// first scan request pays for it, startup does not. The memoized
+    /// outcome keeps a failed compilation sticky — a scanner that silently
+    /// holds zero patterns would approve everything, so requests must keep
+    /// failing closed.
+    patterns_init: tokio::sync::OnceCell<Result<(), String>>,
 }
 
 impl DaemonState {
+    #[must_use]
     pub fn new(socket_path: PathBuf) -> Self {
         let scan_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Self::with_scan_root(socket_path, scan_root)
+        Self::with_scan_root(socket_path, &scan_root)
     }
 
     /// Construct state with an approved scan root.
@@ -139,14 +158,27 @@ impl DaemonState {
     /// This convenience constructor is intended for callers that already
     /// know the root exists. The daemon entry point uses the fallible form so
     /// configuration errors are reported instead of panicking.
-    pub fn with_scan_root(socket_path: PathBuf, scan_root: PathBuf) -> Self {
+    ///
+    /// # Panics
+    ///
+    /// Panics when the scan root cannot be canonicalized or resolves to a path
+    /// that is not an existing directory; the `expect` message states the
+    /// requirement.
+    #[must_use]
+    pub fn with_scan_root(socket_path: PathBuf, scan_root: &Path) -> Self {
         Self::try_with_scan_root(socket_path, scan_root)
             .expect("Aegis daemon scan root must be an existing directory")
     }
 
     /// Construct state after canonicalizing and validating the approved root.
-    pub fn try_with_scan_root(socket_path: PathBuf, scan_root: PathBuf) -> io::Result<Self> {
-        let scan_root = fs::canonicalize(&scan_root)?;
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying I/O error when the root cannot be canonicalized,
+    /// or an `InvalidInput` I/O error when the resolved path is not an existing
+    /// directory.
+    pub fn try_with_scan_root(socket_path: PathBuf, scan_root: &Path) -> io::Result<Self> {
+        let scan_root = fs::canonicalize(scan_root)?;
         if !scan_root.is_dir() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -174,16 +206,32 @@ impl DaemonState {
     ///
     /// Compiling 600+ regexes is CPU-bound; `spawn_blocking` keeps it off
     /// the reactor, and the `OnceCell` makes concurrent first requests
-    /// share one compilation.
-    pub async fn ensure_patterns_loaded(&self) {
+    /// share one compilation. Fails closed: a compilation error is returned
+    /// to every caller instead of degrading to a scanner with no patterns.
+    ///
+    /// # Errors
+    ///
+    /// Returns the failure message when the bundled patterns cannot be
+    /// compiled, or when the compiling task panics or is cancelled before
+    /// finishing. The outcome is memoized, so every later call observes the
+    /// same error instead of retrying.
+    pub async fn ensure_patterns_loaded(&self) -> Result<(), String> {
         self.patterns_init
             .get_or_init(|| async {
-                let scanner = tokio::task::spawn_blocking(init_scanner)
+                let compiled: Result<Scanner, String> = tokio::task::spawn_blocking(init_scanner)
                     .await
-                    .expect("init_scanner must not panic; it falls back to Scanner::new on error");
-                *self.scanner.write().await = scanner;
+                    .map_err(|error| format!("pattern compilation task failed: {error}"))
+                    .and_then(|result| result.map_err(|error| error.to_string()));
+                match compiled {
+                    Ok(scanner) => {
+                        *self.scanner.write().await = scanner;
+                        Ok(())
+                    }
+                    Err(message) => Err(message),
+                }
             })
-            .await;
+            .await
+            .clone()
     }
 
     fn resolve_scan_path(&self, requested: &str) -> Result<PathBuf, String> {
@@ -213,13 +261,21 @@ impl DaemonState {
 }
 
 /// Initialize scanner with patterns from aegis-patterns
-pub fn init_scanner() -> Scanner {
+///
+/// Fails closed: a pattern that cannot compile aborts initialization rather
+/// than returning a scanner that would silently approve everything.
+///
+/// # Errors
+///
+/// Returns an error when a bundled pattern definition cannot be converted into
+/// a scanner pattern or cannot be compiled.
+pub fn init_scanner() -> anyhow::Result<Scanner> {
     let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
         .map(Into::into)
         .collect();
 
-    Scanner::from_definitions(definitions).unwrap_or_else(|_| Scanner::new())
+    Scanner::from_definitions(definitions).map_err(anyhow::Error::from)
 }
 
 /// Daemon response
@@ -236,6 +292,7 @@ pub struct DaemonResponse {
 }
 
 impl DaemonResponse {
+    #[must_use]
     pub fn from_findings(findings: Vec<Finding>, stats: ScanStats) -> Self {
         Self::from_findings_with_source(findings, stats, "daemon")
     }
@@ -245,7 +302,7 @@ impl DaemonResponse {
         stats: ScanStats,
         source: impl Into<String>,
     ) -> Self {
-        let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
+        let risk = RiskScore::new(&findings, &HashMap::default(), &HashMap::default());
         let profile = "daemon-default";
         let receipt = ScanReceipt::from_scan(
             source,
@@ -255,7 +312,7 @@ impl DaemonResponse {
             &findings,
             stats.clone(),
         )
-        .with_source_revision(std::env::var("AEGIS_SOURCE_REVISION").ok());
+        .with_source_revision(env::var("AEGIS_SOURCE_REVISION").ok());
         Self {
             success: true,
             finding_count: findings.len(),
@@ -268,6 +325,7 @@ impl DaemonResponse {
         }
     }
 
+    #[must_use]
     pub fn error(msg: String) -> Self {
         Self {
             success: false,
@@ -287,43 +345,44 @@ pub async fn handle_request(
     request: &serde_json::Value,
     state: &Arc<DaemonState>,
 ) -> DaemonResponse {
-    let method = match request.get("method").and_then(|v| v.as_str()) {
-        Some(m) => m,
-        None => return DaemonResponse::error("Missing method".to_string()),
+    let Some(method) = request.get("method").and_then(|v| v.as_str()) else {
+        return DaemonResponse::error("Missing method".to_string());
     };
 
     let params = request.get("params");
 
     match method {
         "scan_string" => {
-            state.ensure_patterns_loaded().await;
-            let params = match params {
-                Some(serde_json::Value::Array(arr)) => arr,
-                _ => {
-                    return DaemonResponse::error(
-                        "scan_string requires [content, source] params".to_string(),
-                    )
-                }
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
+            let Some(serde_json::Value::Array(arr)) = params else {
+                return DaemonResponse::error(
+                    "scan_string requires [content, source] params".to_string(),
+                );
             };
-            let content = match params.first().and_then(|v| v.as_str()) {
-                Some(s) => s,
-                None => return DaemonResponse::error("Missing content param".to_string()),
+            let Some(content) = arr.first().and_then(|v| v.as_str()) else {
+                return DaemonResponse::error("Missing content param".to_string());
             };
-            let source = match params.get(1).and_then(|v| v.as_str()) {
-                Some(s) => s,
-                None => return DaemonResponse::error("Missing source param".to_string()),
+            let Some(source) = arr.get(1).and_then(|v| v.as_str()) else {
+                return DaemonResponse::error("Missing source param".to_string());
             };
 
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_string(content, source);
-            let stats = ScanStats::for_content(format!("string:{source}"), content.len());
-            DaemonResponse::from_findings_with_source(findings, stats, format!("string:{source}"))
+            let scan_stats = ScanStats::for_content(format!("string:{source}"), content.len());
+            DaemonResponse::from_findings_with_source(
+                findings,
+                scan_stats,
+                format!("string:{source}"),
+            )
         }
         "scan_file" => {
-            state.ensure_patterns_loaded().await;
-            let requested_path = match params.and_then(|v| v.as_str()) {
-                Some(s) => s,
-                None => return DaemonResponse::error("Missing path param".to_string()),
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
+            let Some(requested_path) = params.and_then(|v| v.as_str()) else {
+                return DaemonResponse::error("Missing path param".to_string());
             };
             let path = match state.resolve_scan_path(requested_path) {
                 Ok(path) => path,
@@ -332,19 +391,20 @@ pub async fn handle_request(
 
             let scanner = state.scanner.read().await;
             match scanner.scan_file(&path) {
-                Ok((findings, stats)) => DaemonResponse::from_findings_with_source(
+                Ok((findings, scan_stats)) => DaemonResponse::from_findings_with_source(
                     findings,
-                    stats,
+                    scan_stats,
                     path.to_string_lossy().to_string(),
                 ),
-                Err(e) => DaemonResponse::error(format!("Scan error: {}", e)),
+                Err(e) => DaemonResponse::error(format!("Scan error: {e}")),
             }
         }
         "scan_dir" => {
-            state.ensure_patterns_loaded().await;
-            let requested_path = match params.and_then(|v| v.as_str()) {
-                Some(s) => s,
-                None => return DaemonResponse::error("Missing path param".to_string()),
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
+            let Some(requested_path) = params.and_then(|v| v.as_str()) else {
+                return DaemonResponse::error("Missing path param".to_string());
             };
             let path = match state.resolve_scan_path(requested_path) {
                 Ok(path) => path,
@@ -353,19 +413,23 @@ pub async fn handle_request(
 
             let scanner = state.scanner.read().await;
             match scanner.scan_dir(&path) {
-                Ok((findings, stats)) => DaemonResponse::from_findings(findings, stats),
-                Err(e) => DaemonResponse::error(format!("Scan error: {}", e)),
+                Ok((findings, scan_stats)) => DaemonResponse::from_findings(findings, scan_stats),
+                Err(e) => DaemonResponse::error(format!("Scan error: {e}")),
             }
         }
         "scan_env" => {
-            state.ensure_patterns_loaded().await;
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
-            let stats = ScanStats::for_environment();
-            DaemonResponse::from_findings_with_source(findings, stats, "environment")
+            let scan_stats = ScanStats::for_environment();
+            DaemonResponse::from_findings_with_source(findings, scan_stats, "environment")
         }
         "list_patterns" => {
-            state.ensure_patterns_loaded().await;
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
             let patterns = registry.all();
@@ -393,7 +457,7 @@ pub async fn handle_request(
             }
         }
         "ping" => DaemonResponse::from_findings(vec![], ScanStats::default()),
-        _ => DaemonResponse::error(format!("Unknown method: {}", method)),
+        _ => DaemonResponse::error(format!("Unknown method: {method}")),
     }
 }
 
@@ -426,8 +490,7 @@ mod tests {
     fn test_scan_root_rejects_traversal_and_external_symlink() {
         use std::os::unix::fs::symlink;
 
-        let base =
-            std::env::temp_dir().join(format!("aegis-daemon-boundary-{}", std::process::id()));
+        let base = env::temp_dir().join(format!("aegis-daemon-boundary-{}", std::process::id()));
         let root = base.join("root");
         let outside = base.join("outside");
         fs::create_dir_all(&root).expect("create root");
@@ -437,7 +500,7 @@ mod tests {
         symlink(outside.join("secret.txt"), root.join("external-link.txt"))
             .expect("create external symlink");
 
-        let state = DaemonState::with_scan_root(PathBuf::from("/tmp/test.sock"), root.clone());
+        let state = DaemonState::with_scan_root(PathBuf::from("/tmp/test.sock"), &root);
         assert_eq!(
             state.resolve_scan_path("inside.txt").expect("inside path"),
             fs::canonicalize(root.join("inside.txt")).expect("canonical inside")
@@ -451,7 +514,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn test_scan_request_rejects_path_outside_approved_root() {
-        let base = std::env::temp_dir().join(format!(
+        let base = env::temp_dir().join(format!(
             "aegis-daemon-boundary-request-{}",
             std::process::id()
         ));
@@ -460,7 +523,7 @@ mod tests {
         fs::write(base.join("outside.txt"), b"outside").expect("create outside file");
         let state = Arc::new(DaemonState::with_scan_root(
             PathBuf::from("/tmp/test.sock"),
-            root,
+            &root,
         ));
         let request = serde_json::json!({
             "method": "scan_file",
@@ -481,7 +544,7 @@ mod tests {
         // Initialize scanner
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -501,7 +564,7 @@ mod tests {
         // Initialize scanner
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -520,7 +583,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -539,7 +602,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -557,7 +620,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -576,7 +639,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -622,7 +685,7 @@ mod tests {
 
     #[test]
     fn test_init_scanner() {
-        let scanner = init_scanner();
+        let scanner = init_scanner().expect("bundled patterns compile");
         let registry = scanner.registry();
         let patterns = registry.all();
         assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
@@ -633,7 +696,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -651,7 +714,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         // scan_string with no content param
@@ -671,7 +734,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         // scan_string with content but no source
@@ -691,7 +754,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -709,7 +772,7 @@ mod tests {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner();
+            *scanner = init_scanner().expect("bundled patterns compile");
         }
 
         let request = serde_json::json!({
@@ -748,7 +811,7 @@ mod tests {
 
         let state = Arc::new(DaemonState::with_scan_root(
             PathBuf::from("/tmp/test.sock"),
-            dir.path().to_path_buf(),
+            dir.path(),
         ));
         let request = serde_json::json!({
             "method": "scan_file",
@@ -766,7 +829,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let state = Arc::new(DaemonState::with_scan_root(
             PathBuf::from("/tmp/test.sock"),
-            dir.path().to_path_buf(),
+            dir.path(),
         ));
         let request = serde_json::json!({
             "method": "scan_file",
@@ -793,7 +856,7 @@ mod tests {
 
         let state = Arc::new(DaemonState::with_scan_root(
             PathBuf::from("/tmp/test.sock"),
-            dir.path().to_path_buf(),
+            dir.path(),
         ));
         let request = serde_json::json!({ "method": "scan_dir", "params": ".", "id": 23 });
 

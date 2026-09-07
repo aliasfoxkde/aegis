@@ -3,13 +3,16 @@
 use crate::output::Output;
 use crate::OutputFormat;
 use aegis_core::{
-    Confidence, Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt,
-    ScanStats, Scanner, Severity,
+    Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt, ScanStats,
+    Scanner,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
+/// The booleans mirror the CLI's scan flag set one-to-one; a settings enum
+/// would force every caller to translate back into per-flag fields.
+#[allow(clippy::struct_excessive_bools)]
 pub struct ScanOptions {
     pub path: PathBuf,
     pub scan_file: bool,
@@ -33,28 +36,13 @@ pub struct ScanOptions {
     pub quiet: bool,
 }
 
-/// Convert aegis_patterns::Pattern to aegis_core::PatternDefinition
-pub fn convert_pattern(p: aegis_patterns::Pattern) -> PatternDefinition {
-    PatternDefinition {
-        name: p.name,
-        category: p.category,
-        match_pattern: p.match_pattern,
-        enabled: p.enabled,
-        severity: Severity::parse(&p.severity).unwrap_or(Severity::Medium),
-        confidence: Confidence::parse(&p.confidence).unwrap_or(Confidence::Medium),
-        min_entropy: p.min_entropy,
-        description: p.description,
-        reference: p.reference,
-        tags: p.tags,
-        env_var: p.env_var,
-        binary: p.binary,
-        exclude_pattern: p.exclude,
-        file_extensions: p.file_extensions,
-        remediation: None,
-    }
-}
-
 /// Build scanner from scan options (testable)
+///
+/// # Errors
+///
+/// Returns an error when the pattern bundle cannot be loaded, when a
+/// configured baseline file is missing or unreadable, or when `categories`
+/// names a category no pattern provides.
 pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     // Trimmed, non-empty category list shared by the filter and validation
     let categories: Vec<String> = opts
@@ -72,7 +60,7 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     // unfiltered results as if they were new-findings-only.
     if let Some(path) = &opts.baseline {
         aegis_core::scanner::load_baseline_fingerprints(path)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
     let core_opts = CoreOptions {
@@ -86,9 +74,9 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     };
 
     let patterns = aegis_patterns::all_patterns();
-    let definitions: Vec<PatternDefinition> = patterns.into_iter().map(convert_pattern).collect();
+    let definitions: Vec<PatternDefinition> = patterns.into_iter().map(Into::into).collect();
     let scanner = Scanner::from_definitions(definitions)
-        .map_err(|e| anyhow::anyhow!("Failed to load patterns: {}", e))?
+        .map_err(|e| anyhow::anyhow!("Failed to load patterns: {e}"))?
         .with_options(core_opts);
 
     // Fail loudly on unknown --categories values; a typo would otherwise
@@ -97,13 +85,19 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         scanner
             .registry()
             .validate_categories(&categories)
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
     Ok(scanner)
 }
 
 /// Perform scan based on options (testable)
+///
+/// # Errors
+///
+/// Returns an error when the diff file cannot be read, when the target file
+/// or directory cannot be scanned, or when `--staged` runs outside a git
+/// repository.
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
         // Scan only changed lines from a diff file
@@ -120,20 +114,18 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
     } else if opts.scan_file {
         let path = &opts.path;
         if path.is_dir() {
-            scanner
-                .scan_dir(path)
-                .map_err(|e| anyhow::anyhow!("{}", e))?
+            scanner.scan_dir(path).map_err(|e| anyhow::anyhow!("{e}"))?
         } else {
             scanner
                 .scan_file(path)
-                .map_err(|e| anyhow::anyhow!("{}", e))?
+                .map_err(|e| anyhow::anyhow!("{e}"))?
         }
     } else if opts.staged {
         scan_staged(scanner, opts)?
     } else {
         scanner
             .scan_dir(&opts.path)
-            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .map_err(|e| anyhow::anyhow!("{e}"))?
     };
 
     Ok((findings, stats))
@@ -142,7 +134,7 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
 /// List the paths staged in the git index at `root` (added, copied,
 /// modified, renamed). Paths are relative to the repository root, which is
 /// also the form `git show :<path>` expects.
-fn staged_file_list(root: &Path) -> anyhow::Result<Vec<String>> {
+fn staged_file_list(root: &Path) -> Result<Vec<String>> {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
@@ -169,7 +161,7 @@ fn staged_file_list(root: &Path) -> anyhow::Result<Vec<String>> {
 }
 
 /// Read the staged blob for one index path.
-fn staged_blob(root: &Path, file: &str) -> anyhow::Result<Vec<u8>> {
+fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
@@ -197,7 +189,7 @@ fn looks_binary(bytes: &[u8]) -> bool {
 /// can differ from the working tree, so blobs are read with
 /// `git show :<path>` rather than from disk. Nothing staged means nothing
 /// to scan and a clean result.
-fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> anyhow::Result<(Vec<Finding>, ScanStats)> {
+fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let files = staged_file_list(&opts.path).map_err(|e| {
         anyhow::anyhow!(
             "--staged requires a git repository at {}: {e}",
@@ -259,12 +251,18 @@ fn persist_receipt_if_configured(receipt: &ScanReceipt) -> Result<()> {
         if path.trim().is_empty() {
             return Err(anyhow::anyhow!("AEGIS_RECEIPT_FILE must not be empty"));
         }
-        receipt.write_atomic(std::path::Path::new(&path))?;
+        receipt.write_atomic(Path::new(&path))?;
     }
     Ok(())
 }
 
 /// Execute scan and return result (testable)
+///
+/// # Errors
+///
+/// Returns an error when the scanner cannot be built (bad categories or
+/// baseline), when the scan itself fails, or when the report cannot be
+/// rendered.
 pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
     let scanner = build_scanner_from_opts(opts)?;
 
@@ -273,7 +271,11 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
     let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
-    let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
+    let risk = RiskScore::new(
+        &findings,
+        &std::collections::HashMap::default(),
+        &std::collections::HashMap::default(),
+    );
 
     // Output results
     let mut output_dev = Output::new(opts.format.clone(), opts.quiet);
@@ -289,6 +291,11 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
 }
 
 /// Execute scan from stdin content (testable)
+///
+/// # Errors
+///
+/// Returns an error when the scanner cannot be built (bad categories or
+/// baseline) or when the report cannot be rendered.
 pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Result<ScanResult> {
     let scanner = build_scanner_from_opts(opts)?;
 
@@ -298,7 +305,11 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
     let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
-    let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
+    let risk = RiskScore::new(
+        &findings,
+        &std::collections::HashMap::default(),
+        &std::collections::HashMap::default(),
+    );
 
     // Output results
     let mut output_dev = Output::new(opts.format.clone(), opts.quiet);
@@ -314,6 +325,11 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
 }
 
 /// Run scan with I/O handling (not fully testable due to async stdin and process::exit)
+///
+/// # Errors
+///
+/// Returns an error when the scan fails; exits the process with the
+/// findings exit code when it is non-zero.
 pub async fn run_scan(opts: ScanOptions) -> Result<()> {
     let exit_code = run_scan_and_get_exit_code(opts).await?;
     if exit_code != 0 {
@@ -327,12 +343,18 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
 fn retire_receipt_if_configured() {
     if let Ok(path) = std::env::var("AEGIS_RECEIPT_FILE") {
         if !path.trim().is_empty() {
-            let _ = std::fs::remove_file(path);
+            // Best effort: an absent or unreadable receipt has nothing to retire.
+            let _retired = std::fs::remove_file(path);
         }
     }
 }
 
 /// Run scan and return exit code (testable async wrapper)
+///
+/// # Errors
+///
+/// Returns an error when the scan fails, when the configured receipt file
+/// cannot be persisted, or when `output_file` cannot be written.
 pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     // Fail-closed: remove any existing receipt before scan so a failed scan
     // cannot be confused with a successful one whose result we never persisted.
@@ -356,7 +378,7 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     }
 
     // Return exit code based on findings
-    Ok(if result.has_findings { 1 } else { 0 })
+    Ok(i32::from(result.has_findings))
 }
 
 /// Read stdin content (extracted for testing)
@@ -367,6 +389,12 @@ async fn read_stdin_content() -> Result<String> {
     Ok(content)
 }
 
+/// Refresh the pattern bundle from its source.
+///
+/// # Errors
+///
+/// Never fails today: patterns ship inside the binary, so there is nothing
+/// to download or write.
 pub async fn update_bundle(_force: bool) -> Result<()> {
     println!("Checking pattern bundle...");
 
@@ -404,57 +432,6 @@ mod tests {
         path
     }
 
-    #[test]
-    fn test_convert_pattern() {
-        let pattern = aegis_patterns::Pattern {
-            name: "test-pattern".to_string(),
-            category: "secrets".to_string(),
-            match_pattern: "secret".to_string(),
-            severity: "high".to_string(),
-            confidence: "high".to_string(),
-            description: "Test pattern".to_string(),
-            enabled: true,
-            min_entropy: None,
-            reference: None,
-            tags: vec![],
-            env_var: false,
-            binary: false,
-            exclude: None,
-            file_extensions: Vec::new(),
-        };
-
-        let converted = convert_pattern(pattern);
-        assert_eq!(converted.name, "test-pattern");
-        assert_eq!(converted.category, "secrets");
-        assert_eq!(converted.severity, Severity::High);
-        assert_eq!(converted.confidence, Confidence::High);
-    }
-
-    #[test]
-    fn test_convert_pattern_medium_defaults() {
-        let pattern = aegis_patterns::Pattern {
-            name: "test-pattern".to_string(),
-            category: "test".to_string(),
-            match_pattern: "test".to_string(),
-            severity: "invalid".to_string(),   // Invalid severity
-            confidence: "invalid".to_string(), // Invalid confidence
-            description: "Test".to_string(),
-            enabled: true,
-            min_entropy: None,
-            reference: None,
-            tags: vec![],
-            env_var: false,
-            binary: false,
-            exclude: None,
-            file_extensions: Vec::new(),
-        };
-
-        let converted = convert_pattern(pattern);
-        // Should default to Medium for invalid values
-        assert_eq!(converted.severity, Severity::Medium);
-        assert_eq!(converted.confidence, Confidence::Medium);
-    }
-
     #[tokio::test]
     async fn test_update_bundle() {
         let result = update_bundle(false).await;
@@ -462,60 +439,9 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_pattern_with_min_entropy() {
-        let pattern = aegis_patterns::Pattern {
-            name: "high-entropy".to_string(),
-            category: "secrets".to_string(),
-            match_pattern: "[A-Za-z0-9+/]{20,}".to_string(),
-            severity: "high".to_string(),
-            confidence: "medium".to_string(),
-            description: "High entropy secret".to_string(),
-            enabled: true,
-            min_entropy: Some(4.5),
-            reference: Some("https://example.com".to_string()),
-            tags: vec!["secret".to_string(), "entropy".to_string()],
-            env_var: true,
-            binary: false,
-            exclude: None,
-            file_extensions: Vec::new(),
-        };
-
-        let converted = convert_pattern(pattern);
-        assert_eq!(converted.name, "high-entropy");
-        assert_eq!(converted.min_entropy, Some(4.5));
-        assert!(converted.env_var);
-        assert!(!converted.binary);
-        assert_eq!(converted.tags.len(), 2);
-    }
-
-    #[test]
-    fn test_convert_pattern_binary_enabled() {
-        let pattern = aegis_patterns::Pattern {
-            name: "binary-pattern".to_string(),
-            category: "secrets".to_string(),
-            match_pattern: "pattern".to_string(),
-            severity: "low".to_string(),
-            confidence: "low".to_string(),
-            description: "Binary pattern".to_string(),
-            enabled: false,
-            min_entropy: None,
-            reference: None,
-            tags: vec![],
-            env_var: false,
-            binary: true,
-            exclude: None,
-            file_extensions: Vec::new(),
-        };
-
-        let converted = convert_pattern(pattern);
-        assert!(converted.binary);
-        assert!(!converted.enabled); // disabled by input
-    }
-
-    #[test]
     fn test_scan_options_default() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -541,7 +467,7 @@ mod tests {
     #[test]
     fn test_scan_options_with_categories() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -562,43 +488,6 @@ mod tests {
         assert!(opts.quiet);
     }
 
-    #[test]
-    fn test_convert_pattern_preserves_all_fields() {
-        let pattern = aegis_patterns::Pattern {
-            name: "full-pattern".to_string(),
-            category: "security".to_string(),
-            match_pattern: r"\bKEY-[A-Z0-9]{16}\b".to_string(),
-            severity: "critical".to_string(),
-            confidence: "high".to_string(),
-            description: "API key pattern".to_string(),
-            enabled: true,
-            min_entropy: Some(5.0),
-            reference: Some("https://docs.example.com/api-keys".to_string()),
-            tags: vec![
-                "api".to_string(),
-                "key".to_string(),
-                "production".to_string(),
-            ],
-            env_var: true,
-            binary: true,
-            exclude: None,
-            file_extensions: Vec::new(),
-        };
-
-        let converted = convert_pattern(pattern.clone());
-        assert_eq!(converted.name, pattern.name);
-        assert_eq!(converted.category, pattern.category);
-        assert_eq!(converted.match_pattern, pattern.match_pattern);
-        assert_eq!(converted.severity, Severity::Critical);
-        assert_eq!(converted.confidence, Confidence::High);
-        assert_eq!(converted.min_entropy, pattern.min_entropy);
-        assert_eq!(converted.description, pattern.description);
-        assert_eq!(converted.reference, pattern.reference);
-        assert_eq!(converted.tags, pattern.tags);
-        assert_eq!(converted.env_var, pattern.env_var);
-        assert_eq!(converted.binary, pattern.binary);
-    }
-
     #[tokio::test]
     async fn test_update_bundle_with_force() {
         // Force should still succeed since patterns are bundled
@@ -609,7 +498,7 @@ mod tests {
     #[test]
     fn test_build_scanner_from_opts() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -632,7 +521,7 @@ mod tests {
     #[test]
     fn test_build_scanner_from_opts_no_categories() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -655,7 +544,7 @@ mod tests {
     #[test]
     fn test_build_scanner_from_opts_rejects_unknown_category() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -671,9 +560,8 @@ mod tests {
             staged: false,
         };
 
-        let err = match build_scanner_from_opts(&opts) {
-            Err(err) => err,
-            Ok(_) => panic!("phantom category must fail the build"),
+        let Err(err) = build_scanner_from_opts(&opts) else {
+            panic!("phantom category must fail the build")
         };
         assert!(
             err.to_string().contains("security"),
@@ -684,7 +572,7 @@ mod tests {
     #[test]
     fn test_build_scanner_from_opts_tolerates_whitespace_in_categories() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -706,7 +594,7 @@ mod tests {
     #[test]
     fn test_build_scanner_with_severity_threshold() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: false,
@@ -729,7 +617,7 @@ mod tests {
     #[test]
     fn test_perform_scan_env() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: true,
             scan_stdin: false,
@@ -756,7 +644,7 @@ mod tests {
     #[test]
     fn test_perform_scan_file_not_found() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/nonexistent/path/to/file.txt"),
+            path: PathBuf::from("/nonexistent/path/to/file.txt"),
             scan_file: true,
             scan_env: false,
             scan_stdin: false,
@@ -810,7 +698,7 @@ mod tests {
     #[test]
     fn test_execute_scan_with_stdin() {
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: true,
@@ -839,7 +727,7 @@ mod tests {
     fn test_perform_scan_stdin_branch() {
         // Test the perform_scan function with scan_stdin = true (line 77-78)
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/test"),
+            path: PathBuf::from("/test"),
             scan_file: false,
             scan_env: false,
             scan_stdin: true, // This triggers the stdin branch
@@ -1006,7 +894,7 @@ mod tests {
 
         let result = execute_scan(&opts).unwrap();
         // Exit code should be 1 if has_findings, 0 otherwise
-        let expected_exit = if result.has_findings { 1 } else { 0 };
+        let expected_exit = i32::from(result.has_findings);
         assert!(expected_exit == 0 || expected_exit == 1);
         std::fs::remove_dir_all(scan_path).ok();
     }
@@ -1019,8 +907,8 @@ mod tests {
         // Use a process-unique temp path to avoid races between parallel test
         // invocations. process::id is embedded in the receipt tmp-name so we
         // further isolate by including a monotonic fixture counter.
-        static FIXTURE_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let fixture_id = FIXTURE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let receipt_path = std::env::temp_dir().join(format!(
             "aegis_stale_receipt_test_{}_{}",
             std::process::id(),
@@ -1051,7 +939,7 @@ mod tests {
             receipt_path.to_string_lossy().as_ref(),
         );
         let opts = ScanOptions {
-            path: std::path::PathBuf::from("/this/path/does/not/exist/at/all"),
+            path: PathBuf::from("/this/path/does/not/exist/at/all"),
             scan_file: true,
             scan_env: false,
             scan_stdin: false,
@@ -1077,8 +965,9 @@ mod tests {
             receipt_path.display()
         );
 
-        // Suppress unused field warning.
-        let _ = guard;
+        // Keep the guard alive until the end of the test so it can restore
+        // the process-global environment.
+        let _guard = guard;
     }
 
     /// RAII guard that sets an env var on construction and removes it on drop.
@@ -1138,7 +1027,7 @@ mod tests {
     }
 
     /// Serialize findings in the exact shape `--format json` writes.
-    fn write_baseline_document(path: &std::path::Path, findings: &[Finding]) {
+    fn write_baseline_document(path: &Path, findings: &[Finding]) {
         #[derive(serde::Serialize)]
         struct BaselineDocument<'a> {
             findings: &'a [Finding],
@@ -1262,9 +1151,8 @@ mod tests {
         let opts = baseline_scan_opts(fixture.clone(), Some(fixture.join("nope.json")));
         // Validation happens at scanner construction: a missing baseline
         // must fail loudly before anything is scanned.
-        let err = match build_scanner_from_opts(&opts) {
-            Err(err) => err,
-            Ok(_) => panic!("baseline validation must fail before scanning"),
+        let Err(err) = build_scanner_from_opts(&opts) else {
+            panic!("baseline validation must fail before scanning")
         };
         assert!(
             err.to_string().contains("baseline"),
@@ -1274,7 +1162,7 @@ mod tests {
     }
 
     /// Create a git repository at `fixture` and stage `files`.
-    fn git_repo_with_staged(fixture: &std::path::Path, files: &[(&str, &str)]) {
+    fn git_repo_with_staged(fixture: &Path, files: &[(&str, &str)]) {
         let run = |args: &[&str]| {
             std::process::Command::new("git")
                 .arg("-C")
@@ -1382,9 +1270,8 @@ mod tests {
 
         let opts = staged_scan_opts(fixture.path().into());
         let scanner = build_scanner_from_opts(&opts).unwrap();
-        let err = match perform_scan(&scanner, &opts) {
-            Err(err) => err,
-            Ok(_) => panic!("--staged outside a git repository must fail loudly"),
+        let Err(err) = perform_scan(&scanner, &opts) else {
+            panic!("--staged outside a git repository must fail loudly")
         };
         assert!(
             err.to_string().contains("git repository"),
@@ -1400,9 +1287,8 @@ mod tests {
         std::fs::write(&baseline_path, "not json at all").unwrap();
 
         let opts = baseline_scan_opts(fixture.clone(), Some(baseline_path));
-        let err = match build_scanner_from_opts(&opts) {
-            Err(err) => err,
-            Ok(_) => panic!("baseline validation must fail before scanning"),
+        let Err(err) = build_scanner_from_opts(&opts) else {
+            panic!("baseline validation must fail before scanning")
         };
         assert!(
             err.to_string().contains("baseline"),

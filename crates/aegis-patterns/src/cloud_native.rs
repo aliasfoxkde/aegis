@@ -2,6 +2,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // Kubernetes patterns (additional beyond infrastructure.rs)
@@ -122,7 +123,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "aws-sam-template".to_string(),
             category: "cloud-native".to_string(),
-            match_pattern: r#"Transform:\s*AWS::Serverless"#.to_string(),
+            match_pattern: r"Transform:\s*AWS::Serverless".to_string(),
             enabled: true,
             severity: "low".to_string(),
             confidence: "high".to_string(),

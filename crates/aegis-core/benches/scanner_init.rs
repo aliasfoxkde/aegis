@@ -55,7 +55,7 @@ fn bench_registry_build(c: &mut Criterion) {
             let definitions = black_box(bundled_definitions());
             // Bench setup may expect; the directive must share the flagged line.
             Scanner::from_definitions(definitions).expect("patterns compile") // aegis:ignore:rust-expect-usage
-        })
+        });
     });
 
     // First scan of a file type pays the per-extension scanner compile.
@@ -68,20 +68,23 @@ fn bench_registry_build(c: &mut Criterion) {
                     .len()
             },
             criterion::BatchSize::PerIteration,
-        )
+        );
     });
 
     // Steady state: scanners for the extension are already compiled.
     group.bench_function("cached_scan_extension_rs", |b| {
         // Bench setup may expect; the directive must share the flagged line.
         let scanner = Scanner::from_definitions(bundled_definitions()).expect("patterns compile"); // aegis:ignore:rust-expect-usage
-                                                                                                   // Warm the extension cache outside the timed section.
-        let _ = scanner.scan_string(&sample_source(), "src/main.rs");
+
+        // Warm the extension cache outside the timed section; the findings are
+        // dropped immediately so nothing from the warm-up is measured.
+        let warmup = scanner.scan_string(&sample_source(), "src/main.rs");
+        drop(warmup);
         b.iter(|| {
             scanner
                 .scan_string(black_box(&sample_source()), "src/main.rs")
                 .len()
-        })
+        });
     });
 
     group.finish();

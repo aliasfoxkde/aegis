@@ -11,6 +11,7 @@
 
 use crate::Pattern;
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         Pattern {
@@ -680,7 +681,7 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: Some(
-                r#"(?i)\b(?:os\.environ|process\.env|std::env::var|getenv)\b|placeholder|example|changeme|your[-_]|<[^>]*>|\$\{"#
+                r"(?i)\b(?:os\.environ|process\.env|std::env::var|getenv)\b|placeholder|example|changeme|your[-_]|<[^>]*>|\$\{"
                     .to_string(),
             ),
             file_extensions: Vec::new(),

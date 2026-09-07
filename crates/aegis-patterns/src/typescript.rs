@@ -34,6 +34,7 @@ fn ts_extensions() -> Vec<String> {
     ]
 }
 
+#[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
         // `any` disables type checking at the use site

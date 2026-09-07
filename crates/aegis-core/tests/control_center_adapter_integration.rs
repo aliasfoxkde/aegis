@@ -40,7 +40,7 @@ fn test_adapter_empty_content_rejected() {
 
     let request = WorkRequest {
         work_request_id: "wr-empty-001".to_string(),
-        content: "".to_string(),
+        content: String::new(),
         source: "test.rs".to_string(),
     };
 
@@ -54,7 +54,7 @@ fn test_adapter_empty_work_request_id_rejected() {
     let mut adapter = ControlCenterAdapter::new();
 
     let request = WorkRequest {
-        work_request_id: "".to_string(),
+        work_request_id: String::new(),
         content: "some content".to_string(),
         source: "test.rs".to_string(),
     };
@@ -66,6 +66,8 @@ fn test_adapter_empty_work_request_id_rejected() {
 /// Test that evidence is stored with correct hash reference
 #[test]
 fn test_adapter_evidence_stored_with_hash() {
+    use sha2::{Digest, Sha256};
+
     let mut adapter = ControlCenterAdapter::new();
 
     let content = "fn main() { println!(\"test\"); }";
@@ -84,7 +86,6 @@ fn test_adapter_evidence_stored_with_hash() {
     assert!(evidence.evidence_ref.chars().all(|c| c.is_ascii_hexdigit()));
 
     // Content hash should match what we compute
-    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     let expected_hash = hex::encode(hasher.finalize());
@@ -98,8 +99,8 @@ fn test_adapter_multiple_scans_accumulate_evidence() {
 
     for i in 0..3 {
         let request = WorkRequest {
-            work_request_id: format!("wr-multi-{}", i),
-            content: format!("fn test_{}() {{}}", i),
+            work_request_id: format!("wr-multi-{i}"),
+            content: format!("fn test_{i}() {{}}"),
             source: "test.rs".to_string(),
         };
         adapter.scan_work_sync(request).unwrap();
@@ -109,7 +110,7 @@ fn test_adapter_multiple_scans_accumulate_evidence() {
 
     for i in 0..3 {
         assert!(adapter
-            .get_evidence_for_work(&format!("wr-multi-{}", i))
+            .get_evidence_for_work(&format!("wr-multi-{i}"))
             .is_some());
     }
 }
@@ -131,7 +132,7 @@ fn test_adapter_evidence_redacted() {
     let evidence = adapter.get_evidence_for_work("wr-redacted-001").unwrap();
 
     // Evidence ref should be a hash, not the actual content
-    assert!(evidence.evidence_ref.len() == 64);
+    assert_eq!(evidence.evidence_ref.len(), 64);
     assert_ne!(evidence.evidence_ref, secret_content);
 
     // The evidence should NOT contain the raw content
@@ -255,8 +256,8 @@ fn test_adapter_clear_evidence() {
 
     for i in 0..3 {
         let request = WorkRequest {
-            work_request_id: format!("wr-clear-{}", i),
-            content: format!("fn test_{}() {{}}", i),
+            work_request_id: format!("wr-clear-{i}"),
+            content: format!("fn test_{i}() {{}}"),
             source: "test.rs".to_string(),
         };
         adapter.scan_work_sync(request).unwrap();
@@ -308,7 +309,7 @@ fn test_fixture_clean_pass() {
     ));
 
     let evidence = adapter.get_evidence_for_work("fixture-clean-001").unwrap();
-    assert!(evidence.finding_count == 0);
+    assert_eq!(evidence.finding_count, 0);
 }
 
 /// Fixture: clean_with_findings - Normal response with security issues detected
@@ -350,7 +351,7 @@ fn test_fixture_high_load_large_content() {
 
     // Generate large content (simulating a large diff)
     let large_content = (0..1000)
-        .map(|i| format!("fn function_{}(x: i32) -> i32 {{ return x + {}; }}", i, i))
+        .map(|i| format!("fn function_{i}(x: i32) -> i32 {{ return x + {i}; }}"))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -376,7 +377,7 @@ fn test_fixture_high_load_multiple_files() {
     let mut adapter = ControlCenterAdapter::new();
 
     let multi_file_content = (0..50)
-        .map(|i| format!("// File: {}.rs\nfn task_{}() {{}}\n", i, i))
+        .map(|i| format!("// File: {i}.rs\nfn task_{i}() {{}}\n"))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -485,7 +486,7 @@ fn test_fixture_malformed_empty_content() {
 
     let request = WorkRequest {
         work_request_id: "fixture-malformed-001".to_string(),
-        content: "".to_string(),
+        content: String::new(),
         source: "test.rs".to_string(),
     };
 
@@ -503,7 +504,7 @@ fn test_fixture_malformed_empty_work_id() {
     let mut adapter = ControlCenterAdapter::new();
 
     let request = WorkRequest {
-        work_request_id: "".to_string(),
+        work_request_id: String::new(),
         content: "some content".to_string(),
         source: "test.rs".to_string(),
     };
@@ -637,7 +638,7 @@ fn test_fixture_evidence_size_bounded() {
 
     // Large content that would produce many findings if patterns matched
     let large_content = (0..100)
-        .map(|i| format!("let x_{} = {};", i, i))
+        .map(|i| format!("let x_{i} = {i};"))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -709,7 +710,7 @@ fn test_gate_policy_fail_closed_on_malformed() {
 
     let request = WorkRequest {
         work_request_id: "gate-malformed-001".to_string(),
-        content: "".to_string(),
+        content: String::new(),
         source: "test.rs".to_string(),
     };
 
@@ -803,9 +804,6 @@ fn test_reused_work_request_id_with_new_content_is_rejected() {
         source: "retry.rs".to_string(),
     });
 
-    assert!(matches!(
-        result,
-        Err(aegis_core::control_center_adapter::AdapterError::WorkRequestConflict(_))
-    ));
+    assert!(matches!(result, Err(AdapterError::WorkRequestConflict(_))));
     assert_eq!(adapter.get_evidence().len(), 1);
 }

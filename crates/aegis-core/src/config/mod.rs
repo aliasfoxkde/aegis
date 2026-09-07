@@ -12,6 +12,8 @@ use std::{fs, io};
 
 /// Preset configuration for scan bundles
 #[derive(Debug, Clone, Serialize, Deserialize)]
+// Mirrors the on/off scan switches in the preset YAML 1:1.
+#[allow(clippy::struct_excessive_bools)]
 pub struct YamlPreset {
     /// Preset name
     pub name: String,
@@ -153,12 +155,23 @@ pub enum YamlDatabaseType {
 
 impl YamlPreset {
     /// Load from YAML file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if the file cannot be read or is not a valid
+    /// preset document (kind [`io::ErrorKind::InvalidData`] for bad YAML).
     pub fn from_file(path: impl AsRef<Path>) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
         content.parse()
     }
 
     /// Save to YAML file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] of kind [`io::ErrorKind::InvalidData`] if the
+    /// preset cannot be serialized, or the underlying write error if the
+    /// file cannot be written.
     pub fn to_file(&self, path: impl AsRef<Path>) -> io::Result<()> {
         let yaml = serde_yaml::to_string(self)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -166,6 +179,7 @@ impl YamlPreset {
     }
 
     /// Convert to Config
+    #[must_use]
     pub fn to_config(&self) -> Config {
         Config {
             name: self.name.clone(),
@@ -195,12 +209,19 @@ pub struct YamlPresetRegistry {
 }
 
 impl YamlPresetRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             presets: HashMap::new(),
         }
     }
 
+    /// Load every `.yaml`/`.yml` preset in a directory, keyed by preset name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::Error`] if `path` is not a directory, or if reading a
+    /// directory entry fails. Unparseable preset files are skipped silently.
     pub fn load_directory(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
         let path = path.as_ref();
         if !path.is_dir() {
@@ -227,10 +248,12 @@ impl YamlPresetRegistry {
         self.presets.insert(preset.name.clone(), preset);
     }
 
+    #[must_use]
     pub fn get(&self, name: &str) -> Option<&YamlPreset> {
         self.presets.get(name)
     }
 
+    #[must_use]
     pub fn list(&self) -> Vec<String> {
         self.presets.keys().cloned().collect()
     }
@@ -245,6 +268,8 @@ use crate::bundle::Bundle;
 /// Configuration profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+// Mirrors the on/off CLI flags 1:1.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Config {
     /// Profile name
     pub name: String,
@@ -332,20 +357,31 @@ impl std::fmt::Display for OutputFormat {
 
 impl Config {
     /// Load config from a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::IoError`] if the file cannot be read and
+    /// [`ConfigError::ParseError`] if it is not valid JSON.
     pub fn load(path: &std::path::PathBuf) -> Result<Self, ConfigError> {
-        let content = std::fs::read_to_string(path)?;
+        let content = fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&content)?;
         Ok(config)
     }
 
     /// Save config to a file
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConfigError::ParseError`] if the config cannot be
+    /// serialized and [`ConfigError::IoError`] if the file cannot be written.
     pub fn save(&self, path: &std::path::PathBuf) -> Result<(), ConfigError> {
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
+        fs::write(path, content)?;
         Ok(())
     }
 
     /// Get a preset configuration
+    #[must_use]
     pub fn preset(name: &str) -> Option<Self> {
         match name {
             "production" => Some(Self {
@@ -426,11 +462,13 @@ impl Config {
     }
 
     /// List available presets
+    #[must_use]
     pub fn list_presets() -> Vec<&'static str> {
         vec!["production", "pipeline", "development", "mcp"]
     }
 
     /// Create a default configuration
+    #[must_use]
     pub fn default_config() -> Self {
         Self {
             name: "default".to_string(),
@@ -460,7 +498,7 @@ impl Default for Config {
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("I/O error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(#[from] io::Error),
     #[error("Parse error: {0}")]
     ParseError(#[from] serde_json::Error),
     #[error("Unknown preset: {0}")]
@@ -473,14 +511,14 @@ mod tests {
 
     #[test]
     fn test_preset_parse_yaml() {
-        let yaml = r#"
+        let yaml = r"
 name: test-preset
 description: Test preset
 enabled_categories:
   - secrets
   - pii
 max_file_size_mb: 5
-"#;
+";
         let preset: YamlPreset = yaml.parse().unwrap();
         assert_eq!(preset.name, "test-preset");
         assert_eq!(preset.enabled_categories, vec!["secrets", "pii"]);
@@ -489,12 +527,12 @@ max_file_size_mb: 5
 
     #[test]
     fn test_preset_to_config() {
-        let yaml = r#"
+        let yaml = r"
 name: test
 enabled_categories:
   - secrets
 max_file_size_mb: 15
-"#;
+";
         let preset: YamlPreset = yaml.parse().unwrap();
         let config = preset.to_config();
         assert_eq!(config.enabled_categories, Some(vec!["secrets".to_string()]));
@@ -549,7 +587,7 @@ max_file_size_mb: 15
     fn yaml_preset_file_round_trip_preserves_fields() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("preset.yaml");
-        let yaml = r#"
+        let yaml = r"
 name: full
 enabled_categories: [secrets, pii]
 webhooks:
@@ -564,7 +602,7 @@ database_outputs:
 output_formats:
   - format: sarif
     path: out.sarif
-"#;
+";
         let preset: YamlPreset = yaml.parse().expect("parse preset");
         preset.to_file(&path).expect("write preset");
 
@@ -584,13 +622,13 @@ output_formats:
 
     #[test]
     fn to_config_propagates_scanner_relevant_fields() {
-        let preset: YamlPreset = r#"
+        let preset: YamlPreset = r"
 name: propagated
 enabled_categories: [secrets]
 gitignore_respect: false
 aegisignore_respect: false
 severity_threshold: high
-"#
+"
         .parse()
         .expect("parse preset");
         let config = preset.to_config();
@@ -622,10 +660,10 @@ severity_threshold: high
     #[test]
     fn registry_load_directory_reads_yaml_and_yml_only() {
         let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(dir.path().join("alpha.yaml"), "name: alpha").expect("write yaml");
-        std::fs::write(dir.path().join("beta.yml"), "name: beta").expect("write yml");
-        std::fs::write(dir.path().join("gamma.json"), "name: gamma").expect("write json");
-        std::fs::write(dir.path().join("broken.yaml"), "name: [oops").expect("write broken");
+        fs::write(dir.path().join("alpha.yaml"), "name: alpha").expect("write yaml");
+        fs::write(dir.path().join("beta.yml"), "name: beta").expect("write yml");
+        fs::write(dir.path().join("gamma.json"), "name: gamma").expect("write json");
+        fs::write(dir.path().join("broken.yaml"), "name: [oops").expect("write broken");
 
         let mut registry = YamlPresetRegistry::new();
         registry.load_directory(dir.path()).expect("load directory");
@@ -638,7 +676,7 @@ severity_threshold: high
     fn registry_load_directory_rejects_non_directories() {
         let dir = tempfile::tempdir().expect("tempdir");
         let file = dir.path().join("file");
-        std::fs::write(&file, b"x").expect("write file");
+        fs::write(&file, b"x").expect("write file");
         let mut registry = YamlPresetRegistry::new();
         let error = registry.load_directory(&file).unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::Other);
@@ -679,7 +717,7 @@ severity_threshold: high
     fn config_load_malformed_json_is_parse_error() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("broken.json");
-        std::fs::write(&path, "{not json").expect("write broken json");
+        fs::write(&path, "{not json").expect("write broken json");
         let error = Config::load(&path).unwrap_err();
         assert!(matches!(error, ConfigError::ParseError(_)));
     }
