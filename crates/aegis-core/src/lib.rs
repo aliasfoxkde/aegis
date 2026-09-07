@@ -68,7 +68,7 @@ pub use remediation::{
 };
 pub use risk::{RiskClassification, RiskLevel, RiskScore};
 pub use sbom::{Sbom, SbomComponent, SbomDependency, SbomFormat, SbomFormat::Spdx, SbomGenerator};
-pub use scanner::{ScanOptions, Scanner};
+pub use scanner::{ScanError, ScanOptions, Scanner};
 pub use suppression::Suppression;
 
 #[cfg(feature = "output-pipeline")]

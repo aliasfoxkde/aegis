@@ -340,6 +340,9 @@ pub struct ControlCenterAdapter {
     /// Internal scanner instance (not stored, recreated per scan for panic safety)
     #[allow(dead_code)]
     scanner: Scanner,
+    /// Builds the per-scan scanner instance. Indirected so tests can inject a
+    /// scanner that panics and prove the fail-closed path end to end.
+    scanner_factory: fn() -> Scanner,
     /// Evidence storage (in-memory for this implementation)
     evidence_store: Vec<EvidenceRecord>,
     /// In-memory lifecycle records for accepted work requests.
@@ -360,6 +363,7 @@ impl ControlCenterAdapter {
     pub fn new() -> Self {
         Self {
             scanner: Scanner::new(),
+            scanner_factory: default_scanner_factory,
             evidence_store: Vec::new(),
             lifecycle_store: Vec::new(),
         }
@@ -369,6 +373,7 @@ impl ControlCenterAdapter {
     pub fn with_scanner(scanner: Scanner) -> Self {
         Self {
             scanner,
+            scanner_factory: default_scanner_factory,
             evidence_store: Vec::new(),
             lifecycle_store: Vec::new(),
         }
@@ -414,7 +419,9 @@ impl ControlCenterAdapter {
         }
         let work_request_id = request.work_request_id.clone();
         self.begin_lifecycle(&work_request_id);
-        let outcome = tokio::task::spawn_blocking(move || Self::scan_request(request)).await;
+        let scanner_factory = self.scanner_factory;
+        let outcome =
+            tokio::task::spawn_blocking(move || Self::scan_request(request, scanner_factory)).await;
         match outcome {
             Ok(Ok((scan_result, evidence_record))) => {
                 self.transition_lifecycle(&work_request_id, LifecycleState::Completed, None);
@@ -451,7 +458,7 @@ impl ControlCenterAdapter {
         }
         let work_request_id = request.work_request_id.clone();
         self.begin_lifecycle(&work_request_id);
-        match Self::scan_request(request) {
+        match Self::scan_request(request, self.scanner_factory) {
             Ok((scan_result, evidence_record)) => {
                 self.transition_lifecycle(&work_request_id, LifecycleState::Completed, None);
                 self.evidence_store.push(evidence_record);
@@ -520,7 +527,10 @@ impl ControlCenterAdapter {
     }
 
     /// Execute one scan without mutating adapter state.
-    fn scan_request(request: WorkRequest) -> Result<(ScanResult, EvidenceRecord), AdapterError> {
+    fn scan_request(
+        request: WorkRequest,
+        scanner_factory: fn() -> Scanner,
+    ) -> Result<(ScanResult, EvidenceRecord), AdapterError> {
         // Validate input
         Self::validate_request(&request)?;
 
@@ -539,7 +549,7 @@ impl ControlCenterAdapter {
         // UnwindSafe issues with the Arc<IgnoreManager> in Scanner
         let findings: Vec<Finding> =
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let scanner = Scanner::new();
+                let scanner = scanner_factory();
                 scanner.scan_string(&content, &source)
             })) {
                 Ok(findings) => findings,
@@ -644,9 +654,23 @@ impl Default for ControlCenterAdapter {
     }
 }
 
+/// Builds the standalone scanner every work-request scan runs against.
+fn default_scanner_factory() -> Scanner {
+    Scanner::new()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl ControlCenterAdapter {
+        /// Swap in a scanner factory so tests can drive the fail-closed
+        /// panic path without a real scanner misbehaving.
+        fn with_scanner_factory(mut self, factory: fn() -> Scanner) -> Self {
+            self.scanner_factory = factory;
+            self
+        }
+    }
 
     #[test]
     fn test_work_request_serialization() {
@@ -976,5 +1000,275 @@ mod tests {
         let record = adapter.get_lifecycle("wr-lifecycle-async").unwrap();
         assert_eq!(record.current_state, LifecycleState::Completed);
         assert_eq!(record.transition_count(), 4);
+    }
+
+    #[test]
+    fn lifecycle_state_transition_table_matches_the_contract() {
+        use LifecycleState::*;
+        let states = [Pending, Accepted, Running, Completed, Failed, Cancelled];
+
+        for from in states {
+            // Only terminal states report themselves as terminal.
+            let terminal = matches!(from, Completed | Failed | Cancelled);
+            assert_eq!(from.is_terminal(), terminal, "{from:?}");
+
+            for to in states {
+                let expected = match (from, to) {
+                    // Forward progress only; no revisiting earlier states.
+                    (Pending, Accepted | Running | Failed | Cancelled) => true,
+                    (Accepted, Running | Failed | Cancelled) => true,
+                    (Running, Completed | Failed | Cancelled) => true,
+                    // Terminal states accept idempotent replays of themselves.
+                    (Completed, Completed) | (Failed, Failed) | (Cancelled, Cancelled) => true,
+                    _ => false,
+                };
+                assert_eq!(from.can_transition_to(to), expected, "{from:?} -> {to:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn lifecycle_transition_constructor_gates_on_validity() {
+        let invalid = LifecycleTransition::transition(
+            LifecycleState::Completed,
+            LifecycleState::Pending,
+            None,
+        );
+        assert!(invalid.is_none());
+
+        let valid = LifecycleTransition::transition(
+            LifecycleState::Pending,
+            LifecycleState::Accepted,
+            Some("queued".to_string()),
+        )
+        .unwrap();
+        assert_eq!(valid.schema_version, 1);
+        assert_eq!(valid.from_state, Some(LifecycleState::Pending));
+        assert_eq!(valid.to_state, LifecycleState::Accepted);
+        assert_eq!(valid.reason.as_deref(), Some("queued"));
+        assert!(valid.transitioned_at > 0);
+    }
+
+    #[test]
+    fn lifecycle_record_timestamps_bound_the_first_and_latest_transition() {
+        let mut record = LifecycleRecord::new("wr-timestamps".to_string());
+        let started = record
+            .started_at()
+            .expect("initial transition sets a start");
+        assert_eq!(Some(started), record.last_updated_at());
+        assert_eq!(record.transition_count(), 1);
+
+        record
+            .transition_to(LifecycleState::Failed, Some("scan error".into()))
+            .unwrap();
+        let last = record.last_updated_at().expect("latest transition");
+        assert!(last >= started, "time must not move backwards");
+        assert!(record.is_terminal());
+    }
+
+    #[test]
+    fn adapter_debug_lists_stores_without_leaking_content() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-debug".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .unwrap();
+
+        let debug = format!("{adapter:?}");
+        assert!(debug.contains("ControlCenterAdapter"));
+        assert!(debug.contains("evidence_store"));
+        assert!(debug.contains("lifecycle_store"));
+    }
+
+    #[test]
+    fn highest_severity_picks_the_most_severe_known_rating() {
+        use crate::Location;
+        let finding = |severity: &str| {
+            Finding::new(
+                "test-pattern",
+                "test-category",
+                severity,
+                "medium",
+                Location::new("src.rs", 1, 1, "needle"),
+                "needle",
+                "Test finding",
+            )
+        };
+
+        // min_by walks the severity ladder from critical down to info, so the
+        // most severe known rating wins regardless of input order.
+        let mixed = vec![
+            finding("low"),
+            finding("MEDIUM"),
+            finding("critical"),
+            finding("high"),
+        ];
+        assert_eq!(
+            ControlCenterAdapter::extract_highest_severity(&mixed),
+            Some("critical".to_string())
+        );
+
+        let only_info = vec![finding("info"), finding("unknown-rating")];
+        assert_eq!(
+            ControlCenterAdapter::extract_highest_severity(&only_info),
+            Some("info".to_string())
+        );
+
+        assert_eq!(ControlCenterAdapter::extract_highest_severity(&[]), None);
+    }
+
+    #[test]
+    fn sync_scan_replays_identical_requests_and_rejects_conflicting_ones() {
+        let mut adapter = ControlCenterAdapter::new();
+        let request = |content: &str| WorkRequest {
+            work_request_id: "wr-replay".to_string(),
+            content: content.to_string(),
+            source: "test.rs".to_string(),
+        };
+
+        let first = adapter.scan_work_sync(request("fn main() {}")).unwrap();
+        let replay = adapter.scan_work_sync(request("fn main() {}")).unwrap();
+        assert_eq!(first, replay, "identical content is an idempotent replay");
+        assert_eq!(adapter.get_evidence().len(), 1);
+
+        let conflict = adapter.scan_work_sync(request("different content"));
+        assert!(matches!(
+            conflict.unwrap_err(),
+            AdapterError::WorkRequestConflict(id) if id == "wr-replay"
+        ));
+        assert_eq!(adapter.get_evidence().len(), 1);
+    }
+
+    /// A scanner that dies on construction proves the catch_unwind guard
+    /// converts a panic into a fail-closed error rather than unwinding out
+    /// of the adapter.
+    fn panicking_scanner_factory() -> Scanner {
+        panic!("scanner exploded during construction");
+    }
+
+    #[test]
+    fn sync_scan_panics_fail_closed_and_record_a_failed_lifecycle() {
+        let mut adapter =
+            ControlCenterAdapter::new().with_scanner_factory(panicking_scanner_factory);
+        let error = adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-panic-sync".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .expect_err("a panicking scanner must fail closed");
+
+        assert!(
+            matches!(error, AdapterError::ScannerError(message) if message.contains("panicked"))
+        );
+        let record = adapter.get_lifecycle("wr-panic-sync").unwrap();
+        assert_eq!(record.current_state, LifecycleState::Failed);
+        assert!(record.is_terminal());
+        let last = record.transitions.last().unwrap();
+        assert!(last
+            .reason
+            .as_deref()
+            .expect("failure transition carries the reason")
+            .contains("Scanner error"));
+        assert!(adapter.get_evidence().is_empty());
+    }
+
+    #[tokio::test]
+    async fn async_scan_panics_fail_closed_and_record_a_failed_lifecycle() {
+        let mut adapter =
+            ControlCenterAdapter::new().with_scanner_factory(panicking_scanner_factory);
+        let error = adapter
+            .scan_work(WorkRequest {
+                work_request_id: "wr-panic-async".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .await
+            .expect_err("a panicking scanner must fail closed across the blocking task");
+
+        assert!(matches!(error, AdapterError::ScannerError(_)));
+        let record = adapter.get_lifecycle("wr-panic-async").unwrap();
+        assert_eq!(record.current_state, LifecycleState::Failed);
+        assert!(adapter.get_evidence().is_empty());
+    }
+
+    #[test]
+    fn default_adapter_matches_new() {
+        let adapter = ControlCenterAdapter::default();
+        assert!(adapter.get_evidence().is_empty());
+        assert!(adapter.get_lifecycles().is_empty());
+    }
+
+    #[test]
+    fn get_lifecycles_returns_one_record_per_accepted_request() {
+        let mut adapter = ControlCenterAdapter::new();
+        for id in ["wr-a", "wr-b"] {
+            adapter
+                .scan_work_sync(WorkRequest {
+                    work_request_id: id.into(),
+                    content: "fn main() {}".into(),
+                    source: "test.rs".into(),
+                })
+                .unwrap();
+        }
+
+        let lifecycles = adapter.get_lifecycles();
+        assert_eq!(lifecycles.len(), 2);
+        assert!(lifecycles.iter().any(|r| r.work_request_id == "wr-a"));
+        assert!(lifecycles.iter().any(|r| r.work_request_id == "wr-b"));
+        assert!(adapter.get_lifecycle("wr-missing").is_none());
+    }
+
+    #[test]
+    fn persist_evidence_creates_missing_parent_directories() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-persist-nested".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .unwrap();
+
+        let root =
+            std::env::temp_dir().join(format!("aegis-evidence-nested-{}", std::process::id()));
+        let path = root.join("nested/deeper/evidence.json");
+        adapter.persist_evidence(&path).unwrap();
+        assert!(path.is_file());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn persist_evidence_failure_cleans_up_its_temporary_file() {
+        let mut adapter = ControlCenterAdapter::new();
+        adapter
+            .scan_work_sync(WorkRequest {
+                work_request_id: "wr-persist-collision".into(),
+                content: "fn main() {}".into(),
+                source: "test.rs".into(),
+            })
+            .unwrap();
+
+        // Renaming onto a directory fails, which exercises the rollback that
+        // removes the staged temporary file.
+        let root =
+            std::env::temp_dir().join(format!("aegis-evidence-collision-{}", std::process::id()));
+        let target = root.join("evidence.json");
+        std::fs::create_dir_all(&target).unwrap();
+
+        assert!(adapter.persist_evidence(&target).is_err());
+        let leftovers: Vec<_> = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files must not leak: {leftovers:?}"
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
