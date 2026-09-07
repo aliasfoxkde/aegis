@@ -167,11 +167,8 @@ async fn main() -> Result<()> {
         scan_root,
     )?);
 
-    // Initialize scanner with patterns
-    {
-        let mut scanner = state.scanner.write().await;
-        *scanner = init_scanner();
-    }
+    // Patterns compile lazily on the first request that needs them (see
+    // `DaemonState::ensure_patterns_loaded`); startup only binds the socket.
 
     // Setup Unix socket
     let listener = setup_socket(&socket_path)?;

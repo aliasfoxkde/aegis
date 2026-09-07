@@ -123,6 +123,9 @@ pub struct DaemonState {
     pub config: RwLock<Config>,
     pub socket_path: PathBuf,
     scan_root: PathBuf,
+    /// Guards the one-time lazy compilation of the bundled patterns; the
+    /// first scan request pays for it, startup does not.
+    patterns_init: tokio::sync::OnceCell<()>,
 }
 
 impl DaemonState {
@@ -159,11 +162,28 @@ impl DaemonState {
             config: RwLock::new(Config::default()),
             socket_path,
             scan_root,
+            patterns_init: tokio::sync::OnceCell::const_new(),
         })
     }
 
     pub fn scan_root(&self) -> &Path {
         &self.scan_root
+    }
+
+    /// Compile the bundled patterns on first use instead of at startup.
+    ///
+    /// Compiling 600+ regexes is CPU-bound; `spawn_blocking` keeps it off
+    /// the reactor, and the `OnceCell` makes concurrent first requests
+    /// share one compilation.
+    pub async fn ensure_patterns_loaded(&self) {
+        self.patterns_init
+            .get_or_init(|| async {
+                let scanner = tokio::task::spawn_blocking(init_scanner)
+                    .await
+                    .expect("init_scanner must not panic; it falls back to Scanner::new on error");
+                *self.scanner.write().await = scanner;
+            })
+            .await;
     }
 
     fn resolve_scan_path(&self, requested: &str) -> Result<PathBuf, String> {
@@ -295,6 +315,7 @@ pub async fn handle_request(
 
     match method {
         "scan_string" => {
+            state.ensure_patterns_loaded().await;
             let params = match params {
                 Some(serde_json::Value::Array(arr)) => arr,
                 _ => {
@@ -318,6 +339,7 @@ pub async fn handle_request(
             DaemonResponse::from_findings_with_source(findings, stats, format!("string:{source}"))
         }
         "scan_file" => {
+            state.ensure_patterns_loaded().await;
             let requested_path = match params.and_then(|v| v.as_str()) {
                 Some(s) => s,
                 None => return DaemonResponse::error("Missing path param".to_string()),
@@ -338,6 +360,7 @@ pub async fn handle_request(
             }
         }
         "scan_dir" => {
+            state.ensure_patterns_loaded().await;
             let requested_path = match params.and_then(|v| v.as_str()) {
                 Some(s) => s,
                 None => return DaemonResponse::error("Missing path param".to_string()),
@@ -354,12 +377,14 @@ pub async fn handle_request(
             }
         }
         "scan_env" => {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
             let stats = ScanStats::for_environment();
             DaemonResponse::from_findings_with_source(findings, stats, "environment")
         }
         "list_patterns" => {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
             let patterns = registry.all();

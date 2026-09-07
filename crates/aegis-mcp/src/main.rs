@@ -21,6 +21,10 @@ pub struct ServerState {
     pub config: RwLock<Config>,
     pub bundle_version: RwLock<String>,
     pub bundle_checksum: RwLock<String>,
+    /// Guards the one-time lazy compilation of the bundled patterns. The
+    /// JSON-RPC handshake and tool listing never wait on it; the first
+    /// request that needs the scanner does.
+    patterns_init: tokio::sync::OnceCell<()>,
 }
 
 impl ServerState {
@@ -31,7 +35,25 @@ impl ServerState {
             config: RwLock::new(config),
             bundle_version: RwLock::new(String::from("0.0.0")),
             bundle_checksum: RwLock::new(String::new()),
+            patterns_init: tokio::sync::OnceCell::const_new(),
         }
+    }
+
+    /// Compile the bundled patterns on first use instead of at startup.
+    ///
+    /// Compiling 600+ regexes is CPU-bound; `spawn_blocking` keeps it off
+    /// the reactor, and the `OnceCell` makes concurrent first requests
+    /// share one compilation. `update_bundle` marks the cell as done so an
+    /// eager bundle swap is never clobbered by a later lazy init.
+    pub async fn ensure_patterns_loaded(&self) {
+        self.patterns_init
+            .get_or_init(|| async {
+                let scanner = tokio::task::spawn_blocking(init_scanner)
+                    .await
+                    .expect("init_scanner must not panic; it falls back to Scanner::new on error");
+                *self.scanner.write().await = scanner;
+            })
+            .await;
     }
 }
 
@@ -135,6 +157,7 @@ impl AegisRpcImpl {
     fn scan_string(&self, content: String, source: String) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_string(&content, &source);
 
@@ -156,6 +179,7 @@ impl AegisRpcImpl {
                 });
             }
 
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let (findings, stats) = scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
@@ -185,6 +209,7 @@ impl AegisRpcImpl {
                 });
             }
 
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let (findings, stats) = scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
@@ -203,6 +228,7 @@ impl AegisRpcImpl {
     fn scan_env(&self) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
 
@@ -213,6 +239,7 @@ impl AegisRpcImpl {
     fn list_patterns(&self, category: Option<String>) -> BoxFuture<Result<ListPatternsResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
 
@@ -243,6 +270,7 @@ impl AegisRpcImpl {
     fn list_categories(&self) -> BoxFuture<Result<Vec<String>>> {
         let state = self.state.clone();
         Box::pin(async move {
+            state.ensure_patterns_loaded().await;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
             Ok(registry.categories())
@@ -316,11 +344,13 @@ impl AegisRpcImpl {
                 data: None,
             })?;
 
-            // Update state
+            // Update state. The lazy-init cell is marked done so a later
+            // `ensure_patterns_loaded` cannot overwrite this bundle.
             {
                 let mut scanner = state.scanner.write().await;
                 *scanner = new_scanner;
             }
+            state.patterns_init.set(()).ok();
             {
                 let mut version = state.bundle_version.write().await;
                 *version = bundle.metadata().version.to_string();
@@ -431,11 +461,9 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(ServerState::new());
 
-    // Initialize scanner with patterns
-    {
-        let mut scanner = state.scanner.write().await;
-        *scanner = init_scanner();
-    }
+    // Patterns compile lazily on the first request that needs them (see
+    // `ServerState::ensure_patterns_loaded`); startup only wires the
+    // JSON-RPC machinery so the handshake answers immediately.
 
     let rpc = Arc::new(AegisRpcImpl::new(state.clone()));
     let mut io = IoHandler::new();

@@ -115,7 +115,6 @@ pub struct Scanner {
     suppression_manager: SuppressionManager,
     options: ScanOptions,
     /// Cached category scanners for performance
-    category_scanners: RwLock<Option<Vec<crate::pattern::CategoryScanner>>>,
     /// Per-extension category scanners ("" = sources without an extension);
     /// values contain only patterns applicable to that extension
     extension_scanners:
@@ -199,7 +198,6 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
-            category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
@@ -215,7 +213,6 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
-            category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
@@ -233,7 +230,6 @@ impl Scanner {
             ignore_manager: Arc::new(IgnoreManager::new()),
             suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
-            category_scanners: RwLock::new(None),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(std::collections::HashSet::new()),
@@ -276,12 +272,10 @@ impl Scanner {
 
     /// Update options and rebuild category scanners if needed
     pub fn with_options(mut self, options: ScanOptions) -> Self {
-        // Invalidate cache if include_disabled changed
-        if self.last_include_disabled.load(Ordering::SeqCst) != options.include_disabled {
-            *self.category_scanners.write().unwrap() = None;
-            self.last_include_disabled
-                .store(options.include_disabled, Ordering::SeqCst);
-        }
+        // Track include_disabled so a changed flag re-reads the registry
+        // (extension scanner caches are always cleared below).
+        self.last_include_disabled
+            .store(options.include_disabled, Ordering::SeqCst);
         self.extension_scanners.write().unwrap().clear();
         let baseline = options.baseline.clone();
         self.options = options;
@@ -295,21 +289,26 @@ impl Scanner {
         self
     }
 
-    /// Get or build cached category scanners
-    fn get_category_scanners(&self) -> Vec<crate::pattern::CategoryScanner> {
-        let include_disabled = self.options.include_disabled;
+    /// Get category scanners narrowed to a file extension.
+    ///
+    /// Scanners are compiled once per extension (and category filter) on
+    /// first use and cached: only the patterns that can apply to the
+    /// extension are grouped and compiled, so a TypeScript-only pattern
+    /// never runs against a Rust file and vice versa, and no regex is ever
+    /// compiled for patterns a scan cannot reach.
+    fn get_scanners_for_extension(
+        &self,
+        ext: Option<&str>,
+    ) -> Vec<crate::pattern::CategoryScanner> {
+        let key = ext.unwrap_or("").trim_start_matches('.').to_lowercase();
 
-        // Check cache
-        if let Ok(cache) = self.category_scanners.read() {
-            if let Some(ref scanners) = *cache {
-                return scanners.clone();
-            }
+        if let Some(scanners) = self.extension_scanners.read().unwrap().get(&key) {
+            return scanners.clone();
         }
 
-        // Build new scanners
         let scanners: Vec<crate::pattern::CategoryScanner> = self
             .registry
-            .build_category_scanners(include_disabled)
+            .build_category_scanners_for_extension(ext, self.options.include_disabled)
             .into_iter()
             .filter(|scanner| {
                 self.options.categories.is_empty()
@@ -319,34 +318,6 @@ impl Scanner {
                         .iter()
                         .any(|category| category == scanner.category())
             })
-            .collect();
-
-        // Cache them
-        if let Ok(mut cache) = self.category_scanners.write() {
-            *cache = Some(scanners.clone());
-        }
-
-        scanners
-    }
-
-    /// Get category scanners narrowed to a file extension.
-    ///
-    /// Categories with no applicable patterns are dropped entirely, so a
-    /// TypeScript-only pattern never runs against a Rust file and vice versa.
-    fn get_scanners_for_extension(
-        &self,
-        ext: Option<&str>,
-    ) -> Vec<crate::pattern::CategoryScanner> {
-        let key = ext.unwrap_or("").to_lowercase();
-
-        if let Some(scanners) = self.extension_scanners.read().unwrap().get(&key) {
-            return scanners.clone();
-        }
-
-        let scanners: Vec<crate::pattern::CategoryScanner> = self
-            .get_category_scanners()
-            .iter()
-            .filter_map(|category| category.with_extension_filter(ext))
             .collect();
 
         self.extension_scanners
@@ -778,9 +749,8 @@ impl Scanner {
         loaded.insert(canonical);
         drop(loaded);
 
-        // The registry changed: cached category scanners no longer include
+        // The registry changed: cached extension scanners no longer include
         // the user patterns and must be rebuilt for this and later scans.
-        *self.category_scanners.write().unwrap() = None;
         self.extension_scanners.write().unwrap().clear();
 
         tracing::debug!("Loaded custom patterns from {}", path.display());
