@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn setup_socket_refuses_non_socket_entries() {
-        let path = test_socket_path("regular");
+        let path = test_socket_path("refuse-regular");
         fs::write(&path, b"do not remove").expect("create sentinel");
         let error = setup_socket(&path).expect_err("regular file must be refused");
         assert_eq!(error.kind(), ErrorKind::AlreadyExists);
@@ -457,7 +457,7 @@ mod tests {
         remove_socket_if_present(&missing);
         assert!(!missing.exists());
 
-        let regular = test_socket_path("regular");
+        let regular = test_socket_path("cleanup-regular");
         fs::write(&regular, b"keep me").expect("create sentinel");
         remove_socket_if_present(&regular);
         assert_eq!(
