@@ -1,7 +1,13 @@
 //! Infrastructure patterns - Terraform, Kubernetes, Docker, CloudFormation
+//!
+//! A structural inventory rather than a security pack: it recognizes Terraform
+//! blocks, Kubernetes objects, Dockerfile instructions, CloudFormation sections,
+//! and Helm files so a report can describe what a repository deploys. Nearly every
+//! rule is low severity.
 
 use crate::Pattern;
 
+/// Structural IaC inventory: Terraform, Kubernetes, Dockerfile, CloudFormation, Helm.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

@@ -37,6 +37,7 @@ fn service_extensions() -> Vec<String> {
     ]
 }
 
+/// Client/service integration mistakes, scoped to JS/TS plus server-side extensions.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

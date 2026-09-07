@@ -78,6 +78,10 @@ impl DaemonPeerPolicy {
         Ok(policy)
     }
 
+    /// Policy that trusts the socket owner and nobody else.
+    ///
+    /// Matches the posture the daemon gets when neither allowlist variable is
+    /// set, without reading process-global environment state.
     #[must_use]
     pub fn owner_only(socket_owner_uid: u32) -> Self {
         Self {
@@ -105,6 +109,9 @@ impl DaemonPeerPolicy {
         }
     }
 
+    /// Apply the UID/GID check to the credentials the kernel reported for a
+    /// connected peer; the connection handler runs this before parsing a
+    /// single request byte, so an untrusted local account gets no response.
     #[cfg(unix)]
     #[must_use]
     pub fn allows(&self, credentials: &tokio::net::unix::UCred) -> bool {
@@ -134,8 +141,14 @@ fn parse_allowlist(name: &str, value: &str) -> io::Result<BTreeSet<u32>> {
 
 /// Daemon state
 pub struct DaemonState {
+    /// Scanner shared by concurrent requests; reads take a read lock and the
+    /// lazy pattern load swaps in a fully compiled instance on first use.
     pub scanner: RwLock<Scanner>,
+    /// Live configuration, published behind a lock so a host process can
+    /// retune scanning without rebuilding the state.
     pub config: RwLock<Config>,
+    /// Where the Unix socket is (or will be) bound; lets an embedding process
+    /// or test discover the endpoint it needs to connect to.
     pub socket_path: PathBuf,
     scan_root: PathBuf,
     /// Guards the one-time lazy compilation of the bundled patterns; the
@@ -147,6 +160,14 @@ pub struct DaemonState {
 }
 
 impl DaemonState {
+    /// Build state using the process's current working directory as the
+    /// approved scan root, falling back to `.` when that cannot be read.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the chosen root is not an existing directory, exactly as
+    /// [`Self::with_scan_root`] does; prefer [`Self::try_with_scan_root`] in
+    /// code that must report the failure instead.
     #[must_use]
     pub fn new(socket_path: PathBuf) -> Self {
         let scan_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -198,6 +219,10 @@ impl DaemonState {
         })
     }
 
+    /// The canonicalized boundary every client-supplied path is confined to.
+    ///
+    /// Requests that resolve outside it — including through symlinks — are
+    /// refused, so this value is the effective trust boundary of the daemon.
     pub fn scan_root(&self) -> &Path {
         &self.scan_root
     }
@@ -281,22 +306,42 @@ pub fn init_scanner() -> anyhow::Result<Scanner> {
 /// Daemon response
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonResponse {
+    /// Whether the request was served at all; `false` is always paired with a
+    /// non-empty [`Self::error`] and never with findings.
     pub success: bool,
+    /// Findings produced by the scan, already redacted of matched source text
+    /// before they reach the socket; empty on failure.
     pub findings: Vec<Finding>,
+    /// How many findings came back, reused by `list_patterns` to report the
+    /// number of rules in the registry.
     pub finding_count: usize,
+    /// Aggregated severity label computed over the findings, `"unknown"` when
+    /// the request failed and `"none"` when nothing was inspected.
     pub risk_level: String,
+    /// Numeric rollup of finding severities, `0` for an empty or failed scan.
     pub risk_score: i32,
+    /// Coverage and timing ledger for the inspection; defaults when no files
+    /// or content were actually read.
     pub stats: ScanStats,
+    /// Signed-ish audit record tying the answer to a source, profile digest,
+    /// and optional source revision; absent for errors and `list_patterns`.
     pub receipt: Option<ScanReceipt>,
+    /// Human-readable reason the request was refused or failed, `None` on
+    /// success.
     pub error: Option<String>,
 }
 
 impl DaemonResponse {
+    /// Package a completed scan whose origin is the daemon itself, which is
+    /// the attribution used when no more specific label applies.
     #[must_use]
     pub fn from_findings(findings: Vec<Finding>, stats: ScanStats) -> Self {
         Self::from_findings_with_source(findings, stats, "daemon")
     }
 
+    /// Package a completed scan and record `source` in its receipt, so a
+    /// `string:<label>` in-memory scan and a resolved filesystem path stay
+    /// distinguishable in audit output. Risk is derived from the findings.
     pub fn from_findings_with_source(
         findings: Vec<Finding>,
         stats: ScanStats,
@@ -325,6 +370,9 @@ impl DaemonResponse {
         }
     }
 
+    /// Build the response sent when a request cannot be honored: no findings,
+    /// no stats, no receipt, and an `"unknown"` risk level so a rejected
+    /// request can never be mistaken for a clean scan.
     #[must_use]
     pub fn error(msg: String) -> Self {
         Self {

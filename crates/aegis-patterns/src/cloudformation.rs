@@ -1,7 +1,11 @@
 //! CloudFormation/AWS patterns
+//!
+//! CloudFormation template checks: wildcard IAM assume-role principals and S3
+//! buckets that skip default encryption or disable the public-access block.
 
 use crate::Pattern;
 
+/// CloudFormation checks for IAM trust scope and S3 encryption and exposure.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

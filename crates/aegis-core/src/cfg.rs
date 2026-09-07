@@ -436,6 +436,8 @@ impl CfgAnalyzer {
 /// CFG error types
 #[derive(Debug, thiserror::Error)]
 pub enum CfgError {
+    /// Reading or otherwise touching the analyzed file on disk failed; the
+    /// underlying `std::io::Error` is preserved via `#[from]`.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 }

@@ -1,7 +1,13 @@
 //! PII patterns - Personal Identifiable Information detection
+//!
+//! The largest format pack: government, financial, health, and contact
+//! identifiers. Structured shapes (SSN, IBAN, bank cards) are precise; free-text
+//! ones (names, street addresses) carry reduced confidence because format alone
+//! cannot disambiguate them.
 
 use crate::Pattern;
 
+/// Personal data identifier formats, from SSN and IBAN to names and street addresses.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

@@ -1,7 +1,12 @@
 //! Kubernetes patterns
+//!
+//! Pod-spec hardening for manifests under source control: privilege escalation and
+//! privileged containers, host network and PID namespaces, missing capability
+//! drops and resource limits, and secrets committed inline.
 
 use crate::Pattern;
 
+/// Pod-spec hardening: privilege escalation, host namespaces, limits, inline secrets.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

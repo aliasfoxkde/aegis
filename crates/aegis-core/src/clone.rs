@@ -23,9 +23,16 @@ pub struct CodeClone {
 /// Location of a clone
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct CloneLocation {
+    /// Source label for the block, taken verbatim from the `source` argument
+    /// passed to [`CloneDetector::detect_content`] (the file path for
+    /// [`CloneDetector::detect_file`]).
     pub file: String,
+    /// First line of the cloned block, 1-indexed and inclusive.
     pub start_line: usize,
+    /// Last line of the cloned block, 1-indexed and inclusive.
     pub end_line: usize,
+    /// Enclosing function name when known; [`CloneDetector`] currently leaves
+    /// this unset because detection works on token blocks, not symbol bounds.
     pub function: Option<String>,
 }
 
@@ -428,6 +435,8 @@ struct CodeBlock {
 /// Clone detection error
 #[derive(Debug, thiserror::Error)]
 pub enum CloneError {
+    /// The source file could not be read from disk; wraps the underlying
+    /// [`std::io::Error`].
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 }

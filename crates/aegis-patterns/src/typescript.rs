@@ -34,6 +34,7 @@ fn ts_extensions() -> Vec<String> {
     ]
 }
 
+/// TypeScript-only rules, scoped by extension so they never flag plain JavaScript.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

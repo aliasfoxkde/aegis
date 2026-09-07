@@ -1,7 +1,12 @@
 //! Performance patterns - code smells that affect performance
+//!
+//! Latency smells grouped by language family: N+1 queries and missing indexes on
+//! the data side, work rebuilt inside loops, unbounded selects, and DOM or network
+//! misuse in the browser.
 
 use crate::Pattern;
 
+/// Latency smells: N+1 queries, work inside loops, unbounded selects, DOM misuse.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

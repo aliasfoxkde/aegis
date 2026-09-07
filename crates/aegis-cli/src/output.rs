@@ -3,6 +3,10 @@
 use crate::OutputFormat;
 use aegis_core::{Finding, RiskScore, ScanStats};
 
+/// Buffered report writer: renders a scan into the format chosen at
+/// construction, accumulating the document in memory so callers can print,
+/// redirect, or parse it later through `Display`. Its [`std::fmt::Write`]
+/// impl appends to the same buffer.
 pub struct Output {
     format: OutputFormat,
     quiet: bool,
@@ -16,6 +20,8 @@ impl std::fmt::Write for Output {
 }
 
 impl Output {
+    /// Create an empty buffer that renders `format`; `quiet` drops the
+    /// human header, risk summary, and stats footer so only findings remain.
     #[must_use]
     pub fn new(format: OutputFormat, quiet: bool) -> Self {
         Self {

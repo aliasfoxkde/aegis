@@ -1,7 +1,12 @@
 //! Shift-left patterns - early detection, CI/CD integration, automation
+//!
+//! Inventory of the gates a repository actually has: CI pipeline definitions, test
+//! markers, and scanner config (Checkov, Trivy, Grype, Snyk, SonarQube, Dependabot,
+//! Codecov).
 
 use crate::Pattern;
 
+/// Shift-left tooling inventory: CI pipelines, test markers, scanner configuration.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

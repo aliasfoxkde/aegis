@@ -1,10 +1,11 @@
 # Codecov configuration.
 #
 # Targets are pinned to measured reality, not aspirations: the workspace
-# line coverage measured by `cargo llvm-cov --workspace` is ~94.5%, with
-# the gaps concentrated in the wasm crate (requires a wasm runtime) and
-# the thin binary shims. Both are ignored below so the gate reflects the
-# library and CLI code that the thresholds are meant to protect.
+# line coverage measured by `cargo llvm-cov --workspace` is ~97.2% (94.5%
+# regions), with the gaps concentrated in the wasm crate (requires a wasm
+# runtime) and the thin binary shims. Both are ignored below so the gate
+# reflects the library and CLI code that the thresholds are meant to
+# protect.
 coverage:
   status:
     project:

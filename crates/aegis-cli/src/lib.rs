@@ -22,7 +22,13 @@ use clap::ValueEnum;
 /// Output format options
 #[derive(Clone, Debug, ValueEnum)]
 pub enum OutputFormat {
+    /// Colorized console report with the risk summary, per-finding lines, and
+    /// stats footer.
     Human,
+    /// Machine-readable document holding findings plus scan stats; the same
+    /// shape a `--baseline` file is expected to carry.
     Json,
+    /// SARIF 2.1.0 run for code-scanning platforms, carrying the inspection
+    /// ledger as run properties.
     Sarif,
 }

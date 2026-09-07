@@ -86,7 +86,7 @@ enum Commands {
         diff: Option<PathBuf>,
 
         /// Scan the staged (index) content of the git repository instead
-        /// of files on disk — pre-commit mode; <path> selects the
+        /// of files on disk — pre-commit mode; `[path]` selects the
         /// repository and defaults to the current directory
         #[arg(long)]
         staged: bool,

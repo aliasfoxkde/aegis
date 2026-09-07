@@ -1,7 +1,13 @@
 //! LLM guardrails patterns - AI safety, content filtering, prompt injection
+//!
+//! Prompt-screening patterns for LLM applications: jailbreak and role-play
+//! overrides, exfiltration and injection attempts, and the content-policy
+//! categories (self-harm, hate, PII leakage, copyrighted material) a guardrail
+//! layer is expected to refuse.
 
 use crate::Pattern;
 
+/// Prompt-screening patterns for LLM guardrails: jailbreaks, exfiltration, policy.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

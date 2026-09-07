@@ -1014,18 +1014,31 @@ impl LineIndex {
 /// Scan error types
 #[derive(Debug, thiserror::Error)]
 pub enum ScanError {
+    /// The requested path does not exist, so nothing could be inspected;
+    /// carries the missing path.
     #[error("File not found: {0}")]
     FileNotFound(PathBuf),
 
+    /// Metadata or content could not be read, or the file was not valid UTF-8;
+    /// wraps the underlying I/O error.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
+    /// The path exists but cannot be read with the current permissions; carries
+    /// the unreadable path. Not raised by the scanner itself today, which
+    /// reports such failures as [`ScanError::IoError`].
     #[error("Permission denied: {0}")]
     PermissionDenied(PathBuf),
 
+    /// Fail-closed guard for directory scans: required files existed under the
+    /// root but none were inspected successfully, so reporting success would
+    /// have made an incomplete scan look clean.
     #[error("No required files were successfully inspected under {root}")]
     AllRequiredFilesFailed {
+        /// Directory whose scan tripped the fail-closed check.
         root: PathBuf,
+        /// Aggregated statistics for the aborted scan, including the inspection
+        /// ledger that records why each required unit failed.
         stats: Box<ScanStats>,
     },
 

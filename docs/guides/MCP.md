@@ -95,16 +95,32 @@ List all pattern categories.
 
 ### update_bundle
 
-Update pattern bundle (checks if updates are available).
+Update pattern bundle. Takes a two-element array: an optional bundle path
+(`null` for the default) and a `force` flag.
 
 ```json
 {
   "jsonrpc": "2.0",
   "method": "update_bundle",
-  "params": [false],
+  "params": [null, false],
   "id": 7
 }
 ```
+
+## Parameter Shapes
+
+| Method | `params` |
+|--------|----------|
+| `scan_string` | `["<content>", "<source label>"]` — two strings |
+| `scan_file` | `["/path/to/file"]` — exactly one string |
+| `scan_dir` | `["/path/to/dir"]` — exactly one string |
+| `scan_env` | `[]` or omitted |
+| `list_patterns` | `[]` or `["<category>"]` |
+| `list_categories` | `[]` or omitted |
+| `update_bundle` | `[<path or null>, <bool>]` |
+
+`scan_file` and `scan_dir` are sandboxed to the server's working
+directory: a path that escapes it is rejected.
 
 ## MCP Client Integration
 
@@ -128,33 +144,46 @@ Consult your IDE's documentation for MCP server configuration. The server uses t
 
 ## Response Format
 
-Responses are JSON-RPC 2.0:
+Responses are JSON-RPC 2.0. Scan results carry `finding_count`,
+`findings`, `risk_level`, `risk_score`, `stats`, and a `receipt`:
 
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
+    "finding_count": 1,
     "findings": [
       {
         "pattern": "aws-access-key",
+        "category": "pii",
+        "kind": "pattern",
         "severity": "critical",
         "confidence": "high",
         "location": {
           "file": "config.js",
           "line": 1,
-          "column": 20
+          "column": 18
         },
-        "matched_content": "AKIAIOSFODNN7EXAMPLE",
-        "description": "AWS access key ID detected"
+        "description": "AWS Access Key ID detected",
+        "reference": "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html",
+        "tags": [],
+        "id": "000000000000000018d31755598f11f4",
+        "fingerprint": "aws-access-key:config.js:1:1a5d44a2…",
+        "stable_id": "aegis-84f7dbec95cecf248f…"
       }
     ],
-    "finding_count": 1,
-    "risk_level": "high",
-    "risk_score": 85
+    "risk_level": "critical",
+    "risk_score": 215,
+    "stats": {"files_scanned": 1},
+    "receipt": {"receipt_id": "aegis-receipt-…"}
   },
   "id": 1
 }
 ```
+
+`list_patterns` returns `{"patterns": [...], "total": N}`;
+`list_categories` returns a plain array of category names;
+`update_bundle` returns `{"success": true, "message": "...", "pattern_count": 0}`.
 
 ## Error Responses
 
@@ -163,8 +192,12 @@ Responses are JSON-RPC 2.0:
   "jsonrpc": "2.0",
   "error": {
     "code": -32602,
-    "message": "Invalid params: path is outside allowed directory"
+    "message": "Path is outside allowed directory"
   },
   "id": 2
 }
 ```
+
+Malformed parameters also return `-32602`, e.g. calling `scan_file` with
+the wrong number of arguments yields
+`Invalid params: expected exactly one string parameter: ["/path/to/scan/target"]`.

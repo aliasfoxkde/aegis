@@ -1,7 +1,12 @@
 //! Code quality patterns
+//!
+//! Hygiene checks that stay language-agnostic: debug output, TODO markers, loose
+//! equality, magic numbers. All but one are medium severity or lower, so they
+//! inform a scan rather than gate it.
 
 use crate::Pattern;
 
+/// Language-agnostic hygiene rules: debug output, TODOs, loose typing.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

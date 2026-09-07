@@ -1,7 +1,13 @@
 //! Compliance patterns - regulatory frameworks, standards, certifications
+//!
+//! Keyword rules that record which regime a file claims to satisfy - GDPR, HIPAA,
+//! SOC 2, PCI DSS, NIST, ISO 27001 and friends. They fire on the mention of a
+//! framework or of a specific article, so a finding can carry the matching
+//! obligation.
 
 use crate::Pattern;
 
+/// Regulatory framework references (GDPR, HIPAA, SOC 2, PCI DSS, NIST, ISO 27001).
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

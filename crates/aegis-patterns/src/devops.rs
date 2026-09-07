@@ -1,7 +1,12 @@
 //! DevOps patterns - CI/CD, pipelines, deployment
+//!
+//! Pipeline and deployment safety: committed `.env` and Terraform state,
+//! plaintext CI secrets, branch-protection bypasses, and Dockerfile footguns such
+//! as a mounted socket or a `latest` base image.
 
 use crate::Pattern;
 
+/// CI/CD and deployment rules, from committed `.env` files to Dockerfile footguns.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

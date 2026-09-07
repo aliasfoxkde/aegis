@@ -7,15 +7,16 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (post v0.3.0, 2026-09-06)
+## Current state (2026-09-07, phases 0–7 of the improvement plan merged)
 
 | Dimension | State |
 | --- | --- |
 | Patterns | 633 across 33 categories, per-extension dispatch, entropy + exclude gates |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering, `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode |
-| Quality gates | clippy `-D warnings`, fmt, 26 test suites, codecov (94.51% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
+| Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 729 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
 | Surfaces | CLI (human/json/sarif), MCP server, Unix-socket daemon, wasm build, 5-platform release tarballs |
-| Known defects | Three dead/malformed rules found by the corpus harness (fixed in 0.3.0); more are likely — no per-rule liveness proof yet |
+| Known defects | Rule liveness and hygiene are CI-enforced; the CI-parity self-scan currently reports 2 `high` findings, both `env-credential-assignment` inside `#[cfg(test)]` fixtures that already suppress `aws-secret-key` (`crates/aegis-mcp/src/tools.rs`, `crates/aegis-daemon/src/lib.rs`) — test-fixture residue, not shipped-code issues |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
 [docs/architecture/OVERVIEW.md](architecture/OVERVIEW.md). Per-category
@@ -89,7 +90,7 @@ Measured with the new `scanner_init` criterion bench (release,
 this machine): registry from bundled definitions 164.6 ms; first scan of a
 new extension 73.7 ms (was ~216 ms when every pattern compiled); cached
 rescan 2.5 ms. Findings are byte-identical to the eager build across the
-workspace suite (651 tests).
+workspace suite (651 tests at the time; 729 now).
 
 - **Exit criteria:** criterion bench steady state unchanged; startup and
   MCP handshake compile only what they need. ✅
@@ -99,7 +100,7 @@ workspace suite (651 tests).
 The self-scan ranked every firing rule and each finding was traced to its
 source line before anything was retuned. Self-scan findings: 941 → 817;
 CI-parity scan (`secrets,security-hardening,web-security` at high+) 3 → 0.
-Corpus precision/recall thresholds unchanged and green (651 tests).
+Corpus precision/recall thresholds unchanged and green (651 tests at the time; 729 now).
 
 What actually caused the noise, and the fix for each:
 
@@ -143,22 +144,25 @@ hits are test-fixture constants and config values in manifests.
 - **Exit criteria:** CI-parity scan (`secrets,security-hardening,
   web-security` at high+) stays at zero findings; corpus precision stays
   at 1.00; noisy rules fixed, demoted, or documented with rationale. ✅
+  (Held at zero through phase 7; the 2 test-fixture findings noted in the
+  current-state table above are phase 9 work.)
 
-### Phase 4 — CI/CD hardening
+### Phase 4 — CI/CD hardening — DELIVERED
 
-Current gaps: default (write-capable) token permissions on most jobs, no
-concurrency groups, `cargo-audit` compiled from source per run, tests on
-Ubuntu only.
+The gaps at the time: default (write-capable) token permissions on most
+jobs, no concurrency groups, `cargo-audit` compiled from source per run,
+tests on Ubuntu only.
 
 - Top-level `permissions: contents: read` everywhere; per-job elevation
-  only where a step requires it.
-- `concurrency` groups keyed on `workflow-ref`, cancel-in-progress on PRs.
-- Add cargo-deny (`deny.toml`: advisories, licenses, bans, sources) as the
+  only where a step requires it (CodeQL's SARIF upload, the release job).
+- `concurrency` groups keyed on workflow + ref, cancel-in-progress on PRs.
+- cargo-deny (`deny.toml`: advisories, licenses, bans, sources) runs as the
   dependency-policy gate next to cargo-audit; tools installed via
   `taiki-e/install-action`, never `cargo install` from source.
-- macOS + Windows test jobs.
+- macOS + Windows test jobs, pinned tool versions.
+- Landed in `6f8672f` and `ef24512`.
 - **Exit criteria:** workflows least-privilege, deduplicated, cached; test
-  matrix green on three OSes.
+  matrix green on three OSes. ✅
 
 ### Phase 5 — `env_var` semantics decision — DELIVERED
 
@@ -192,26 +196,34 @@ only in a struct field comment.
   (`docs/PATTERNS.md` scoping section); the decision is recorded in
   `docs/architecture/OVERVIEW.md` ("File vs. Environment Scan Scope"). ✅
 
-### Phase 6 — Coverage push
+### Phase 6 — Coverage push — DELIVERED
 
-Measured 94.51% lines / 90.65% regions; aegis-wasm at 0%.
+At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
 
-- Test the wasm crate (factor pure logic or use wasm-bindgen-test).
-- Sweep the largest uncovered areas (aegis-mcp tools, daemon, CLI paths).
+- The wasm crate is now unit-tested directly (`cargo test --workspace`
+  covers it; 91.47% lines), so the codecov ignore exists only to keep the
+  wasm runtime out of the *gate*, not out of the measurement.
+- Swept the largest uncovered areas (aegis-mcp tools and sandbox, daemon,
+  CLI paths, control-center adapter, sbom, config) — #90 plus #81's gate.
+- Measured now (`cargo llvm-cov --workspace --all-targets`): 97.24% lines,
+  94.60% regions.
 - **Exit criteria:** every crate above 80% lines; codecov target raised
   toward 99% only as measured coverage actually rises — never pinned above
-  reality.
+  reality. ✅ (codecov still gates at 90%/85%; raising it is follow-up work)
 
-### Phase 7 — Strictest practical linting + code smells
+### Phase 7 — Strictest practical linting + code smells — DELIVERED (#91)
 
-- Workspace `[lints]` table: adopt the pedantic subset that fits,
-  including `missing_docs` on library-crate public API; fix all findings.
+- Workspace `[lints]` table: `unsafe_code`, `let_underscore_drop`, and
+  `future_incompatible` denied; `rust_2018_idioms`, `unused_qualifications`,
+  `missing_docs`, `clippy::all`, and `clippy::pedantic` warned; every
+  member crate opts in and CI runs `-D warnings`. Scanner init is
+  fail-closed rather than silently degraded.
 - Code-smell pass: oversized functions/files, real duplication
   (category-scanner paths, CLI scan modes), needless clones.
 - **Exit criteria:** strict lints enforced in CI; duplication reduced
-  without abstracting single-use code.
+  without abstracting single-use code. ✅
 
-### Phase 8 — Documentation coverage and accuracy
+### Phase 8 — Documentation coverage and accuracy — IN PROGRESS (this branch)
 
 - `missing_docs` clean on aegis-core / aegis-patterns public API.
 - Accuracy pass over `docs/` against current behavior (suppression
@@ -220,12 +232,14 @@ Measured 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   matrix current (it tracks shipped rule coverage; Aegis itself ships no
   web front-end).
 
-### Phase 9 — E2E + local CI validation
+### Phase 9 — E2E + local CI validation — OPEN
 
 - Full e2e pass: every CLI scan mode, MCP handshake/tools, daemon socket,
   staged mode, custom patterns, baseline, ignore semantics.
 - Validate workflows locally via GitForge where supported; aegis self-scan
-  clean at CI parity.
+  clean at CI parity. Today the CI-parity scan reports the 2 test-fixture
+  findings noted above; they need a same-line directive or a fixture
+  rewrite, not a rule change.
 
 ### Phase 10 — Release
 
@@ -248,29 +262,36 @@ struct RiskScore {
     level: RiskLevel,
     by_category: HashMap<String, CategoryRisk>,
     finding_count: usize,
-    highest_severity: Severity,
+    highest_severity: Option<String>,
+    by_severity: HashMap<String, usize>,
 }
 ```
 
 Inputs: pattern severity (critical=40, high=25, medium=10, low=3),
-confidence multiplier (high=1.0, medium=0.7, low=0.4), category weight,
-finding density, and context (CI/CD vs local).
+confidence multiplier (high=1.0, medium=0.7, low=0.4), and category weight
+(secrets 1.5, security-hardening 1.4, supply-chain 1.4, code-quality 0.8,
+…). Finding density and scan context are not modelled today; `RiskScore`
+is a straight weighted sum (`aegis-core::risk`).
 
 ### Performance targets
 
-- Throughput: 10GB+/minute on modern hardware
-- Memory: <100MB baseline, scales with patterns
-- Latency: <10ms per file (avg)
-- Concurrency: worker pool with N*2 workers (N = CPU cores)
-- Bundle load: <100ms startup
+- Throughput: 10GB+/minute on modern hardware (target, not a measured gate)
+- Memory: <100MB baseline, scales with patterns (target)
+- Latency: <10ms per file (avg) (target)
+- Concurrency: rayon's global pool, one thread per core;
+  `ScanOptions::workers` is recorded but not yet wired to the pool
+- Startup (measured, release, criterion `scanner_init`): registry from
+  bundled definitions 164.6 ms; first scan of a new extension 73.7 ms;
+  cached rescan 2.5 ms
 
 ### Testing strategy
 
-- Line coverage target 99%, branch 95% (gated at measured reality — see
-  Phase 6)
-- Unit tests per crate; integration tests per surface; property tests and
-  fuzzing for parsers (4 cargo-fuzz targets); criterion benchmarks;
-  labelled corpus with precision/recall gates
+- Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
+  (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
+  gate rises with measured reality, never above it (see Phase 6)
+- 729 tests: unit tests per crate; integration tests per surface; property
+  tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
+  benchmarks; labelled corpus with precision/recall gates
 
 ### Security considerations
 

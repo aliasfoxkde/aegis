@@ -221,21 +221,41 @@ pub const INSPECTION_LEDGER_SCHEMA_VERSION: u16 = 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InspectionStatus {
+    /// The unit was registered but analysis has not run yet.
     Discovered,
+    /// Analysis completed and findings were collected from the unit.
     Analyzed,
+    /// Analysis was deliberately not attempted, usually a policy limit such
+    /// as `file_size_limit`; the reason names it.
     Skipped,
+    /// The unit is out of scope, so it never counts against coverage —
+    /// ignore rules and other path exclusions land here.
     Excluded,
+    /// The unit exists but Aegis has no analyzer for it, for example a
+    /// binary file or an unrecognized language.
     Unsupported,
+    /// Analysis was attempted and did not complete, such as an unreadable
+    /// file, a walk error, or a parser reporting a syntax error.
     Failed,
+    /// The unit was analyzed but its findings were withheld by an approved
+    /// suppression; it still counts as covered.
     Suppressed,
 }
 
 /// Bounded inspection record for one file, source, or analyzer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InspectionUnit {
+    /// Identifier of the inspected unit: a file path, a path with a
+    /// sub-analyzer suffix such as `src/main.rs#ast`, or a synthetic id for
+    /// walk errors.
     pub unit_id: String,
+    /// Outcome recorded for the unit.
     pub status: InspectionStatus,
+    /// Whether the unit had to be inspected for the scan to be trustworthy.
+    /// Only required units gate [`InspectionLedger::allows_safe`].
     pub required: bool,
+    /// Human-readable explanation for a non-`Analyzed` status, such as
+    /// `"file_size_limit"` or `"binary_file"`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
@@ -243,7 +263,11 @@ pub struct InspectionUnit {
 /// Explicit accounting of what a scan did and did not inspect.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InspectionLedger {
+    /// Ledger schema version, matching
+    /// [`INSPECTION_LEDGER_SCHEMA_VERSION`] for ledgers built by Aegis.
     pub schema_version: u16,
+    /// One record per inspected unit, in the order the scanner encountered
+    /// them.
     pub units: Vec<InspectionUnit>,
 }
 
@@ -257,6 +281,10 @@ impl Default for InspectionLedger {
 }
 
 impl InspectionLedger {
+    /// Append one unit to the ledger, keeping the order units were seen in.
+    ///
+    /// Any existing record with the same `unit_id` is left untouched, so a
+    /// unit analyzed in more than one pass appears once per pass.
     pub fn record(
         &mut self,
         unit_id: impl Into<String>,
@@ -285,6 +313,9 @@ impl InspectionLedger {
             })
     }
 
+    /// Append every unit from `other` onto this ledger without deduplicating
+    /// or rewriting `schema_version`, so a merged scan reports the union of
+    /// both coverage records.
     pub fn merge(&mut self, other: &Self) {
         self.units.extend(other.units.iter().cloned());
     }

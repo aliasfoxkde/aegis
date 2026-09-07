@@ -45,6 +45,7 @@ let_underscore_drop = "deny"
 rust_2018_idioms = { level = "warn", priority = -1 }
 unsafe_code = "deny"
 unused_qualifications = "warn"
+missing_docs = "warn"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
@@ -103,7 +104,6 @@ atty = "0.2"
 dirs = "6.0"
 serde_yaml = "0.9"
 nix = "0.31"
-ratelimit = "2.0"
 
 # HTTP client (for bundle download)
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }

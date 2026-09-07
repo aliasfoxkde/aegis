@@ -2,15 +2,10 @@
 
 ## Quick Install (Recommended for Users)
 
-Install the latest binary release for your platform:
+Install the latest binary release for your platform. Every archive
+bundles `aegis`, `aegis-mcp`, `aegis-daemon`, and `aegis-bundler`.
 
 ### Linux
-
-```bash
-curl -sSL https://get.aegis.dev | sh
-```
-
-Or download manually:
 
 ```bash
 # Download the latest release
@@ -23,22 +18,27 @@ tar -xzf aegis-linux-x86_64.tar.gz
 sudo mv aegis /usr/local/bin/
 ```
 
+For ARM64 Linux, use `aegis-linux-arm64.tar.gz` instead.
+
 ### macOS
 
 ```bash
-# Download the latest release
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-macos.tar.gz
+# Intel
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-x86_64.tar.gz
+tar -xzf aegis-darwin-x86_64.tar.gz
+sudo mv aegis /usr/local/bin/
 
-# Extract
-tar -xzf aegis-macos.tar.gz
-
-# Move to PATH
+# Apple Silicon
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-arm64.tar.gz
+tar -xzf aegis-darwin-arm64.tar.gz
 sudo mv aegis /usr/local/bin/
 ```
 
 ### Windows
 
-Download the latest release from the [GitHub Releases](https://github.com/aliasfoxkde/aegis/releases/latest) page and add to your PATH.
+Download `aegis-windows-x86_64.tar.gz` from the
+[GitHub Releases](https://github.com/aliasfoxkde/aegis/releases/latest)
+page, extract it, and add `aegis.exe` to your PATH.
 
 ## Verify Installation
 
@@ -49,17 +49,25 @@ aegis list
 
 ## Docker
 
-```bash
-docker run --rm -v $(pwd):/scan ghcr.io/aliasfoxkde/aegis scan /scan
-```
-
-## Package Managers
-
-### Homebrew (macOS/Linux)
+No image is published to a registry, so build one locally from
+[`docker/Dockerfile`](../../docker/Dockerfile):
 
 ```bash
-brew install aliasfoxkde/tap/aegis
+docker build -t aegis:latest -f docker/Dockerfile .
+docker run --rm -v $(pwd):/workspace aegis:latest scan /workspace
 ```
+
+See [`docker/README.md`](../../docker/README.md) for Docker Compose
+profiles.
+
+## Building from Source
+
+```bash
+cargo build --release -p aegis-cli
+```
+
+The binary lands at `target/release/aegis`. See
+[Building from Source](BUILDING.md) for the full contributor setup.
 
 ## Requirements
 

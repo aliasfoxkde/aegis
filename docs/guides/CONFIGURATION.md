@@ -1,109 +1,139 @@
 # Configuration
 
-## Configuration Files
+## Profiles
 
-Aegis uses configuration files in the following order (first found wins):
+Aegis takes its settings from CLI flags plus an optional JSON **profile**
+document. Profiles are selected with the top-level `-c/--config` flag,
+which must come before the subcommand:
 
-1. `./.aegis.toml` (project directory)
-2. `~/.aegis/config.toml` (user home)
-3. `/etc/aegis/config.toml` (system-wide)
+```bash
+aegis --config production scan .
+```
 
-## Profile Configuration
+Four preset names are built in: `production`, `pipeline`,
+`development`, and `mcp`. JSON copies of the preset documents also ship
+in [`config/profiles/`](../../config/profiles/) (`development.json`,
+`pipeline.json`, `production.json`, `mcp-integration.json`) so they can
+be reviewed or copied.
 
-Aegis includes preset profiles for different use cases.
+Note that profile loading is not wired into the scan path yet: `-c` is
+accepted and resolves a preset, but it does not change the behaviour of
+the current run. `--format` and the scan-level flags remain
+authoritative.
+
+## Profile Fields
+
+A profile is a single JSON object with these keys:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string | Profile label |
+| `enabled_categories` | array or `null` | Restrict the scan to these categories; `null` enables all |
+| `strict_mode` | string | `permissive`, `standard`, or `strict` |
+| `performance_mode` | string | `debug`, `standard`, or `optimized` |
+| `exit_on_findings` | bool | Exit non-zero when findings are reported |
+| `max_file_size_mb` | integer | Files above this size are skipped |
+| `binary_file_detection` | bool | Detect and skip binary files |
+| `gitignore_respect` | bool | Honour `.gitignore` (default `true`) |
+| `aegisignore_respect` | bool | Honour `.aegisignore` (default `true`) |
+| `output_format` | string | `human`, `json`, or `sarif` |
+| `timeout_seconds` | integer | Scan timeout; `0` means no timeout |
+| `severity_threshold` | string or `null` | Minimum severity to report |
+
+Unknown keys are ignored; omitted keys fall back to their default.
 
 ### Production Profile
 
-High-security settings for production environments.
+High-security settings for production environments
+(`config/profiles/production.json`):
 
-```toml
-[profile]
-name = "production"
-
-[scanning]
-severity_threshold = "medium"
-confidence_threshold = "medium"
-scan_binaries = true
-scan_hidden = false
-
-[performance]
-workers = 8
-batch_size = 1000
-
-[risk]
-enabled = true
-thresholds.critical = 80
-thresholds.high = 60
-thresholds.medium = 40
+```json
+{
+  "name": "production",
+  "enabled_categories": [
+    "secrets",
+    "pii",
+    "security-hardening",
+    "web-security",
+    "compliance"
+  ],
+  "strict_mode": "strict",
+  "performance_mode": "optimized",
+  "exit_on_findings": true,
+  "max_file_size_mb": 5,
+  "binary_file_detection": true,
+  "gitignore_respect": true,
+  "output_format": "sarif",
+  "timeout_seconds": 60
+}
 ```
 
 ### Pipeline Profile
 
-Optimized for CI/CD pipelines.
+Optimized for CI/CD pipelines (`config/profiles/pipeline.json`):
 
-```toml
-[profile]
-name = "pipeline"
-
-[scanning]
-severity_threshold = "high"
-confidence_threshold = "high"
-scan_binaries = false
-scan_hidden = false
-
-[output]
-format = "sarif"
-fail_on = "high"
-
-[performance]
-workers = 4
-batch_size = 500
+```json
+{
+  "name": "pipeline",
+  "enabled_categories": [
+    "secrets",
+    "pii",
+    "security-hardening",
+    "web-security",
+    "code-quality",
+    "devops",
+    "ai-detection",
+    "supply-chain"
+  ],
+  "strict_mode": "standard",
+  "performance_mode": "optimized",
+  "exit_on_findings": true,
+  "max_file_size_mb": 10,
+  "binary_file_detection": true,
+  "gitignore_respect": true,
+  "output_format": "json",
+  "timeout_seconds": 300
+}
 ```
 
 ### Development Profile
 
-Relaxed settings for local development.
+Relaxed settings for local development
+(`config/profiles/development.json`):
 
-```toml
-[profile]
-name = "development"
-
-[scanning]
-severity_threshold = "low"
-confidence_threshold = "low"
-scan_binaries = true
-scan_hidden = true
-
-[output]
-format = "text"
-verbose = true
-
-[performance]
-workers = 2
-batch_size = 100
+```json
+{
+  "name": "development",
+  "enabled_categories": null,
+  "strict_mode": "standard",
+  "performance_mode": "debug",
+  "exit_on_findings": false,
+  "max_file_size_mb": 50,
+  "binary_file_detection": false,
+  "gitignore_respect": true,
+  "output_format": "human",
+  "timeout_seconds": 0
+}
 ```
 
 ### MCP Integration Profile
 
-Settings for MCP server mode.
+Settings for MCP server mode
+(`config/profiles/mcp-integration.json`):
 
-```toml
-[profile]
-name = "mcp-integration"
-
-[scanning]
-severity_threshold = "low"
-confidence_threshold = "low"
-scan_binaries = false
-scan_hidden = false
-
-[output]
-format = "json"
-verbose = false
-
-[mcp]
-port = 8765
-timeout = 30
+```json
+{
+  "name": "mcp-integration",
+  "enabled_categories": null,
+  "strict_mode": "standard",
+  "performance_mode": "optimized",
+  "exit_on_findings": false,
+  "max_file_size_mb": 10,
+  "binary_file_detection": true,
+  "gitignore_respect": true,
+  "output_format": "json",
+  "timeout_seconds": 30
+}
 ```
 
 ## Ignoring Files
@@ -140,57 +170,45 @@ Semantics:
   is absent.
 - `node_modules/`, `target/`, and `.git/` are always ignored.
 
-Both sources can be toggled independently in configuration:
+Both sources can be toggled independently in a profile:
 `gitignore_respect` and `aegisignore_respect` (both default to `true`;
-the legacy config key `gitignore_atheon_respect` is still accepted for
-the latter).
+the legacy key `gitignore_atheon_respect` is still accepted as an alias
+for the latter).
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AEGIS_CONFIG` | Config file path | - |
-| `AEGIS_PROFILE` | Profile to use | `development` |
-| `AEGIS_BUNDLE_URL` | Pattern bundle URL | official |
-| `AEGIS_WORKERS` | Worker threads | auto |
-| `AEGIS_LOG_LEVEL` | Log level | `info` |
+Aegis reads only these variables; there is no general `AEGIS_CONFIG` or
+`AEGIS_PROFILE` override.
 
-## Risk Scoring Configuration
+| Variable | Description |
+|----------|-------------|
+| `AEGIS_RECEIPT_FILE` | Path a scan writes its receipt to; the file is removed again before a subsequent scan so a failed scan never leaves a stale receipt behind |
+| `AEGIS_DAEMON_SOCKET_PATH` | Socket the daemon listens on |
+| `AEGIS_DAEMON_SCAN_ROOT` | Root directory the daemon restricts scans to |
+| `AEGIS_DAEMON_ALLOWED_UIDS` | Comma-separated UIDs permitted to talk to the daemon |
+| `AEGIS_DAEMON_ALLOWED_GIDS` | Comma-separated GIDs permitted to talk to the daemon |
+| `AEGIS_SOURCE_REVISION` | Source revision stamped into scan receipts (informational only) |
+| `AEGIS_ATHEON_PATH` | Path to an Atheon binary that `aegis benchmark --compare` runs against; when unset, the external comparison is skipped |
 
-```toml
-[risk]
-enabled = true
+## Risk Scoring
 
-[risk.severity_weights]
-critical = 40
-high = 25
-medium = 10
-low = 3
-
-[risk.confidence_weights]
-high = 1.0
-medium = 0.7
-low = 0.4
-
-[risk.density_threshold]
-high = 10    # findings per 1000 lines
-medium = 5
-low = 2
-```
+Risk scoring is not user-configurable. Each finding contributes its
+severity weight — `critical` 40, `high` 25, `medium` 10, `low` 3 —
+multiplied by a confidence factor of `high` 1.0, `medium` 0.7, `low` 0.4.
+The scan reports an overall level and score plus a per-category rollup.
 
 ## Pattern Categories
 
-Categories can be individually enabled/disabled:
+Categories are enabled or disabled in bulk, not individually. Either pass
+a list on the command line:
 
-```toml
-[categories.secrets]
-enabled = true
-severity_override = "high"
-
-[categories.pii]
-enabled = true
-severity_override = null  # use pattern default
-
-[categories.ai-detection]
-enabled = false
+```bash
+aegis scan . --categories secrets,pii
 ```
+
+or set `enabled_categories` in a profile (a JSON array of category
+names, or `null` for all of them). `aegis list --category <name>`
+filters the pattern listing the same way.
+
+There is no per-category `severity_override`: severities are fixed per
+pattern in the registry.

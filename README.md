@@ -19,37 +19,39 @@
 
 **Binary releases (no dependencies):**
 
+Each archive bundles `aegis`, `aegis-mcp`, `aegis-daemon`, and
+`aegis-bundler`.
+
 ```bash
 # Linux x86_64
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf aegis-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+tar -xzf aegis-linux-x86_64.tar.gz
+sudo mv aegis /usr/local/bin/
+
+# Linux ARM64
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-arm64.tar.gz
+tar -xzf aegis-linux-arm64.tar.gz
 sudo mv aegis /usr/local/bin/
 
 # macOS Intel
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-apple-darwin.tar.gz
-tar -xzf aegis-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-x86_64.tar.gz
+tar -xzf aegis-darwin-x86_64.tar.gz
 sudo mv aegis /usr/local/bin/
 
 # macOS Apple Silicon
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-aarch64-apple-darwin.tar.gz
-tar -xzf aegis-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-arm64.tar.gz
+tar -xzf aegis-darwin-arm64.tar.gz
 sudo mv aegis /usr/local/bin/
 
 # Windows
-curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-x86_64-pc-windows-gnu.tar.gz
-tar -xzf aegis-x86_64-pc-windows-gnu.tar.gz
+curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-windows-x86_64.tar.gz
+tar -xzf aegis-windows-x86_64.tar.gz
 ```
 
 **Verify:**
 
 ```bash
 aegis --version
-```
-
-**Install script (Linux/macOS):**
-
-```bash
-curl -sSL https://get.aegis.dev | sh
 ```
 
 For full installation instructions, see [Installation Guide](docs/guides/INSTALLATION.md).
@@ -60,8 +62,9 @@ For full installation instructions, see [Installation Guide](docs/guides/INSTALL
 # Scan a directory
 aegis scan .
 
-# Scan with JSON output
-aegis scan . --format json
+# Scan with JSON output (--format is a global flag, so it precedes the
+# subcommand)
+aegis --format json scan .
 
 # Scan environment variables
 aegis scan --env
@@ -84,7 +87,7 @@ from source; see the full catalog for every rule):
 |----------|----------|-------------|
 | [secrets](docs/patterns/README.md#secrets) | 41 | API keys, tokens, credentials |
 | [pii](docs/patterns/README.md#pii) | 39 | Personal data detection |
-| [security-hardening](docs/patterns/README.md#security-hardening) | 33 | Security best practices |
+| [security-hardening](docs/patterns/README.md#security-hardening) | 32 | Security best practices |
 | [web-security](docs/patterns/README.md#web-security) | 37 | XSS, SQLi, CORS, SSRF |
 | [infrastructure](docs/patterns/README.md#infrastructure) | 55 | Terraform, IaC security |
 | [cloud-native](docs/patterns/README.md#cloud-native) | 38 | Kubernetes, Docker |
@@ -121,11 +124,14 @@ Browse all [633 detection patterns](docs/patterns/README.md).
 ### GitHub Actions
 
 ```yaml
+- name: Install Aegis
+  run: |
+    curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+    tar -xzf aegis-linux-x86_64.tar.gz
+    sudo mv aegis /usr/local/bin/
+
 - name: Security Scan
-  uses: aliasfoxkde/aegis-action@v1
-  with:
-    severity-threshold: high
-    format: sarif
+  run: aegis --format sarif scan . --severity-threshold high
 ```
 
 ### GitLab CI
@@ -133,7 +139,7 @@ Browse all [633 detection patterns](docs/patterns/README.md).
 ```yaml
 security_scan:
   script:
-    - aegis scan . --format json --severity-threshold medium
+    - aegis --format json scan . --severity-threshold medium
   artifacts:
     reports:
       sast: aegis-results.json
@@ -142,10 +148,14 @@ security_scan:
 ### GitHub Actions (Manual)
 
 ```yaml
-- name: Run Aegis
+- name: Install Aegis
   run: |
-    curl -sSL https://get.aegis.dev | sh
-    aegis scan . --format sarif --output results.sarif
+    curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+    tar -xzf aegis-linux-x86_64.tar.gz
+    sudo mv aegis /usr/local/bin/
+
+- name: Run Aegis
+  run: aegis --format sarif scan . --output-file results.sarif
 ```
 
 See the [CI/CD Integration Guide](docs/guides/CICD_INTEGRATION.md) for more examples.
@@ -165,6 +175,7 @@ Available tools:
 - `scan_env` - Scan environment variables
 - `list_patterns` - List all patterns
 - `list_categories` - List all categories
+- `update_bundle` - Check for pattern bundle updates
 
 See the [MCP Guide](docs/guides/MCP.md) for details.
 
@@ -185,19 +196,28 @@ aegis/
 
 ## Contributing Patterns
 
-Patterns are defined as YAML files for easy contribution:
+Patterns are defined as YAML files for easy contribution. A pattern file
+holds a **list** of rules:
 
 ```yaml
 # community/secrets/my-api-key.yaml
-name: my-api-key
-match: '(?i)myapi[_-]?key\s*[:=]\s*["\'][A-Za-z0-9]{16,}'
-severity: high
-confidence: high
-minEntropy: 3.5
-description: 'Detects MyAPI key patterns'
-tags:
-  - secrets
-  - api-key
+- name: my-api-key
+  category: secrets
+  match: '(?i)myapi[_-]?key\s*[:=]\s*["''][A-Za-z0-9]{16,}'
+  enabled: true
+  severity: high
+  confidence: high
+  minEntropy: 3.5
+  description: 'Detects MyAPI key patterns'
+  tags:
+    - secrets
+    - api-key
+```
+
+Build it into a distributable bundle with `aegis-bundler`:
+
+```bash
+cargo run -p aegis-bundler -- community/secrets my.bundle
 ```
 
 See [Adding Patterns](docs/guides/ADDING_PATTERNS.md) for contribution guidelines.

@@ -1,7 +1,12 @@
 //! Metadata patterns
+//!
+//! Editor, OS, and backup residue: `.idea` and `.vscode` configs leak machine names
+//! and plugin state, while `*.bak`, `*.swp`, `.DS_Store`, and `Thumbs.db` files
+//! arrive in a commit by accident.
 
 use crate::Pattern;
 
+/// Editor, OS, and backup artifacts that leak machine detail or are pure noise.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

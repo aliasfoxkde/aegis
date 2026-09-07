@@ -16,17 +16,29 @@ pub const BUNDLE_VERSION: u32 = 2;
 /// Bundle metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundleMetadata {
+    /// Bundle format version this metadata describes; mirrors
+    /// [`Bundle::schema_version`].
     pub version: u32,
+    /// Creation timestamp as reported by the platform clock, formatted as a
+    /// decimal Unix-epoch-seconds string (for example `"1712345678"`).
     pub created_at: String,
+    /// Number of patterns carried by the bundle.
     pub pattern_count: usize,
+    /// Hex-encoded SHA-256 digest of the serialized pattern list, as
+    /// produced by [`Bundle::checksum`].
     pub checksum: String,
 }
 
 /// Bundle format v2
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bundle {
+    /// Format version the bundle was written with. Newly built bundles carry
+    /// [`BUNDLE_VERSION`]; anything else fails [`Bundle::validate`].
     pub schema_version: u32,
+    /// Creation timestamp as a decimal Unix-epoch-seconds string; empty for
+    /// [`Bundle::default`].
     pub created_at: String,
+    /// Pattern definitions shipped in this bundle, in file order.
     pub patterns: Vec<PatternDefinition>,
 }
 
@@ -206,30 +218,49 @@ fn chrono_now() -> String {
 /// Bundle error types
 #[derive(Debug, Error)]
 pub enum BundleError {
+    /// Reading or writing the bundle file failed; the offending
+    /// [`std::io::Error`] is carried as the source.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
+    /// The input is not a valid gzip stream, or decoding it was cut short.
+    /// The message comes from the decompressor.
     #[error("Failed to decompress bundle: {0}")]
     DecompressError(String),
 
+    /// The decompressed payload is not a JSON document matching the bundle
+    /// schema. The [`serde_json::Error`] is carried as the source.
     #[error("Failed to parse bundle: {0}")]
     ParseError(#[from] serde_json::Error),
 
+    /// The bundle could not be turned into JSON, or the gzip encoder could
+    /// not be flushed. Serialization is infallible for in-memory bundles, so
+    /// this usually signals an encoder failure.
     #[error("Failed to serialize bundle")]
     SerializeError(String),
 
+    /// [`Bundle::validate`] rejected a bundle whose schema version differs
+    /// from [`BUNDLE_VERSION`]; the offending version is reported.
     #[error("Invalid bundle version: {0}")]
     InvalidVersion(u32),
 
+    /// [`Bundle::validate`] found two patterns with the same name; the
+    /// duplicated name is reported.
     #[error("Duplicate pattern: {0}")]
     DuplicatePattern(String),
 
+    /// [`Bundle::validate`] found a pattern whose `match_pattern` is empty;
+    /// the pattern name is reported.
     #[error("Invalid pattern: {0}")]
     InvalidPattern(String),
 
+    /// [`Bundle::validate`] found a pattern whose `match_pattern` is not a
+    /// compilable regular expression; the pattern name is reported.
     #[error("Invalid regex in pattern: {0}")]
     InvalidRegex(String),
 
+    /// A recomputed digest did not match the recorded one. Not produced by
+    /// the current loader or validator; retained for bundle verifiers.
     #[error("Checksum mismatch")]
     ChecksumMismatch,
 }

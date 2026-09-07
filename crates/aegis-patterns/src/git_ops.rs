@@ -1,7 +1,11 @@
 //! GitOps patterns - git operations security and safety
+//!
+//! Dangerous git invocations in scripts and pipeline files: force pushes,
+//! credentials embedded in remote URLs, and deletes aimed at protected branches.
 
 use crate::Pattern;
 
+/// Dangerous git operations in scripts and pipelines: force push, leaked credentials.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

@@ -3,14 +3,24 @@
 use serde::{Deserialize, Serialize};
 
 /// Risk level enumeration
+///
+/// Severity tiers ordered from least to most severe: the derived [`Ord`] makes
+/// `None < Low < Medium < High < Critical`, so levels compare and sort
+/// directly. Parsing is case-insensitive and accepts the lowercase name, plus
+/// the `med` and `crit` aliases; anything else is rejected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RiskLevel {
+    /// Nothing flagged: a risk score of exactly zero.
     #[default]
     None,
+    /// Minor issues; any non-zero score below 20.
     Low,
+    /// Moderate issues worth reviewing; scores from 20 through 49.
     Medium,
+    /// Significant issues needing prompt attention; scores from 50 through 99.
     High,
+    /// Immediate action required; scores of 100 and above.
     Critical,
 }
 

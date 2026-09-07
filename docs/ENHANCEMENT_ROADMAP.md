@@ -90,7 +90,10 @@ the shipped work:
 ### Medium Priority
 
 #### 5. Tree-sitter Integration
-- **What**: Add tree-sitter for multi-language AST parsing
+- **What**: Deepen the existing optional `tree-sitter` feature (Go, Rust,
+  Python, JavaScript, TypeScript grammars are already wired behind
+  `--features tree-sitter`) so AST rules can carry findings, not just
+  metrics
 - **Why**: Enables language-aware scanning beyond regex
 - **Effort**: Medium (3-5 weeks)
 - **References**: YASA, CodeSentinel papers
@@ -110,7 +113,8 @@ the shipped work:
 ### Lower Priority
 
 #### 10. Additional Output Formats
-- **What**: JUnit, CSV, SPDX SBOM output
+- **What**: JUnit output (CSV file output and SPDX/CycloneDX SBOM are
+  already shipped — see `aegis-core::output::file` and `aegis-core::sbom`)
 - **Why**: Better CI/CD integration
 - **Effort**: Low (1 week)
 - **References**: Gitleaks multi-format support
@@ -135,9 +139,11 @@ the shipped work:
 ## Implementation Notes
 
 ### Tree-sitter Integration Path
-1. Add `tree-sitter` and `tree-sitter-languages` crates
-2. Create AST-based scanner wrapper
-3. Implement language-specific query patterns
+1. ~~Add `tree-sitter` and language grammar crates~~ — done: the optional
+   `tree-sitter` feature pulls `tree-sitter-go/-rust/-python/-javascript/-typescript`
+2. ~~Create AST-based scanner wrapper~~ — done: `aegis-core::ast` wraps the
+   grammars and also ships a regex-free fallback analyzer
+3. Implement language-specific query patterns that produce findings
 4. Add WASM support via tree-sitter's wasm runtime
 
 ### Hybrid Detection Path
@@ -173,16 +179,23 @@ the shipped work:
 
 Tracked as standing work alongside features:
 
-- **Coverage gate**: measure with `cargo llvm-cov`, then pin a real
-  threshold in `codecov.yml` instead of an aspirational one
-- **Benchmarks**: criterion suite for the pattern-matching hot path
-  (per-extension scanner dispatch) to catch regressions before release
-- **Fuzzing**: cargo-fuzz targets for the ignore/glob compiler, the
-  `.aegis.yml` pattern compiler, and the YAML/JSON config loaders
-- **Corpus precision/recall harness**: vulnerable + clean fixtures with
-  expected findings, failing CI when precision drops
-- **Crates.io publishing**: `cargo publish` for the library crates in
-  the release workflow (needs an `CARGO_REGISTRY_TOKEN` secret; the
+- **Coverage gate**: shipped — `cargo llvm-cov --workspace` runs in CI and
+  `codecov.yml` pins real thresholds (90% project / 85% patch); measured
+  97.24% lines, so the gate can be raised as coverage rises
+- **Benchmarks**: shipped — criterion suite for the pattern-matching hot
+  path and for scanner init (`crates/aegis-core/benches/`)
+- **Fuzzing**: shipped — four cargo-fuzz targets for the suppression
+  parser, the ignore/glob compiler, the baseline parser, and the
+  `.aegis.yml` pattern compiler, run weekly
+- **Corpus precision/recall harness**: shipped — labelled vulnerable +
+  clean fixtures with expected findings, failing CI when precision drops
+  (`crates/aegis-core/tests/corpus_precision_recall.rs`)
+- **Rule-liveness proof**: shipped — every shipped rule has a provably
+  firing example (`crates/aegis-core/tests/pattern_liveness.rs`)
+- **Strict lints**: shipped — workspace `[lints]` with pedantic +
+  `missing_docs`, `-D warnings` in CI
+- **Crates.io publishing**: open — `cargo publish` for the library crates
+  in the release workflow (needs a `CARGO_REGISTRY_TOKEN` secret; the
   workspace version source is already single-sourced for this)
 
 ---
@@ -203,9 +216,10 @@ testing and are out of scope by design.
 
 Current channels:
 
-- **GitHub Releases**: signed-off binaries for linux-amd64,
-  linux-arm64, macOS x86_64/arm64, Windows, plus `aegis_wasm.wasm`,
-  published by `.github/workflows/release.yml` on `v*` tags
+- **GitHub Releases**: checksummed binaries (SHA-256 `checksums.txt` per
+  platform) for linux-amd64, linux-arm64, macOS x86_64/arm64, Windows,
+  plus `aegis_wasm.wasm`, published by `.github/workflows/release.yml` on
+  `v*` tags — 9 assets in total
 - **From source**: `cargo install --path crates/aegis-cli` or the
   workspace build; MSRV 1.75
 - **MCP / daemon**: `aegis-mcp` and `aegis-daemon` binaries ship in the
@@ -213,5 +227,5 @@ Current channels:
 
 ---
 
-*Last Updated: 2026-09-06*
+*Last Updated: 2026-09-07*
 *Maintained by: Aegis Team*

@@ -1,7 +1,11 @@
 //! ARM/Azure patterns
+//!
+//! Two hardening checks for JSON ARM templates: a SQL firewall opened to every
+//! address and a storage account still serving plain HTTP.
 
 use crate::Pattern;
 
+/// ARM template hardening: permissive Azure SQL firewall and plain-HTTP storage.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

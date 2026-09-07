@@ -34,6 +34,7 @@ fn style_extensions() -> Vec<String> {
     ]
 }
 
+/// WCAG rules for HTML, JSX, and stylesheet files; every rule is extension-scoped.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![

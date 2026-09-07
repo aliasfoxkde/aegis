@@ -5,6 +5,9 @@ use super::{
     UpdateResponse,
 };
 
+/// Stateless tool entry points that take the [`ServerState`] explicitly
+/// instead of holding a reference, so tests and future tool-call dispatch can
+/// drive them without going through the JSON-RPC layer.
 #[allow(dead_code)]
 pub struct AegisTools;
 

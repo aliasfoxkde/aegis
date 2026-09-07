@@ -22,9 +22,13 @@ use crate::entropy::shannon_entropy;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    /// Highest weight (40): an exposed credential or immediately exploitable issue.
     Critical,
+    /// Weight 25: a real vulnerability that needs no exposed secret to matter.
     High,
+    /// Weight 10: a hygiene problem worth fixing but rarely urgent.
     Medium,
+    /// Weight 3: style and cleanliness findings that survive triage.
     Low,
 }
 
@@ -68,8 +72,11 @@ impl fmt::Display for Severity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
+    /// Multiplier 1.0: the shape alone identifies the issue reliably.
     High,
+    /// Multiplier 0.7: shape is suggestive but can flag legitimate code.
     Medium,
+    /// Multiplier 0.4: heuristic; treat hits as a signal to review, not a verdict.
     Low,
 }
 
@@ -109,8 +116,13 @@ impl fmt::Display for Confidence {
 /// Category of a pattern
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Category {
+    /// Registry key patterns are grouped under and selected by via
+    /// `--categories`; must match the category string on each pattern.
     pub name: String,
+    /// Human-readable summary shown in listings and reports.
     pub description: String,
+    /// Risk multiplier applied to every finding in this category (1.0 is
+    /// neutral; `secrets` scores 1.5, `performance` 0.6).
     pub weight: f64,
 }
 
@@ -578,9 +590,15 @@ impl CategoryScanner {
 /// A single pattern match
 #[derive(Debug, Clone)]
 pub struct PatternMatch<'a> {
+    /// Byte offset of the first byte of the match within the scanned content.
     pub start: usize,
+    /// Byte offset one past the last byte of the match; `end - start` is the
+    /// match length in bytes, so the span is always valid for slicing.
     pub end: usize,
+    /// The matched source text, borrowed from the scanned content.
     pub matched_text: &'a str,
+    /// Capture group texts in declaration order, skipping group 0 (the whole
+    /// match). `None` marks a group that did not participate in this match.
     pub groups: Vec<Option<&'a str>>,
 }
 
@@ -589,29 +607,44 @@ pub struct PatternMatch<'a> {
 pub struct AttributedMatch<'a> {
     /// Index into the category scanner's pattern list
     pub pattern_index: usize,
+    /// The pattern whose regex produced this hit; borrows from the scanner
+    /// that yielded the match, so it stays valid while the scanner does.
     pub pattern: &'a Pattern,
+    /// Byte offset of the first byte of the match within the scanned content.
     pub start: usize,
+    /// Byte offset one past the last byte of the match.
     pub end: usize,
+    /// The matched source text, borrowed from the scanned content.
     pub matched_text: &'a str,
+    /// Capture group texts in declaration order, skipping group 0. `None`
+    /// marks a group that did not participate in this match.
     pub groups: Vec<Option<&'a str>>,
 }
 
 /// Pattern error types
 #[derive(Debug, thiserror::Error)]
 pub enum PatternError {
+    /// A match or exclude pattern failed to compile as a Rust `regex` syntax.
     #[error("Invalid regex pattern: {0}")]
     InvalidRegex(String),
+    /// A lookup by name found no registered pattern with that name.
     #[error("Pattern not found: {0}")]
     NotFound(String),
+    /// A registration attempted to reuse the unique name of an existing
+    /// pattern.
     #[error("Duplicate pattern: {0}")]
     Duplicate(String),
+    /// A category filter named categories that no registered pattern uses;
+    /// carrying the accepted list lets the caller suggest a correction.
     #[error(
         "Unknown categories: {}. Valid categories: {}",
         unknown.join(", "),
         valid.join(", ")
     )]
     UnknownCategories {
+        /// Category names from the request that matched no registered pattern.
         unknown: Vec<String>,
+        /// Sorted, deduplicated category names present in the registry.
         valid: Vec<String>,
     },
 }

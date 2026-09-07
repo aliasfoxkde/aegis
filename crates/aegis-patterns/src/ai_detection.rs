@@ -1,7 +1,12 @@
 //! AI detection patterns - identifying AI-generated content
+//!
+//! Every rule here is low severity and mostly low confidence: the shapes involved
+//! (placeholder text, chat-transcript artifacts, repetitive structure) suggest
+//! generated code without proving it.
 
 use crate::Pattern;
 
+/// Signals of AI-generated code; all low severity, most low confidence.
 #[must_use]
 pub fn get() -> Vec<Pattern> {
     vec![
