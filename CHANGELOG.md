@@ -9,6 +9,15 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- Six research-grounded AI-writing markers in `ai-detection` (assistant-conversation
+  remnants, formulaic verbs, marketing vocabulary, hedging boilerplate, academic
+  phrasing, emoji-led Markdown headings), informed by the detector-ablation
+  literature; the category page now states explicitly that these are triage
+  signals rather than verdicts, since formulaic human writing triggers them and
+  paraphrasing defeats them. 633 → 639 patterns.
+- `scripts/generate_examples.py` now emits the lint attributes on the generated
+  `example_for` lookup, so regenerating liveness examples no longer produces a
+  file that fails `clippy -D warnings`.
 - Hierarchical pattern catalog under `docs/patterns/`: a high-level index
   (scoring, scoping, severity distribution) linking one generated page per
   category with every pattern's regex, metadata, and liveness-verified

@@ -3,6 +3,15 @@
 //! Every rule here is low severity and mostly low confidence: the shapes involved
 //! (placeholder text, chat-transcript artifacts, repetitive structure) suggest
 //! generated code without proving it.
+//!
+//! Treat findings as triage signals, never verdicts. The lexical markers below
+//! are the same "superficial statistical cues" the literature shows are
+//! brittle: formulaic human writing triggers them, and paraphrasing defeats
+//! them (Zhang & Zhou 2026, <https://www.nature.com/articles/s41598-026-35203-3>,
+//! measured recall dropping 99.8% → 70.4% under moderate paraphrasing).
+//! Likelihood-based detectors (DetectGPT, Binoculars, Fast-DetectGPT) that
+//! don't share this weakness need token probabilities, which a static
+//! scanner does not have.
 
 use crate::Pattern;
 
@@ -368,6 +377,102 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
             exclude: None,
             file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-assistant-prelude".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: r"(?i)(here(?:'s| is) (?:the|your) (?:updated|revised|corrected|improved|complete) (?:version|code|implementation|file)|i hope this helps|let me know if you (?:have any|need any|want any|face any|run into any))".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "medium".to_string(),
+            min_entropy: None,
+            description: "AI assistant conversation remnant pasted into a file".to_string(),
+            reference: None,
+            tags: vec!["ai".to_string(), "language".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-formulaic-verb".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: r"(?i)(?://|#|/\*|\*|<!--).*\b(?:leverages?|utilizes?|delves?|showcases?|underscores?)\b.*".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "Formulaic AI-preferred verb in a comment (informative signal, not proof)".to_string(),
+            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            tags: vec!["ai".to_string(), "language".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-marketing-slop".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: r"(?i)\b(?:seamlessly|state-of-the-art|cutting-edge|game-?changer|blazing(?:ly)? fast|robust solution|comprehensive suite|unlock the (?:full )?potential|elevate your)\b".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "Marketing boilerplate vocabulary common in AI-written prose (also common in human marketing copy)".to_string(),
+            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            tags: vec!["ai".to_string(), "language".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-hedge-boilerplate".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: r"(?i)\b(?:please note that|it'?s worth noting that|it is important to note(?: that)?|keep in mind that|kindly (?:note|be advised))\b".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "Hedging boilerplate characteristic of AI-written explanations".to_string(),
+            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            tags: vec!["ai".to_string(), "language".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-formulaic-academic".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: r"(?i)\b(?:novel (?:approach|method|framework|solution)|addresses? the (?:challenge|problem) of|in conclusion)\b".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "Academic formulaic phrasing in code or docs (informative signal, not proof)".to_string(),
+            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            tags: vec!["ai".to_string(), "language".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: Vec::new(),
+        },
+        Pattern {
+            name: "ai-emoji-header".to_string(),
+            category: "ai-detection".to_string(),
+            match_pattern: "(?m)^#+\\s*[\u{1f680}\u{2728}\u{1f3af}\u{1f4a1}\u{1f525}\u{2705}⚡]".to_string(),
+            enabled: true,
+            severity: "low".to_string(),
+            confidence: "low".to_string(),
+            min_entropy: None,
+            description: "Emoji-led Markdown heading, a common AI-generated README signature".to_string(),
+            reference: None,
+            tags: vec!["ai".to_string(), "markdown".to_string()],
+            env_var: false,
+            binary: false,
+            exclude: None,
+            file_extensions: vec!["md".to_string(), "markdown".to_string(), "mdx".to_string()],
         },
     ]
 }

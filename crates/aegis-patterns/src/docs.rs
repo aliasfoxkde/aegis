@@ -360,7 +360,9 @@ fn redact_token_runs(example: &str) -> Option<String> {
 fn category_description(category: &str) -> &'static str {
     match category {
         "accessibility" => "WCAG 2.x success criteria for markup, media, and styles",
-        "ai-detection" => "Heuristics that flag likely AI-generated code",
+        "ai-detection" => {
+            "Informative markers of likely AI-generated code — triage signals, not verdicts"
+        }
         "ai-safety" => "Agentic and LLM application safety checks",
         "api-integration" => "HTTP client and webhook integration mistakes",
         "arm" => "Azure Resource Manager template issues",
