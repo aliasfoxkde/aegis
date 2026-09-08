@@ -25,7 +25,7 @@ pub struct Pattern {
     pub exclude: Option<String>,  // Suppress finding when this regex hits the matched span
     pub file_extensions: Vec<String>, // Scope to extensions; empty = all files
     pub enabled: bool,
-    pub severity: String,         // critical | high | medium | low
+    pub severity: String,         // critical | high | medium | low | info
     pub confidence: String,       // high | medium | low
     pub min_entropy: Option<f64>, // Shannon entropy floor for secrets
     pub description: String,
@@ -195,7 +195,7 @@ Enforced by the hygiene test suite (`registry_hygiene.rs`):
 4. `name` and `category` must be kebab-case
 5. Every category must round-trip through `by_category()` with no
    orphaned patterns
-6. `severity` must be one of: critical, high, medium, low
+6. `severity` must be one of: critical, high, medium, low, info
 7. `confidence` must be one of: high, medium, low
 8. `min_entropy` must be between 0.0 and 8.0
 9. `reference`, when present, must be an absolute https URL with a host

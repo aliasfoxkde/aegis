@@ -20,7 +20,7 @@ aegis scan [path] [options]
 | `--stdin` | Read the payload to scan from stdin; findings carry the source label `stdin` | `false` |
 | `--follow-symlinks` | Follow symbolic links | `false` |
 | `--categories` | Comma-separated category list to include | all |
-| `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` | all |
+| `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` (`info` observations sit below every threshold and never fail the exit code) | all |
 | `--output-file` | Also write results to this file, rendered in the selected `--format`; stdout output is unaffected | none |
 | `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only. The baseline file itself is excluded from the scan, so it can live inside the scanned tree | none |
 | `--diff` | Scan only the changed lines of a unified diff file | none |
@@ -156,7 +156,7 @@ descriptive error rather than silently skipping a rule.
 patterns:
   - name: internal-token
     category: secrets          # optional, default: custom
-    severity: high             # required: critical | high | medium | low
+    severity: high             # required: critical | high | medium | low | info
     match: 'INTT_[A-Za-z0-9]{24,}'
     exclude: 'INTT_EXAMPLE'    # optional: suppress matching spans
     description: Internal service token committed to source
@@ -170,7 +170,7 @@ patterns:
 | Field | Required | Notes |
 |-------|----------|-------|
 | `name` | yes | Unique; the rule id shown in findings, suppressions, and baselines |
-| `severity` | yes | `critical`, `high`, `medium`, or `low` |
+| `severity` | yes | `critical`, `high`, `medium`, `low`, or `info` |
 | `match` | yes | Regex (Rust `regex` crate syntax) |
 | `description` | yes | Shown with every finding |
 | `category` | no | Defaults to `custom`; unknown categories use a neutral risk weight |

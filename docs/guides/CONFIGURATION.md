@@ -197,7 +197,8 @@ Aegis reads only these variables; there is no general `AEGIS_CONFIG` or
 ## Risk Scoring
 
 Risk scoring is not user-configurable. Each finding contributes its
-severity weight — `critical` 40, `high` 25, `medium` 10, `low` 3 —
+severity weight — `critical` 40, `high` 25, `medium` 10, `low` 3,
+`info` 0 —
 multiplied by a confidence factor of `high` 1.0, `medium` 0.7, `low` 0.4.
 The scan reports an overall level and score plus a per-category rollup.
 

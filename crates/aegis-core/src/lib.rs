@@ -21,6 +21,7 @@
 //! let findings = scanner.scan_string("AKIAIOSFODNN7EXAMPLE", "test.rs"); // aegis:ignore:aws-access-key
 //! ```
 
+pub mod anomalies;
 pub mod ast;
 pub mod benchmark;
 pub mod bundle;

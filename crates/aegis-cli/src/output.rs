@@ -280,7 +280,7 @@ pub(crate) fn severity_to_sarif_level(severity: &str) -> String {
     match severity {
         "critical" | "high" => "error".to_string(),
         "medium" => "warning".to_string(),
-        "low" => "note".to_string(),
+        "low" | "info" => "note".to_string(),
         _ => "none".to_string(),
     }
 }
@@ -342,6 +342,7 @@ pub fn format_patterns(enabled: bool, disabled: bool, category: Option<&str>) ->
             Some(Severity::High) => "\x1b[33mHIGH\x1b[0m",
             Some(Severity::Medium) => "\x1b[35mMEDIUM\x1b[0m",
             Some(Severity::Low) => "\x1b[36mLOW\x1b[0m",
+            Some(Severity::Info) => "\x1b[2mINFO\x1b[0m",
             None => &p.severity,
         };
         let _ = writeln!(

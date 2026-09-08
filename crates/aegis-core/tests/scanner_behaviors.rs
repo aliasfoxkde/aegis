@@ -137,3 +137,142 @@ fn unreadable_directory_entries_are_ledgered_as_failed() {
         .iter()
         .any(|unit| { unit.status == InspectionStatus::Failed && unit.reason.is_some() }));
 }
+
+// ---------------------------------------------------------------------------
+// Statistical anomaly post-pass
+// ---------------------------------------------------------------------------
+
+/// A quiet code file: near-zero comment share, healthy identifier variety.
+fn uniform_file(index: usize) -> String {
+    let mut lines = vec![format!("// routine module number {index}")];
+    for n in 0..99_u32 {
+        lines.push(format!("let value_{n}_{index} = {n} * {index};"));
+    }
+    lines.join("\n") + "\n"
+}
+
+/// A file that narrates almost everything: the comment-ratio outlier shape.
+fn narrated_file() -> String {
+    let mut lines = Vec::new();
+    for n in 0..95_u32 {
+        lines.push(format!("// step {n}: restate the arithmetic in prose"));
+    }
+    for n in 0..5_u32 {
+        lines.push(format!("let value_{n} = {n} + 1;"));
+    }
+    lines.join("\n") + "\n"
+}
+
+/// Ten quiet files plus one heavily narrated outlier.
+fn anomaly_fixture() -> TempDir {
+    let temp = TempDir::new().unwrap();
+    let src = temp.path().join("src");
+    std::fs::create_dir(&src).unwrap();
+    for index in 0..10 {
+        std::fs::write(src.join(format!("unit_{index}.rs")), uniform_file(index)).unwrap();
+    }
+    std::fs::write(src.join("narrated.rs"), narrated_file()).unwrap();
+    temp
+}
+
+fn statistical(findings: &[aegis_core::Finding]) -> Vec<&aegis_core::Finding> {
+    findings
+        .iter()
+        .filter(|f| f.category == "statistical-anomaly")
+        .collect()
+}
+
+#[test]
+fn statistical_anomalies_are_reported_as_info_findings() {
+    let temp = anomaly_fixture();
+    let scanner = bundled_scanner();
+
+    let (findings, stats) = scanner.scan_dir(temp.path()).unwrap();
+    let anomalies = statistical(&findings);
+
+    assert!(
+        anomalies.iter().any(
+            |f| f.pattern == "comment-ratio-outlier" && f.location.file.contains("narrated.rs")
+        ),
+        "the narrated file must be flagged as a comment-ratio outlier, got: {:?}",
+        anomalies
+            .iter()
+            .map(|f| f.pattern.clone())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        anomalies
+            .iter()
+            .all(|f| f.severity == "info" && f.confidence == "low"),
+        "anomaly observations are informational, not verdicts"
+    );
+    assert!(
+        stats.findings_by_severity.get("info").copied().unwrap_or(0) >= 1,
+        "info observations must be reflected in the stats aggregate"
+    );
+}
+
+#[test]
+fn repeated_scans_do_not_duplicate_anomaly_observations() {
+    // The metrics sink must be per-walk: leftover metrics from a previous
+    // run would otherwise skew every later scan of the same scanner.
+    let temp = anomaly_fixture();
+    let scanner = bundled_scanner();
+
+    let (first, _) = scanner.scan_dir(temp.path()).unwrap();
+    let (second, _) = scanner.scan_dir(temp.path()).unwrap();
+
+    assert_eq!(statistical(&first).len(), statistical(&second).len());
+    assert!(
+        !statistical(&second).is_empty(),
+        "a fresh scan must still observe the same outliers"
+    );
+}
+
+#[test]
+fn severity_threshold_suppresses_info_observations() {
+    let temp = anomaly_fixture();
+    let definitions = aegis_patterns::all_patterns()
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let scanner = Scanner::from_definitions(definitions)
+        .unwrap()
+        .with_options(ScanOptions {
+            severity_threshold: Some("low".to_string()),
+            ..ScanOptions::default()
+        });
+
+    let (findings, _) = scanner.scan_dir(temp.path()).unwrap();
+    assert!(
+        statistical(&findings).is_empty(),
+        "a low-severity threshold excludes weight-zero info observations"
+    );
+}
+
+#[test]
+fn single_file_scans_never_emit_or_leak_anomaly_observations() {
+    // Anomalies are repository-shape observations: a lone file has no
+    // baseline to deviate from, and its metrics must not pollute the next
+    // directory walk performed with the same scanner.
+    let dir_temp = TempDir::new().unwrap();
+    let src = dir_temp.path().join("src");
+    std::fs::create_dir(&src).unwrap();
+    for index in 0..10 {
+        std::fs::write(src.join(format!("unit_{index}.rs")), uniform_file(index)).unwrap();
+    }
+
+    let single_temp = TempDir::new().unwrap();
+    let lone = single_temp.path().join("narrated.rs");
+    std::fs::write(&lone, narrated_file()).unwrap();
+
+    let scanner = bundled_scanner();
+    let (single_findings, _) = scanner.scan_file(&lone).unwrap();
+    assert!(statistical(&single_findings).is_empty());
+
+    let (dir_findings, _) = scanner.scan_dir(&src).unwrap();
+    assert!(
+        statistical(&dir_findings).is_empty(),
+        "stale single-file metrics must not seed the next walk's statistics"
+    );
+}

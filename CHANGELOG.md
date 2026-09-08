@@ -9,6 +9,23 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- Statistical anomaly layer in the engine: directory scans now collect
+  per-file metrics (line counts, comment share under a line-prefix
+  heuristic, identifier diversity) and emit `Severity::Info` findings in
+  the new `statistical-anomaly` category for files far outside their own
+  repository's baseline — `comment-ratio-outlier` (z > 2.5), Pareto-style
+  `comment-concentration` (one file holding ≥ 60% of repo commentary),
+  `identifier-diversity-outlier` (heavy token reuse below 0.2 diversity),
+  and `file-size-outlier` (z > 2.5). Each detector reports only its most
+  extreme file; prose, dotfiles, lockfiles, and minified bundles are
+  excluded. Grounded in the detection-brittleness literature, the
+  observations are triage signals, not verdicts.
+- `Severity::Info` across the engine: weight 0 in risk scoring, `info`
+  accepted by `Severity::parse` and custom `.aegis.yml` patterns, an INFO
+  label in text output, SARIF `note` level, and exclusion from the exit
+  code — informational findings are reported in every format but can
+  never fail a CI run. They also respect category, severity-threshold,
+  and baseline filters like every other finding.
 - Seven money-correctness rules in `finance`, which previously only held
   PII/credential detectors: money in binary floating-point fields,
   `toFixed` currency rounding, `Math.round` on money, exact-equality
