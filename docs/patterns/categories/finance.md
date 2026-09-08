@@ -2,7 +2,7 @@
 
 Financial data handling rules
 
-**6 patterns** in this category. Return to the
+**13 patterns** in this category. Return to the
 [pattern index](../README.md) for the other categories and scoring
 reference.
 
@@ -12,8 +12,15 @@ reference.
 |----------|----------|------------|-------------|
 | [`aba-routing-number`](#aba-routing-number) | medium | high | ABA routing number detected |
 | [`ethereum-address`](#ethereum-address) | medium | high | Ethereum address detected |
+| [`finance-balance-read-modify-write`](#finance-balance-read-modify-write) | high | medium | Balance updated by read-modify-write; concurrent updates can lose money without locking |
 | [`finance-bitcoin-address`](#finance-bitcoin-address) | medium | high | Bitcoin address detected |
+| [`finance-float-equality`](#finance-float-equality) | medium | high | Money compared for exact equality; float residue makes this unreliable |
+| [`finance-float-money-field`](#finance-float-money-field) | high | medium | Money held in a binary floating-point field; IEEE 754 cannot represent decimal currency exactly |
 | [`finance-iban`](#finance-iban) | medium | high | IBAN (International Bank Account Number) detected |
+| [`finance-math-round-money`](#finance-math-round-money) | medium | low | Math.round applied to a money value; banker's-rounding expectations differ |
+| [`finance-naive-settlement-now`](#finance-naive-settlement-now) | medium | low | Settlement or expiry timestamp taken from wall-clock now(); timezone and reproducibility hazard |
+| [`finance-parsefloat-money`](#finance-parsefloat-money) | medium | low | Money parsed through parseFloat, inheriting binary float error |
+| [`finance-tofixed-currency`](#finance-tofixed-currency) | medium | high | toFixed used for currency rounding; binary rounding still applies beneath the formatting |
 | [`stripe-publishable-key`](#stripe-publishable-key) | medium | high | Stripe publishable key detected |
 | [`swift-bic`](#swift-bic) | medium | high | SWIFT/BIC code detected |
 
@@ -77,6 +84,31 @@ token-shaped runs are elided here — the exact input is compiled into
 0x85Bfb4…EF
 ```
 
+### finance-balance-read-modify-write
+
+Balance updated by read-modify-write; concurrent updates can lose money without locking
+
+| Field | Value |
+|-------|-------|
+| Severity | `high` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `concurrency` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:balance|available)\s*:?=\s*(?:\w+\.)?(?:balance|available)\s*[-+*].*
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+balance = balance - amount
+```
+
 ### finance-bitcoin-address
 
 Bitcoin address detected
@@ -107,6 +139,64 @@ token-shaped runs are elided here — the exact input is compiled into
 bc1SGuZy…AT
 ```
 
+### finance-float-equality
+
+Money compared for exact equality; float residue makes this unreliable
+
+| Field | Value |
+|-------|-------|
+| Severity | `medium` |
+| Confidence | `high` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `correctness` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:price|amount|total|balance)\w*\s*(?:===|==)\s*[-+]?\d.*
+```
+
+**Exclude pattern** — a match span that also matches this
+regex is suppressed:
+
+```regex
+(?i)(?:_count|_findings|_items|_rows|_lines|_files|_records|_pages|_matches|_size|_length|_number|_num)\b
+```
+**Input that fires** (verified by the liveness test):
+
+```text
+balance == 0.0
+```
+
+### finance-float-money-field
+
+Money held in a binary floating-point field; IEEE 754 cannot represent decimal currency exactly
+
+| Field | Value |
+|-------|-------|
+| Severity | `high` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `correctness` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:double|float)\s+(?:price|amount|balance|total|cost|fee|subtotal|salary|payment)s?\b|(?:price|amount|balance|total|cost|fee)s?\s*:\s*float\b
+```
+
+**Reference**: <https://martinfowler.com/articles/quantity.html>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+double prices
+```
+
 ### finance-iban
 
 IBAN (International Bank Account Number) detected
@@ -135,6 +225,110 @@ token-shaped runs are elided here — the exact input is compiled into
 
 ```text
 WF73JAC3…84
+```
+
+### finance-math-round-money
+
+Math.round applied to a money value; banker's-rounding expectations differ
+
+| Field | Value |
+|-------|-------|
+| Severity | `medium` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `rounding` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)Math\.round\s*\([^)]*(?:price|amount|total|balance|cost|fee|cent).*
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+Math.round(totalAmount * 100) / 100
+```
+
+### finance-naive-settlement-now
+
+Settlement or expiry timestamp taken from wall-clock now(); timezone and reproducibility hazard
+
+| Field | Value |
+|-------|-------|
+| Severity | `medium` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `time` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:settlement|maturity|expiry|expires_at|effective)\w*\s*:?=\s*(?:new\s+Date\s*\(\s*\)|datetime\.now\s*\(\s*\)|Date\.now\s*\(\s*\)|LocalDate\.now\s*\(\s*\)).*
+```
+
+**Input that fires** (verified by the liveness test; long
+token-shaped runs are elided here — the exact input is compiled into
+`crates/aegis-patterns/src/examples.rs`):
+
+```text
+settleme…te := datetime.now()
+```
+
+### finance-parsefloat-money
+
+Money parsed through parseFloat, inheriting binary float error
+
+| Field | Value |
+|-------|-------|
+| Severity | `medium` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `parsing` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)parseFloat\s*\([^)]*(?:price|amount|total|balance|cost|fee).*
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+parseFloat(amountStr)
+```
+
+### finance-tofixed-currency
+
+toFixed used for currency rounding; binary rounding still applies beneath the formatting
+
+| Field | Value |
+|-------|-------|
+| Severity | `medium` |
+| Confidence | `high` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `finance`, `correctness` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\.toFixed\s*\(\s*[0-2]\s*\)
+```
+
+**Reference**: <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/toFixed>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+.toFixed ( 1 )
 ```
 
 ### stripe-publishable-key

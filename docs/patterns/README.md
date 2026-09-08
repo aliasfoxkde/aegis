@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis ships **653 detection patterns** across **34 categories**.
+Aegis ships **660 detection patterns** across **34 categories**.
 Every pattern is compiled into every Aegis surface (CLI, MCP server,
 daemon, WASM) from the source in `crates/aegis-patterns/src/`.
 
@@ -40,8 +40,8 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | Severity | Patterns |
 |----------|----------|
 | critical | 68 |
-| high | 139 |
-| medium | 177 |
+| high | 141 |
+| medium | 182 |
 | low | 269 |
 
 ## Categories
@@ -61,7 +61,7 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | [cryptography](./categories/cryptography.md) | 10 | Cryptographic primitive misuse: weak hashes, broken modes, predictable key material |
 | [data-visualization](./categories/data-visualization.md) | 5 | Charting and visualization pitfalls |
 | [devops](./categories/devops.md) | 15 | CI/CD pipeline and deployment checks |
-| [finance](./categories/finance.md) | 6 | Financial data handling rules |
+| [finance](./categories/finance.md) | 13 | Financial data handling rules |
 | [frameworks](./categories/frameworks.md) | 31 | Web framework-specific issues |
 | [git-hygiene](./categories/git-hygiene.md) | 28 | Repository hygiene: artifacts, debug files, history |
 | [git-ops](./categories/git-ops.md) | 3 | GitOps workflow and manifest checks |
