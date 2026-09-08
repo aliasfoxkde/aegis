@@ -2,7 +2,7 @@
 
 Informative markers of likely AI-generated code — triage signals, not verdicts
 
-**28 patterns** in this category. Return to the
+**33 patterns** in this category. Return to the
 [pattern index](../README.md) for the other categories and scoring
 reference.
 
@@ -29,11 +29,16 @@ reference.
 | [`function-comment-every`](#function-comment-every) | low | low | Every function has descriptive comments (AI style) |
 | [`function-name-verbose`](#function-name-verbose) | low | low | Verbose function naming detected |
 | [`generic-variable-names`](#generic-variable-names) | low | low | Generic variable names detected (common in AI code) |
+| [`hallucinated-deprecated-endpoint`](#hallucinated-deprecated-endpoint) | low | high | Retired OpenAI /v1/engines endpoint, a common LLM-hallucinated API call that fails silently |
 | [`import-bulk`](#import-bulk) | low | medium | Bulk import detected (common in AI-generated code) |
 | [`markdown-code-fence`](#markdown-code-fence) | low | low | Markdown code fence detected |
 | [`openai-format`](#openai-format) | low | low | Common AI assistant phrasing detected |
+| [`placeholder-credential-assignment`](#placeholder-credential-assignment) | low | medium | Credential assigned a doc-example placeholder value, which fails auth at runtime |
+| [`placeholder-env-var`](#placeholder-env-var) | low | medium | Environment variable read from a copied documentation placeholder name |
+| [`placeholder-import`](#placeholder-import) | low | medium | Import of a documentation placeholder package or module name |
 | [`response-format-json`](#response-format-json) | low | medium | Generic JSON response format pattern |
 | [`semicolon-everywhere`](#semicolon-everywhere) | low | low | Excessive semicolons in JavaScript/TypeScript |
+| [`stub-implementation-marker`](#stub-implementation-marker) | low | low | Comment marking unfinished placeholder logic that may ship silently |
 | [`superfluous-type-annotation`](#superfluous-type-annotation) | low | low | Redundant type annotation (TypeScript) |
 | [`todo-still-present`](#todo-still-present) | low | low | TODO/FIXME comment still present in code |
 | [`try-catch-bulk`](#try-catch-bulk) | low | low | Verbose try-catch blocks detected |
@@ -529,6 +534,33 @@ Generic variable names detected (common in AI code)
 const data697234
 ```
 
+### hallucinated-deprecated-endpoint
+
+Retired OpenAI /v1/engines endpoint, a common LLM-hallucinated API call that fails silently
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `high` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `hallucination`, `api` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+api\.openai\.com/v1/engines
+```
+
+**Reference**: <https://platform.openai.com/docs/api-reference>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+api.openai.com/v1/engines
+```
+
 ### import-bulk
 
 Bulk import detected (common in AI-generated code)
@@ -607,6 +639,81 @@ Common AI assistant phrasing detected
 here's
 ```
 
+### placeholder-credential-assignment
+
+Credential assigned a doc-example placeholder value, which fails auth at runtime
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `hallucination`, `placeholder` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(?:api[_-]?key|auth[_-]?token|secret|password)["']?\s*(?:=>|[:=])\s*["'`]?<?(?:your|my|insert|paste|enter)[_-]?(?:api[_-]?key|key|token|secret|value|here)
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+api_key' => '<your_api-key
+```
+
+### placeholder-env-var
+
+Environment variable read from a copied documentation placeholder name
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `hallucination`, `placeholder` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(?:process\.env\.|os\.environ(?:\.get)?\[|os\.getenv\()\s*["']?(?:YOUR|MY|EXAMPLE|INSERT)_[A-Z_]+
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+process.env.YOUR_API_KEY
+```
+
+### placeholder-import
+
+Import of a documentation placeholder package or module name
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `hallucination`, `import` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(?:from\s+|import\s+|require\(\s*|from\s+)["']?(?:your|my|some|example)[_-]?(?:package|module|library)\b
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+from 'your_package
+```
+
 ### response-format-json
 
 Generic JSON response format pattern
@@ -655,6 +762,33 @@ Excessive semicolons in JavaScript/TypeScript
 
 ```text
 ;;
+```
+
+### stub-implementation-marker
+
+Comment marking unfinished placeholder logic that may ship silently
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `hallucination`, `stub` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(?://|#|/\*|\*|<!--).*\b(?:stub(?:bed)?\s+(?:implementation|for|out)|not\s+yet\s+implemented|implementation\s+pending|to\s+be\s+implemented)\b.*
+```
+
+**Input that fires** (verified by the liveness test; long
+token-shaped runs are elided here — the exact input is compiled into
+`crates/aegis-patterns/src/examples.rs`):
+
+```text
+// Stubbed implemen…on for now, replace with real logic
 ```
 
 ### superfluous-type-annotation

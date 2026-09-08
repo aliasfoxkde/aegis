@@ -9,6 +9,12 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- Five hallucination-artifact markers in `ai-detection`: retired OpenAI
+  `/v1/engines` endpoint, doc-example placeholder credential assignments,
+  placeholder environment variable reads, imports of placeholder package
+  names, and comment-marked stub implementations — the shapes left behind
+  when generated code is pasted in unverified, each a silent-failure risk.
+  639 → 644 patterns.
 - Six research-grounded AI-writing markers in `ai-detection` (assistant-conversation
   remnants, formulaic verbs, marketing vocabulary, hedging boilerplate, academic
   phrasing, emoji-led Markdown headings), informed by the detector-ablation
