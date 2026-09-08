@@ -7,6 +7,19 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release pipeline `checksums.txt` is now a usable verification file: it
+  lists every published archive (platform tarballs, WASM, source) in
+  standard `sha256sum -c` format, computed from the final assembled
+  assets. Previously each platform job hashed its unpacked binaries, the
+  Windows job stripped filenames from its lines, and artifact merging
+  let the Windows file silently overwrite all the others — so v0.5.0
+  shipped four bare Windows binary hashes that matched nothing
+  downloadable (release assets are immutable once published, so that
+  file cannot be corrected in place; it is superseded from the next
+  release on).
+
 ## [0.5.0] - 2026-09-08
 
 ### Added

@@ -70,18 +70,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
         run: cargo build --workspace --release
-      - name: Generate checksums
-        run: |
-          cd target/release
-          sha256sum aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-linux-x86_64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+      - name: Package binaries
+        run: tar -czf target/release/aegis-linux-x86_64.tar.gz -C target/release aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-amd64
           path: |
             target/release/aegis-linux-x86_64.tar.gz
-            target/release/checksums.txt
 
   # Linux ARM64
   linux-arm64:
@@ -103,18 +99,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
         run: cargo build --workspace --release --target aarch64-unknown-linux-gnu
-      - name: Generate checksums
-        run: |
-          cd target/aarch64-unknown-linux-gnu/release
-          sha256sum aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-linux-arm64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+      - name: Package binaries
+        run: tar -czf target/aarch64-unknown-linux-gnu/release/aegis-linux-arm64.tar.gz -C target/aarch64-unknown-linux-gnu/release aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-arm64
           path: |
             target/aarch64-unknown-linux-gnu/release/aegis-linux-arm64.tar.gz
-            target/aarch64-unknown-linux-gnu/release/checksums.txt
 
   # macOS x86_64
   macos-x86:
@@ -131,18 +123,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
         run: cargo build --workspace --release
-      - name: Generate checksums
-        run: |
-          cd target/release
-          shasum -a 256 aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-darwin-x86_64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+      - name: Package binaries
+        run: tar -czf target/release/aegis-darwin-x86_64.tar.gz -C target/release aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-x86
           path: |
             target/release/aegis-darwin-x86_64.tar.gz
-            target/release/checksums.txt
 
   # macOS ARM64 (Apple Silicon)
   macos-arm:
@@ -160,18 +148,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
         run: cargo build --workspace --release --target aarch64-apple-darwin
-      - name: Generate checksums
-        run: |
-          cd target/aarch64-apple-darwin/release
-          shasum -a 256 aegis aegis-mcp aegis-daemon aegis-bundler > checksums.txt
-          tar -czf aegis-darwin-arm64.tar.gz aegis aegis-mcp aegis-daemon aegis-bundler
+      - name: Package binaries
+        run: tar -czf target/aarch64-apple-darwin/release/aegis-darwin-arm64.tar.gz -C target/aarch64-apple-darwin/release aegis aegis-mcp aegis-daemon aegis-bundler
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: macos-arm
           path: |
             target/aarch64-apple-darwin/release/aegis-darwin-arm64.tar.gz
-            target/aarch64-apple-darwin/release/checksums.txt
 
   # Windows x86_64
   windows:
@@ -188,22 +172,16 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
         run: cargo build --workspace --release
-      - name: Generate checksums
+      - name: Package binaries
         shell: bash
-        run: |
-          cd target/release
-          certutil -hashfile aegis.exe SHA256 | grep -v ":" | tr -d ' ' > checksums.txt
-          certutil -hashfile aegis-mcp.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
-          certutil -hashfile aegis-daemon.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
-          certutil -hashfile aegis-bundler.exe SHA256 | grep -v ":" | tr -d ' ' >> checksums.txt
-          tar -czf aegis-windows-x86_64.tar.gz aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe  # aegis:ignore:executable-file-upload
+        run: |-
+          tar -czf target/release/aegis-windows-x86_64.tar.gz -C target/release aegis.exe aegis-mcp.exe aegis-daemon.exe aegis-bundler.exe  # aegis:ignore:executable-file-upload
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows
           path: |
             target/release/aegis-windows-x86_64.tar.gz
-            target/release/checksums.txt
 
   # WASM build
   wasm:
@@ -222,17 +200,12 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build WASM
         run: cargo build --target wasm32-unknown-unknown --release --package aegis-wasm
-      - name: Generate checksums
-        run: |
-          cd target/wasm32-unknown-unknown/release
-          sha256sum aegis_wasm.wasm > checksums.txt
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wasm
           path: |
             target/wasm32-unknown-unknown/release/aegis_wasm.wasm
-            target/wasm32-unknown-unknown/release/checksums.txt
 
   # Create release with all assets
   create-release:
@@ -251,9 +224,15 @@ jobs:
       - name: Display structure
         run: ls -la release/
       - name: Create checksums file
+        # Checksum the exact archives users download, in standard
+        # `sha256sum -c` format. Per-platform checksum files were removed:
+        # they hashed unpacked binaries, and the Windows variant stripped
+        # filenames, so whichever artifact merged last silently won.
         run: |
-          (cat release/checksums.txt 2>/dev/null; cat release/*/checksums.txt 2>/dev/null; cat release/*/*/checksums.txt 2>/dev/null) > release/all_checksums.txt || cat release/checksums.txt > release/all_checksums.txt 2>/dev/null || true
-          mv release/all_checksums.txt release/checksums.txt
+          cd release
+          rm -f checksums.txt
+          sha256sum -- *.tar.gz *.wasm *.zip > checksums.txt
+          cat checksums.txt
       - name: Ensure mutable release exists
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
