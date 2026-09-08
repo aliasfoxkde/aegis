@@ -36,6 +36,7 @@ from dataclasses import dataclass
 # ---------------------------------------------------------------------------
 
 OVERRIDES: dict[str, str] = {
+    "ai-formulaic-verb": "// This function leverages the config cache",
     "secrets-aws-access-key": "AKIAB3D7F9H2J5L8N1P6",
     "secrets-aws-secret-key": 'aws_secret = "wJalrXUtnFEMI/K7MDENGbPxRfiCYpX7vQ2mZ8kN"',
     "jwt-token": (
@@ -546,6 +547,13 @@ def emit(patterns: list[dict], examples: dict[str, str], path: str) -> None:
         "//! aegis-core asserts every enabled pattern fires on its example.",
         "",
         "/// Returns a realistic example the named pattern provably matches.",
+        "///",
+        "/// `clippy::match_same_arms` is allowed because the generator emits exactly",
+        "/// one arm per pattern name in alphabetical order, so unrelated rule names",
+        "/// legitimately share the same example text; merging arms would desync this",
+        "/// file from `scripts/generate_examples.py`.",
+        "#[must_use]",
+        "#[allow(clippy::match_same_arms)]",
         "pub fn example_for(name: &str) -> Option<&'static str> {",
         "    match name {",
     ]

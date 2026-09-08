@@ -1,8 +1,8 @@
 # ai-detection patterns
 
-Heuristics that flag likely AI-generated code
+Informative markers of likely AI-generated code — triage signals, not verdicts
 
-**22 patterns** in this category. Return to the
+**28 patterns** in this category. Return to the
 [pattern index](../README.md) for the other categories and scoring
 reference.
 
@@ -10,10 +10,16 @@ reference.
 
 | Pattern | Severity | Confidence | Description |
 |----------|----------|------------|-------------|
+| [`ai-assistant-prelude`](#ai-assistant-prelude) | low | medium | AI assistant conversation remnant pasted into a file |
 | [`ai-detection-empty-catch-block`](#ai-detection-empty-catch-block) | low | high | Empty catch block detected |
+| [`ai-emoji-header`](#ai-emoji-header) | low | low | Emoji-led Markdown heading, a common AI-generated README signature |
+| [`ai-formulaic-academic`](#ai-formulaic-academic) | low | low | Academic formulaic phrasing in code or docs (informative signal, not proof) |
+| [`ai-formulaic-verb`](#ai-formulaic-verb) | low | low | Formulaic AI-preferred verb in a comment (informative signal, not proof) |
 | [`ai-generated-comment`](#ai-generated-comment) | low | medium | AI-generated code comment detected |
 | [`ai-generated-marker`](#ai-generated-marker) | low | medium | AI generation marker detected |
 | [`ai-header-comment`](#ai-header-comment) | low | medium | AI-style header comment with permissions |
+| [`ai-hedge-boilerplate`](#ai-hedge-boilerplate) | low | low | Hedging boilerplate characteristic of AI-written explanations |
+| [`ai-marketing-slop`](#ai-marketing-slop) | low | low | Marketing boilerplate vocabulary common in AI-written prose (also common in human marketing copy) |
 | [`ai-overexplanation`](#ai-overexplanation) | low | low | AI overexplanation pattern detected |
 | [`ai-placeholder`](#ai-placeholder) | low | medium | AI placeholder text detected |
 | [`ai-repetitive-structure`](#ai-repetitive-structure) | low | low | Highly repetitive code structure detected |
@@ -34,6 +40,31 @@ reference.
 | [`very-long-line`](#very-long-line) | low | low | Very long line detected (common in AI output) |
 
 ## Pattern details
+
+### ai-assistant-prelude
+
+AI assistant conversation remnant pasted into a file
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `medium` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `language` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(here(?:'s| is) (?:the|your) (?:updated|revised|corrected|improved|complete) (?:version|code|implementation|file)|i hope this helps|let me know if you (?:have any|need any|want any|face any|run into any))
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+here's the updated version
+```
 
 ### ai-detection-empty-catch-block
 
@@ -58,6 +89,85 @@ Empty catch block detected
 
 ```text
 catch (n) { }
+```
+
+### ai-emoji-header
+
+Emoji-led Markdown heading, a common AI-generated README signature
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | `.md`, `.markdown`, `.mdx` |
+| Binary files | skipped |
+| Tags | `ai`, `markdown` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?m)^#+\s*[🚀✨🎯💡🔥✅⚡]
+```
+
+**Input that fires** (verified by the liveness test):
+
+```text
+# ✅
+```
+
+### ai-formulaic-academic
+
+Academic formulaic phrasing in code or docs (informative signal, not proof)
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `language` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:novel (?:approach|method|framework|solution)|addresses? the (?:challenge|problem) of|in conclusion)\b
+```
+
+**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+novel approach
+```
+
+### ai-formulaic-verb
+
+Formulaic AI-preferred verb in a comment (informative signal, not proof)
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `language` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)(?://|#|/\*|\*|<!--).*\b(?:leverages?|utilizes?|delves?|showcases?|underscores?)\b.*
+```
+
+**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+// This function leverages the config cache
 ```
 
 ### ai-generated-comment
@@ -134,6 +244,60 @@ AI-style header comment with permissions
 ```text
  * Permission    S  SS S SSS
 
+```
+
+### ai-hedge-boilerplate
+
+Hedging boilerplate characteristic of AI-written explanations
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `language` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:please note that|it'?s worth noting that|it is important to note(?: that)?|keep in mind that|kindly (?:note|be advised))\b
+```
+
+**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+please note that
+```
+
+### ai-marketing-slop
+
+Marketing boilerplate vocabulary common in AI-written prose (also common in human marketing copy)
+
+| Field | Value |
+|-------|-------|
+| Severity | `low` |
+| Confidence | `low` |
+| Scope | `file content` |
+| Applies to | every text file |
+| Binary files | skipped |
+| Tags | `ai`, `language` |
+
+**Match pattern** (Rust `regex` syntax):
+
+```regex
+(?i)\b(?:seamlessly|state-of-the-art|cutting-edge|game-?changer|blazing(?:ly)? fast|robust solution|comprehensive suite|unlock the (?:full )?potential|elevate your)\b
+```
+
+**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+
+**Input that fires** (verified by the liveness test):
+
+```text
+seamlessly
 ```
 
 ### ai-overexplanation
