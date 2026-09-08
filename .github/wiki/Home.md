@@ -7,12 +7,13 @@ Welcome to the Aegis wiki! This wiki contains project documentation that syncs w
 **Aegis** is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust for maximum speed and reliability.
 
 **Key Features:**
-- **633 patterns** across 33 categories (browse the [pattern catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md))
+- **660 patterns** across 34 categories (browse the [pattern catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md))
 - Multi-format output: JSON, SARIF, plain text
 - MCP server for AI assistant integration
 - CI/CD integration (GitHub Actions, GitLab, Jenkins, Azure)
 - Risk scoring and intelligent prioritization
 - Custom patterns via `.aegis.yml` in the scan root, or YAML bundled with `aegis-bundler`
+- Statistical anomaly observations (comment concentration, identifier reuse, size outliers) reported as info-level findings that never fail CI
 
 ## Downloads
 
@@ -54,8 +55,8 @@ GitHub wikis cannot link into the repository with relative paths, so repository 
 
 Counts are generated from the shipped pattern corpus; the catalog is canonical.
 
-- **633** detection patterns
-- **33** pattern categories (69 critical, 131 high, 175 medium, 258 low)
+- **660** detection patterns
+- **34** pattern categories (68 critical, 141 high, 182 medium, 269 low)
 - **7** workspace crates: aegis-core, aegis-cli, aegis-mcp, aegis-daemon, aegis-bundler, aegis-patterns, aegis-wasm
 - **4** configuration presets: production, pipeline, development, mcp-integration
 - **100%** Rust implementation
