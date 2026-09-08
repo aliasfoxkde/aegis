@@ -2,7 +2,7 @@
 
 General hardening practices
 
-**32 patterns** in this category. Return to the
+**31 patterns** in this category. Return to the
 [pattern index](../README.md) for the other categories and scoring
 reference.
 
@@ -27,7 +27,6 @@ reference.
 | [`private-key-exposed`](#private-key-exposed) | critical | high | Private key exposed in code |
 | [`security-hardening-aws-access-key`](#security-hardening-aws-access-key) | critical | high | AWS access key ID detected |
 | [`security-hardening-command-injection`](#security-hardening-command-injection) | critical | medium | Potential command injection vulnerability |
-| [`security-hardening-jwt-none-algorithm`](#security-hardening-jwt-none-algorithm) | critical | high | JWT 'none' algorithm vulnerability detected |
 | [`security-hardening-path-traversal`](#security-hardening-path-traversal) | high | medium | Potential path traversal vulnerability |
 | [`security-hardening-xml-external-entity`](#security-hardening-xml-external-entity) | critical | high | XML External Entity (XXE) vulnerability detected |
 | [`sendgrid-api-key`](#sendgrid-api-key) | critical | high | SendGrid API key detected |
@@ -510,33 +509,6 @@ Potential command injection vulnerability
 
 ```text
 exec ( "8XVn@czUKWm-${c
-```
-
-### security-hardening-jwt-none-algorithm
-
-JWT 'none' algorithm vulnerability detected
-
-| Field | Value |
-|-------|-------|
-| Severity | `critical` |
-| Confidence | `high` |
-| Scope | `file content` |
-| Applies to | every text file |
-| Binary files | skipped |
-| Tags | `jwt`, `security`, `algorithm` |
-
-**Match pattern** (Rust `regex` syntax):
-
-```regex
-(?i)\balg(?:orithm)?\s*["']?\s*[:=]\s*["']?\s*none\b
-```
-
-**Reference**: <https://owasp.org/www-project-web-security-testing/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/10-Testing_JSON_Web_Tokens>
-
-**Input that fires** (verified by the liveness test):
-
-```text
-algorithm ' : " none
 ```
 
 ### security-hardening-path-traversal
