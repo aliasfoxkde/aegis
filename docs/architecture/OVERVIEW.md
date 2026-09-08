@@ -76,7 +76,7 @@ Input (file/dir/string/env)
 Each finding contributes `severity weight × confidence multiplier ×
 category weight`, summed per category and for the scan:
 
-- Pattern severity weight (critical 40, high 25, medium 10, low 3)
+- Pattern severity weight (critical 40, high 25, medium 10, low 3, info 0)
 - Confidence multiplier (high 1.0, medium 0.7, low 0.4)
 - Category risk weight (`secrets` 1.5, `security-hardening` 1.4,
   `supply-chain` 1.4, `code-quality` 0.8, … configurable via `Config`)
@@ -89,6 +89,34 @@ Finding density and scan context are not modelled.
 | High | 25 | High: 1.0, Med: 0.7, Low: 0.4 |
 | Medium | 10 | High: 1.0, Med: 0.7, Low: 0.4 |
 | Low | 3 | High: 1.0, Med: 0.7, Low: 0.4 |
+| Info | 0 | High: 1.0, Med: 0.7, Low: 0.4 |
+
+Info findings are informative-only: they are reported in every output
+format but contribute nothing to the risk score and never fail the exit
+code, so a CI run stays green regardless of how many appear.
+
+### Statistical Anomaly Layer
+
+After a directory walk, the scanner analyzes per-file metrics (line
+counts, comment share, identifier diversity) collected during the scan
+and emits `Severity::Info` findings in the `statistical-anomaly` category
+for files that deviate sharply from their own repository's baseline:
+
+- `comment-ratio-outlier` — comment share more than 2.5 standard
+  deviations above the repository mean (the narrated or padded file)
+- `comment-concentration` — a single file holding ≥ 60% of the
+  repository's comment lines (a Pareto-style concentration)
+- `identifier-diversity-outlier` — identifier variety far below the norm
+  with heavy token reuse (the copy-paste / template-expansion footprint)
+- `file-size-outlier` — more than 2.5 standard deviations above the mean
+  line count (where generated dumps accumulate)
+
+Each detector reports at most its single most extreme file, so the
+post-pass stays bounded on any repository. Prose documents, dotfiles,
+lockfiles, and minified bundles never enter the statistics. Observations
+pass through the same category, severity-threshold, and baseline filters
+as every other finding, and — like all info findings — never flip the
+exit code.
 
 ### Concurrency Model
 

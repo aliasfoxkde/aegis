@@ -304,7 +304,8 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
     let scanner = build_scanner_from_opts(opts)?;
 
     let (findings, stats) = perform_scan(&scanner, opts)?;
-    let has_findings = !findings.is_empty();
+    // Informational findings are reported but never fail a CI run.
+    let has_findings = findings.iter().any(|f| f.severity != "info");
     let receipt = build_receipt(opts, &findings, stats.clone());
 
     // Calculate risk score
@@ -337,7 +338,8 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
     let scanner = build_scanner_from_opts(opts)?;
 
     let findings = scanner.scan_string(stdin_content, "stdin");
-    let has_findings = !findings.is_empty();
+    // Informational findings are reported but never fail a CI run.
+    let has_findings = findings.iter().any(|f| f.severity != "info");
     let stats = stats_with_findings(
         ScanStats::for_content("string:stdin", stdin_content.len()),
         &findings,
@@ -1373,5 +1375,66 @@ mod tests {
             "error must mention the baseline file, got: {err}"
         );
         std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_info_findings_never_fail_the_exit_code() {
+        // Build a tree whose only findings are statistical-anomaly info
+        // observations: ten quiet files plus one heavily narrated outlier.
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let scan_path = std::env::temp_dir().join(format!(
+            "aegis_cli_info_exit_fixture_{}_{}",
+            std::process::id(),
+            fixture_id
+        ));
+        std::fs::create_dir_all(&scan_path).unwrap();
+        for index in 0..10_usize {
+            let mut lines = vec![format!("// routine module number {index}")];
+            for n in 0..99_u32 {
+                lines.push(format!("let value_{n}_{index} = {n} * {index};"));
+            }
+            std::fs::write(
+                scan_path.join(format!("unit_{index}.rs")),
+                lines.join("\n") + "\n",
+            )
+            .unwrap();
+        }
+        let mut narrated: Vec<String> = (0..95_u32)
+            .map(|n| format!("// step {n}: restate the arithmetic in prose"))
+            .collect();
+        narrated.extend((0..5_u32).map(|n| format!("let value_{n} = {n} + 1;")));
+        std::fs::write(scan_path.join("narrated.rs"), narrated.join("\n") + "\n").unwrap();
+
+        let opts = ScanOptions {
+            path: scan_path.clone(),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Json,
+            quiet: false,
+            staged: false,
+        };
+
+        let result = execute_scan(&opts).unwrap();
+        let blocking = result.findings.iter().any(|f| f.severity != "info");
+        assert_eq!(
+            result.has_findings, blocking,
+            "info findings must not flip the exit code; only non-info findings may"
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|f| f.category == "statistical-anomaly"),
+            "the narrated outlier should surface as an info observation"
+        );
+        std::fs::remove_dir_all(scan_path).ok();
     }
 }

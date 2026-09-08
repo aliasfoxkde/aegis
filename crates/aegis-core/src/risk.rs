@@ -205,6 +205,9 @@ fn default_severity_weights() -> HashMap<String, i32> {
     m.insert("high".to_string(), 25);
     m.insert("medium".to_string(), 10);
     m.insert("low".to_string(), 3);
+    // Informational findings contribute nothing to the risk score; without an
+    // explicit zero the lookup's `unwrap_or(1)` fallback would score them.
+    m.insert("info".to_string(), 0);
     m
 }
 

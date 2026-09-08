@@ -64,6 +64,8 @@ pub enum FindingKind {
     Entropy,
     /// Taint analysis finding
     Taint,
+    /// Statistical anomaly over repository-wide file metrics
+    Statistical,
 }
 
 impl fmt::Display for FindingKind {
@@ -75,6 +77,7 @@ impl fmt::Display for FindingKind {
             FindingKind::Cfg => write!(f, "cfg"),
             FindingKind::Entropy => write!(f, "entropy"),
             FindingKind::Taint => write!(f, "taint"),
+            FindingKind::Statistical => write!(f, "statistical"),
         }
     }
 }

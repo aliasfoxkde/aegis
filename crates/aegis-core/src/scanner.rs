@@ -11,6 +11,7 @@ use std::sync::RwLock;
 use std::time::Instant;
 use walkdir::WalkDir;
 
+use crate::anomalies::{self, FileMetrics};
 use crate::entropy::shannon_entropy;
 use crate::suppression::SuppressionManager;
 
@@ -131,6 +132,10 @@ pub struct Scanner {
     /// records a load failure so it can be reported instead of silently
     /// scanning unfiltered.
     baseline_cache: std::sync::OnceLock<Result<HashSet<String>, String>>,
+    /// Per-file metrics collected during a directory walk and analyzed by the
+    /// statistical anomaly post-pass. Shared across rayon workers; drained by
+    /// `scan_dir` after the parallel phase.
+    metrics_sink: Arc<RwLock<Vec<FileMetrics>>>,
 }
 
 /// Load the set of finding fingerprints recorded in a baseline file.
@@ -209,6 +214,7 @@ impl Scanner {
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
+            metrics_sink: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -229,6 +235,7 @@ impl Scanner {
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
+            metrics_sink: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -251,6 +258,7 @@ impl Scanner {
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
+            metrics_sink: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -511,30 +519,15 @@ impl Scanner {
                     ) {
                         return false;
                     }
-                    self.options.categories.is_empty()
-                        || self
-                            .options
-                            .categories
-                            .iter()
-                            .any(|category| category == &finding.category)
+                    self.passes_post_filters(finding)
                 }),
         );
 
-        // Apply the requested minimum severity before baseline filtering.
+        // Apply category and severity-threshold gates before baseline
+        // filtering.
         let findings: Vec<Finding> = findings
             .into_iter()
-            .filter(|finding| {
-                let Some(threshold) = self.options.severity_threshold.as_deref() else {
-                    return true;
-                };
-                let (Some(threshold), Some(actual)) = (
-                    Severity::parse(threshold),
-                    Severity::parse(&finding.severity),
-                ) else {
-                    return true;
-                };
-                actual.weight() >= threshold.weight()
-            })
+            .filter(|finding| self.passes_post_filters(finding))
             .collect();
 
         // Filter findings against baseline if configured
@@ -551,6 +544,51 @@ impl Scanner {
         let _ = start.elapsed();
         let suppressed_count = suppression_mgr.suppressed_count();
         (findings, ast_inspection, suppressed_count)
+    }
+
+    /// Category and severity-threshold gates shared by the per-file pipeline
+    /// and the anomaly post-pass.
+    fn passes_post_filters(&self, finding: &Finding) -> bool {
+        if !self.options.categories.is_empty()
+            && !self
+                .options
+                .categories
+                .iter()
+                .any(|category| category == &finding.category)
+        {
+            return false;
+        }
+        let Some(threshold) = self.options.severity_threshold.as_deref() else {
+            return true;
+        };
+        let (Some(threshold), Some(actual)) = (
+            Severity::parse(threshold),
+            Severity::parse(&finding.severity),
+        ) else {
+            return true;
+        };
+        actual.weight() >= threshold.weight()
+    }
+
+    /// Convert statistical anomaly observations into `Severity::Info`
+    /// findings. The measured value doubles as the matched content so its
+    /// fingerprint is stable across rescans and baseline-suppressible.
+    fn anomaly_findings(metrics: &[FileMetrics]) -> Vec<Finding> {
+        anomalies::analyze_anomalies(metrics)
+            .into_iter()
+            .map(|observation| {
+                Finding::new(
+                    observation.pattern_name,
+                    "statistical-anomaly",
+                    Severity::Info.to_string(),
+                    "low",
+                    Location::new(observation.path, 1, 0, observation.evidence.clone()),
+                    observation.evidence,
+                    observation.description,
+                )
+                .with_kind(FindingKind::Statistical)
+            })
+            .collect()
     }
 
     /// Filter findings recorded in the configured baseline file.
@@ -655,6 +693,11 @@ impl Scanner {
     /// Returns [`ScanError::FileNotFound`] when `path` does not exist and
     /// [`ScanError::IoError`] when metadata or content cannot be read, or
     /// the file is not valid UTF-8.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the metrics-sink lock was poisoned by a panic in another
+    /// thread.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
         let io_start = Instant::now();
@@ -728,6 +771,14 @@ impl Scanner {
         // pipeline. AST coverage is recorded separately so a fallback or
         // parser failure cannot be mistaken for complete inspection.
         let source = path.to_string_lossy().into_owned();
+
+        // Collect file metrics for the statistical anomaly post-pass. Failed
+        // and skipped files never reach this point, so the statistics only
+        // ever describe files that were actually analyzed.
+        if let Some(metrics) = anomalies::compute_metrics(&source, &content) {
+            self.metrics_sink.write().unwrap().push(metrics);
+        }
+
         let (findings, ast_inspection, suppressed_count) =
             self.scan_string_with_inspection(&content, &source);
 
@@ -806,11 +857,20 @@ impl Scanner {
 
     /// Scan a directory recursively
     ///
+    /// After the parallel file phase, per-file metrics are analyzed by the
+    /// statistical anomaly post-pass and its `Severity::Info` observations
+    /// are appended to the findings.
+    ///
     /// # Errors
     ///
     /// Returns [`ScanError::CustomPatterns`] when a `.aegis.yml` at `root`
     /// is invalid, and [`ScanError::AllRequiredFilesFailed`] when required
     /// work existed but no required unit was successfully inspected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the metrics-sink lock was poisoned by a panic in another
+    /// thread.
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         let start = Instant::now();
 
@@ -850,6 +910,9 @@ impl Scanner {
         // clean, especially when the inaccessible subtree contains secrets.
         let mut entries = Vec::new();
         let mut merged_stats = ScanStats::default();
+        // Drop metrics left over from earlier single-file scans so this
+        // walk's statistics describe only the files it analyzed.
+        self.metrics_sink.write().unwrap().clear();
         for (index, result) in walker.into_iter().enumerate() {
             match result {
                 Ok(entry) if entry.file_type().is_file() => {
@@ -913,6 +976,19 @@ impl Scanner {
                 }
             }
         }
+
+        // Statistical anomaly post-pass: the parallel phase filled the
+        // metrics sink; analyze it against the repository's own baseline and
+        // append the observations. They pass through the same category,
+        // severity-threshold, and baseline filters as every other finding.
+        let metrics: Vec<FileMetrics> = std::mem::take(&mut *self.metrics_sink.write().unwrap());
+        let mut anomaly_findings = Self::anomaly_findings(&metrics);
+        anomaly_findings.retain(|finding| self.passes_post_filters(finding));
+        let anomaly_findings = self.filter_baseline(anomaly_findings);
+        for finding in &anomaly_findings {
+            merged_stats.add_finding(finding);
+        }
+        all_findings.extend(anomaly_findings);
 
         let required_units = merged_stats
             .inspection_ledger

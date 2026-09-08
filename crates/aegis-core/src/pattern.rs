@@ -30,6 +30,10 @@ pub enum Severity {
     Medium,
     /// Weight 3: style and cleanliness findings that survive triage.
     Low,
+    /// Weight 0: purely informational. Never contributes to risk score and
+    /// never fails a CI run; the scanner reports it but the exit code
+    /// ignores it.
+    Info,
 }
 
 impl Severity {
@@ -41,6 +45,7 @@ impl Severity {
             Severity::High => 25,
             Severity::Medium => 10,
             Severity::Low => 3,
+            Severity::Info => 0,
         }
     }
 
@@ -52,6 +57,7 @@ impl Severity {
             "high" => Some(Severity::High),
             "medium" | "med" => Some(Severity::Medium),
             "low" => Some(Severity::Low),
+            "info" | "informational" => Some(Severity::Info),
             _ => None,
         }
     }
@@ -64,6 +70,7 @@ impl fmt::Display for Severity {
             Severity::High => write!(f, "high"),
             Severity::Medium => write!(f, "medium"),
             Severity::Low => write!(f, "low"),
+            Severity::Info => write!(f, "info"),
         }
     }
 }
