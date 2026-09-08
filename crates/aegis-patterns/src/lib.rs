@@ -91,6 +91,7 @@ pub mod cloudformation;
 pub mod code_quality;
 pub mod compliance;
 pub mod container;
+pub mod cryptography;
 pub mod data_visualization;
 pub mod devops;
 pub mod docs;
@@ -136,6 +137,7 @@ pub fn all_patterns() -> Vec<Pattern> {
     patterns.extend(supply_chain::get());
     patterns.extend(infrastructure::get());
     patterns.extend(compliance::get());
+    patterns.extend(cryptography::get());
     patterns.extend(kubernetes::get());
     patterns.extend(container::get());
     patterns.extend(git_hygiene::get());
@@ -176,6 +178,7 @@ pub fn by_category(category: &str) -> Vec<Pattern> {
         "supply-chain" => supply_chain::get(),
         "infrastructure" => infrastructure::get(),
         "compliance" => compliance::get(),
+        "cryptography" => cryptography::get(),
         "kubernetes" => kubernetes::get(),
         "container" => container::get(),
         "git-hygiene" => git_hygiene::get(),

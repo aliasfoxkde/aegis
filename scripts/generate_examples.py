@@ -37,6 +37,9 @@ from dataclasses import dataclass
 
 OVERRIDES: dict[str, str] = {
     "ai-formulaic-verb": "// This function leverages the config cache",
+    "crypto-low-pbkdf2-iterations": "iterations = 10000",
+    "crypto-predictable-key-material": "secret = Math.random()",
+    "crypto-timing-unsafe-compare": "signature === expected",
     "placeholder-env-var": "process.env.YOUR_API_KEY",
     "stub-implementation-marker": "// Stubbed implementation for now, replace with real logic",
     "secrets-aws-access-key": "AKIAB3D7F9H2J5L8N1P6",

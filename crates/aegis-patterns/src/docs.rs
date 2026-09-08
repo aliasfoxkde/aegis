@@ -371,6 +371,9 @@ fn category_description(category: &str) -> &'static str {
         "code-quality" => "Language anti-patterns and dangerous constructs",
         "compliance" => "Regulatory frameworks: GDPR, HIPAA, PCI-DSS, SOC 2",
         "container" => "Container build and runtime hardening",
+        "cryptography" => {
+            "Cryptographic primitive misuse: weak hashes, broken modes, predictable key material"
+        }
         "data-visualization" => "Charting and visualization pitfalls",
         "devops" => "CI/CD pipeline and deployment checks",
         "finance" => "Financial data handling rules",

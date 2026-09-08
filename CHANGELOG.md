@@ -9,6 +9,16 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- New `cryptography` category with ten primitive-misuse rules: MD5/SHA-1
+  password hashing, weak HMACs, ECB mode, legacy ciphers (DES/3DES/RC4/
+  Blowfish), sub-15000-iteration PBKDF2, RSA without OAEP, key material
+  derived from non-cryptographic PRNGs (including Go `:=` assignments),
+  all-zero IVs/nonces, hard-coded salts, and timing-unsafe MAC
+  comparisons. 644 → 653 patterns.
+- Removed the byte-identical duplicate of `jwt-none-algorithm` that also
+  shipped as `security-hardening-jwt-none-algorithm` (same regex,
+  severity, and confidence in two categories); the web-security rule
+  remains.
 - Five hallucination-artifact markers in `ai-detection`: retired OpenAI
   `/v1/engines` endpoint, doc-example placeholder credential assignments,
   placeholder environment variable reads, imports of placeholder package

@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis ships **644 detection patterns** across **33 categories**.
+Aegis ships **653 detection patterns** across **34 categories**.
 Every pattern is compiled into every Aegis surface (CLI, MCP server,
 daemon, WASM) from the source in `crates/aegis-patterns/src/`.
 
@@ -39,9 +39,9 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 
 | Severity | Patterns |
 |----------|----------|
-| critical | 69 |
-| high | 131 |
-| medium | 175 |
+| critical | 68 |
+| high | 139 |
+| medium | 177 |
 | low | 269 |
 
 ## Categories
@@ -58,6 +58,7 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | [code-quality](./categories/code-quality.md) | 15 | Language anti-patterns and dangerous constructs |
 | [compliance](./categories/compliance.md) | 33 | Regulatory frameworks: GDPR, HIPAA, PCI-DSS, SOC 2 |
 | [container](./categories/container.md) | 4 | Container build and runtime hardening |
+| [cryptography](./categories/cryptography.md) | 10 | Cryptographic primitive misuse: weak hashes, broken modes, predictable key material |
 | [data-visualization](./categories/data-visualization.md) | 5 | Charting and visualization pitfalls |
 | [devops](./categories/devops.md) | 15 | CI/CD pipeline and deployment checks |
 | [finance](./categories/finance.md) | 6 | Financial data handling rules |
@@ -74,7 +75,7 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | [pii](./categories/pii.md) | 39 | Personal data: emails, phones, national IDs |
 | [pwa](./categories/pwa.md) | 5 | Progressive web app checks |
 | [secrets](./categories/secrets.md) | 41 | Credentials, API keys, and tokens |
-| [security-hardening](./categories/security-hardening.md) | 32 | General hardening practices |
+| [security-hardening](./categories/security-hardening.md) | 31 | General hardening practices |
 | [shift-left](./categories/shift-left.md) | 20 | Early-lifecycle security practices |
 | [supply-chain](./categories/supply-chain.md) | 35 | Dependency and artifact supply-chain rules |
 | [terraform](./categories/terraform.md) | 7 | HashiCorp Terraform issues |
