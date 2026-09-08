@@ -8,7 +8,7 @@
 | GitHub Repository | [aliasfoxkde/aegis](https://github.com/aliasfoxkde/aegis) |
 | Issue Tracker | [Report Issues](https://github.com/aliasfoxkde/aegis/issues) |
 | Discussions | [GitHub Discussions](https://github.com/aliasfoxkde/aegis/discussions) |
-| Pattern Catalog | [633 patterns across 33 categories](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) |
+| Pattern Catalog | [660 patterns across 34 categories](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) |
 
 ## Project Info
 

@@ -69,6 +69,11 @@ every release are attached to the matching GitHub release.
 
 ### Changed
 
+- Documentation count refresh: the README category table now lists all 34
+  categories with per-category counts (the previous 15-row table predates
+  `ai-detection`, `cryptography`, and the finance expansion), and the wiki
+  mirror, `docs/README.md`, `docs/PLAN.md`, and the quick-start guide carry
+  the 660/34 totals with the current severity distribution.
 - Wiki and documentation audit: replaced stale references (invented install
   paths, flags, config formats, release asset names) with the real CLI/MCP
   surface, corrected pattern counts, and rewrote the six wiki pages to match

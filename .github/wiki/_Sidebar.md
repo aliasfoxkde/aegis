@@ -23,7 +23,7 @@
 - [Coding Standards](https://github.com/aliasfoxkde/aegis/blob/main/docs/CODING_STANDARDS.md) - Rust conventions
 
 ### Pattern Categories
-- [Pattern Catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) - All 633 patterns, one detail page per category
+- [Pattern Catalog](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/README.md) - All 660 patterns, one detail page per category
 - [Secrets](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/secrets.md) - API keys, credentials
 - [Security Hardening](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/security-hardening.md) - Security best practices
 - [Web Security](https://github.com/aliasfoxkde/aegis/blob/main/docs/patterns/categories/web-security.md) - XSS, injection, CORS, SSRF

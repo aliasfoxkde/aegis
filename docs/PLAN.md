@@ -11,7 +11,7 @@ and quality phases. Status is updated as phases land.
 
 | Dimension | State |
 | --- | --- |
-| Patterns | 633 across 33 categories, per-extension dispatch, entropy + exclude gates |
+| Patterns | 660 across 34 categories, per-extension dispatch, entropy + exclude gates |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
 | Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 735 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
@@ -50,7 +50,7 @@ Every shipped rule must prove it can fire. The corpus harness caught three
 dead rules on first contact; liveness makes that bug class impossible to
 reintroduce. Shipped in this phase: `scripts/generate_examples.py`
 (deterministic, crc32-seeded, reproducible byte-for-byte),
-`crates/aegis-patterns/src/examples.rs` (all 633 enabled patterns), and
+`crates/aegis-patterns/src/examples.rs` (all 660 enabled patterns), and
 `crates/aegis-core/tests/pattern_liveness.rs` (runs via
 `cargo test --workspace`, so CI covers it).
 
@@ -73,7 +73,7 @@ Remaining for follow-up phases: hand-polish generator output realism
 
 ### Phase 2 — Lazy per-extension compilation — DELIVERED
 
-The full registry compiled synchronously at startup (~633 patterns) — what
+The full registry compiled synchronously at startup (~660 patterns) — what
 blew the MCP 30-second deadline. Shipped in this phase:
 
 - `PatternRegistry::build_category_scanners_for_extension` narrows patterns

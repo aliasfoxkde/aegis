@@ -62,6 +62,14 @@ aegis scan . --severity-threshold high
 aegis --format json scan .
 ```
 
+`info` is the lowest rung of the severity scale (weight 0): informational
+findings render in every output format but never contribute to the risk
+score and never fail the exit code, so any `--severity-threshold` keeps
+them out. Directory scans also append `statistical-anomaly` info
+observations for files that deviate sharply from their own repository —
+comment-ratio outliers, Pareto-style comment concentration, identifier
+reuse, and size outliers — as triage signals rather than verdicts.
+
 The `-c/--config` flag takes a preset (`production`, `pipeline`,
 `development`, `mcp-integration`) or a profile JSON file, and supplies
 defaults for flags you did not set explicitly:
