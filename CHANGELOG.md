@@ -9,6 +9,13 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- Seven money-correctness rules in `finance`, which previously only held
+  PII/credential detectors: money in binary floating-point fields,
+  `toFixed` currency rounding, `Math.round` on money, exact-equality
+  money comparisons, `parseFloat` money parsing, unsynchronized
+  read-modify-write balance updates, and wall-clock settlement/expiry
+  timestamps. Counting-shaped identifiers (`total_findings == 0`) are
+  excluded from the equality rule. 653 → 660 patterns.
 - New `cryptography` category with ten primitive-misuse rules: MD5/SHA-1
   password hashing, weak HMACs, ECB mode, legacy ciphers (DES/3DES/RC4/
   Blowfish), sub-15000-iteration PBKDF2, RSA without OAEP, key material
