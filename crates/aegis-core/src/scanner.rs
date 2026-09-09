@@ -86,6 +86,11 @@ pub struct ScanOptions {
     pub include_disabled: bool,
     /// Diff file to scan (only changed lines)
     pub diff_file: Option<PathBuf>,
+    /// Statistical anomaly detectors to run after a directory scan; `None`
+    /// runs every detector, an empty list disables the layer entirely, and a
+    /// non-empty list runs exactly the named detectors (see
+    /// [`crate::anomalies::DETECTOR_NAMES`]).
+    pub anomaly_detectors: Option<Vec<String>>,
 }
 
 impl Default for ScanOptions {
@@ -102,6 +107,7 @@ impl Default for ScanOptions {
             baseline: None,
             include_disabled: false,
             diff_file: None,
+            anomaly_detectors: None,
         }
     }
 }
@@ -570,11 +576,21 @@ impl Scanner {
         actual.weight() >= threshold.weight()
     }
 
+    /// True when the statistical anomaly layer should run: the detector
+    /// allow-list is unset (all detectors) or names at least one detector.
+    /// An explicitly empty allow-list disables the layer.
+    fn anomaly_layer_enabled(&self) -> bool {
+        self.options
+            .anomaly_detectors
+            .as_ref()
+            .map_or(true, |detectors| !detectors.is_empty())
+    }
+
     /// Convert statistical anomaly observations into `Severity::Info`
     /// findings. The measured value doubles as the matched content so its
     /// fingerprint is stable across rescans and baseline-suppressible.
-    fn anomaly_findings(metrics: &[FileMetrics]) -> Vec<Finding> {
-        anomalies::analyze_anomalies(metrics)
+    fn anomaly_findings(metrics: &[FileMetrics], allowed: Option<&[String]>) -> Vec<Finding> {
+        anomalies::analyze_anomalies_with(metrics, allowed)
             .into_iter()
             .map(|observation| {
                 Finding::new(
@@ -774,9 +790,12 @@ impl Scanner {
 
         // Collect file metrics for the statistical anomaly post-pass. Failed
         // and skipped files never reach this point, so the statistics only
-        // ever describe files that were actually analyzed.
-        if let Some(metrics) = anomalies::compute_metrics(&source, &content) {
-            self.metrics_sink.write().unwrap().push(metrics);
+        // ever describe files that were actually analyzed. A disabled layer
+        // skips collection outright.
+        if self.anomaly_layer_enabled() {
+            if let Some(metrics) = anomalies::compute_metrics(&source, &content) {
+                self.metrics_sink.write().unwrap().push(metrics);
+            }
         }
 
         let (findings, ast_inspection, suppressed_count) =
@@ -982,7 +1001,8 @@ impl Scanner {
         // append the observations. They pass through the same category,
         // severity-threshold, and baseline filters as every other finding.
         let metrics: Vec<FileMetrics> = std::mem::take(&mut *self.metrics_sink.write().unwrap());
-        let mut anomaly_findings = Self::anomaly_findings(&metrics);
+        let mut anomaly_findings =
+            Self::anomaly_findings(&metrics, self.options.anomaly_detectors.as_deref());
         anomaly_findings.retain(|finding| self.passes_post_filters(finding));
         let anomaly_findings = self.filter_baseline(anomaly_findings);
         for finding in &anomaly_findings {
@@ -1536,6 +1556,7 @@ mod tests {
             baseline: Some(PathBuf::from("/baseline.json")),
             include_disabled: true,
             diff_file: Some(PathBuf::from("/diff.txt")),
+            anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
         };
 
         assert_eq!(options.max_file_size, 5 * 1024 * 1024);
@@ -1546,6 +1567,10 @@ mod tests {
         assert!(!options.use_gitignore);
         assert!(!options.use_aegisignore);
         assert_eq!(options.workers, 8);
+        assert_eq!(
+            options.anomaly_detectors,
+            Some(vec!["file-size-outlier".to_string()])
+        );
     }
 
     #[test]

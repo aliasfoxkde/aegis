@@ -344,6 +344,11 @@ pub struct Config {
     /// Severity threshold
     #[serde(default)]
     pub severity_threshold: Option<String>,
+    /// Statistical anomaly detectors a profile keeps enabled; `None` runs
+    /// every detector, an empty list disables the statistical layer, and a
+    /// non-empty list runs exactly the named detectors.
+    #[serde(default)]
+    pub anomaly_detectors: Option<Vec<String>>,
     /// Bundle path
     #[serde(skip)]
     pub bundle: Bundle,
@@ -453,6 +458,7 @@ impl Config {
                 output_format: OutputFormat::Sarif,
                 timeout_seconds: 60,
                 severity_threshold: None,
+                anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
             }),
             "pipeline" => Some(Self {
@@ -477,6 +483,7 @@ impl Config {
                 output_format: OutputFormat::Json,
                 timeout_seconds: 300,
                 severity_threshold: None,
+                anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
             }),
             "development" => Some(Self {
@@ -492,6 +499,7 @@ impl Config {
                 output_format: OutputFormat::Human,
                 timeout_seconds: 0,
                 severity_threshold: None,
+                anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
             }),
             "mcp-integration" => Some(Self {
@@ -507,6 +515,7 @@ impl Config {
                 output_format: OutputFormat::Json,
                 timeout_seconds: 30,
                 severity_threshold: None,
+                anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
             }),
             _ => None,
@@ -535,6 +544,7 @@ impl Config {
             output_format: OutputFormat::Human,
             timeout_seconds: 300,
             severity_threshold: None,
+            anomaly_detectors: None,
             bundle: Bundle::new(vec![]),
         }
     }

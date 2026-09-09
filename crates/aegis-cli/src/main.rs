@@ -92,6 +92,16 @@ enum Commands {
         /// repository and defaults to the current directory
         #[arg(long)]
         staged: bool,
+
+        /// Comma-separated statistical anomaly detectors to run
+        /// (comment-ratio-outlier, comment-concentration,
+        /// identifier-diversity-outlier, file-size-outlier)
+        #[arg(long)]
+        anomaly_detectors: Option<String>,
+
+        /// Disable the statistical anomaly layer entirely
+        #[arg(long)]
+        no_anomalies: bool,
     },
 
     /// List patterns
@@ -177,6 +187,8 @@ async fn main() -> Result<()> {
             all,
             diff,
             staged,
+            anomaly_detectors,
+            no_anomalies,
         } => {
             // A `-c/--config` profile supplies defaults for flags the
             // operator did not set; explicit flags always win.
@@ -205,6 +217,21 @@ async fn main() -> Result<()> {
                     .as_ref()
                     .and_then(|profile| profile.severity_threshold.clone())
             });
+            // --no-anomalies wins over --anomaly-detectors; both fall back
+            // to the profile's `anomaly_detectors` list when unset.
+            let anomaly_detectors = if no_anomalies {
+                if anomaly_detectors.is_some() {
+                    anyhow::bail!("--no-anomalies conflicts with --anomaly-detectors");
+                }
+                Some(String::new())
+            } else {
+                anomaly_detectors.or_else(|| {
+                    profile
+                        .as_ref()
+                        .and_then(|profile| profile.anomaly_detectors.as_ref())
+                        .map(|detectors| detectors.join(","))
+                })
+            };
             scanner::run_scan(scanner::ScanOptions {
                 path,
                 scan_file: file,
@@ -218,6 +245,7 @@ async fn main() -> Result<()> {
                 all,
                 diff,
                 staged,
+                anomaly_detectors,
                 format,
                 quiet: cli.quiet,
             })

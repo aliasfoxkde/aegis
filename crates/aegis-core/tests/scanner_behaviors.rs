@@ -276,3 +276,53 @@ fn single_file_scans_never_emit_or_leak_anomaly_observations() {
         "stale single-file metrics must not seed the next walk's statistics"
     );
 }
+
+#[test]
+fn anomaly_allow_list_restricts_detectors() {
+    // The narrated fixture trips comment-ratio; allowing only the
+    // file-size detector must suppress it and run nothing else.
+    let temp = anomaly_fixture();
+    let definitions = aegis_patterns::all_patterns()
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let scanner = Scanner::from_definitions(definitions)
+        .unwrap()
+        .with_options(ScanOptions {
+            anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
+            ..ScanOptions::default()
+        });
+
+    let (findings, _) = scanner.scan_dir(temp.path()).unwrap();
+    let anomalies = statistical(&findings);
+    assert!(
+        anomalies.iter().all(|f| f.pattern == "file-size-outlier"),
+        "only the allowed detector may report, got: {:?}",
+        anomalies
+            .iter()
+            .map(|f| f.pattern.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn empty_anomaly_allow_list_disables_the_layer() {
+    let temp = anomaly_fixture();
+    let definitions = aegis_patterns::all_patterns()
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    let scanner = Scanner::from_definitions(definitions)
+        .unwrap()
+        .with_options(ScanOptions {
+            anomaly_detectors: Some(Vec::new()),
+            ..ScanOptions::default()
+        });
+
+    let (findings, stats) = scanner.scan_dir(temp.path()).unwrap();
+    assert!(
+        statistical(&findings).is_empty(),
+        "an empty allow-list disables every detector"
+    );
+    assert_eq!(stats.findings_by_severity.get("info"), None);
+}

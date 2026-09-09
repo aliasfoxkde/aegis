@@ -100,16 +100,27 @@ code, so a CI run stays green regardless of how many appear.
 After a directory walk, the scanner analyzes per-file metrics (line
 counts, comment share, identifier diversity) collected during the scan
 and emits `Severity::Info` findings in the `statistical-anomaly` category
-for files that deviate sharply from their own repository's baseline:
+for files that deviate sharply from their own baseline:
 
 - `comment-ratio-outlier` — comment share more than 2.5 standard
-  deviations above the repository mean (the narrated or padded file)
+  deviations above the file's language-group mean (the narrated or padded
+  file)
 - `comment-concentration` — a single file holding ≥ 60% of the
   repository's comment lines (a Pareto-style concentration)
-- `identifier-diversity-outlier` — identifier variety far below the norm
-  with heavy token reuse (the copy-paste / template-expansion footprint)
-- `file-size-outlier` — more than 2.5 standard deviations above the mean
-  line count (where generated dumps accumulate)
+- `identifier-diversity-outlier` — identifier variety far below the
+  language-group norm with heavy token reuse (the copy-paste /
+  template-expansion footprint)
+- `file-size-outlier` — more than 2.5 standard deviations above the
+  language-group mean line count (where generated dumps accumulate)
+
+The z-score detectors compare each file against its language group — the
+eligible files sharing its extension — because comment conventions differ
+too much between languages for a mixed baseline to mean anything: a
+narrated Python file judged against terse Rust siblings would be a false
+outlier. A group smaller than eight files supports no z-score, so files
+in minority languages are not judged rather than judged against someone
+else's norm. The Pareto detector is the exception: comment concentration
+is a property of the repository total by definition.
 
 Each detector reports at most its single most extreme file, so the
 post-pass stays bounded on any repository. Prose documents, dotfiles,
@@ -117,6 +128,12 @@ lockfiles, and minified bundles never enter the statistics. Observations
 pass through the same category, severity-threshold, and baseline filters
 as every other finding, and — like all info findings — never flip the
 exit code.
+
+The layer is configurable: `ScanOptions::anomaly_detectors` (core), the
+CLI `--anomaly-detectors <list>` allow-list with `--no-anomalies`
+disabling the layer entirely, and the `anomaly_detectors` field in a
+`-c/--config` profile JSON all select which of the four detectors run.
+Unknown detector names fail loudly with the valid list.
 
 ### Concurrency Model
 

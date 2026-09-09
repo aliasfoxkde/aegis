@@ -43,6 +43,7 @@ A profile is a single JSON object with these keys:
 | `output_format` | string | `human`, `json`, or `sarif` |
 | `timeout_seconds` | integer | Scan timeout; `0` means no timeout |
 | `severity_threshold` | string or `null` | Minimum severity to report |
+| `anomaly_detectors` | array or `null` | Statistical anomaly detectors to run; `null` runs all four, `[]` disables the layer, and a list runs exactly the named detectors (`comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`) |
 
 Unknown keys are ignored; omitted keys fall back to their default.
 

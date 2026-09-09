@@ -10,11 +10,21 @@
 //! detection shows lexical and distributional cues degrade sharply under
 //! paraphrase and routinely fire on formulaic human work.
 //!
+//! The z-score detectors compare each file against its own language group —
+//! the population of eligible files sharing its extension — rather than the
+//! whole repository. Comment conventions differ too much between languages
+//! for a mixed baseline to mean anything: a narrated Python file judged
+//! against terse Rust siblings is a false outlier, not a finding. A group
+//! smaller than [`MIN_FILES`] supports no z-score, so minority-language files
+//! are simply not judged rather than judged against someone else's norm. The
+//! Pareto detector is the exception: comment concentration is a property of
+//! the repository total by definition.
+//!
 //! Detectors are intentionally bounded: each reports only its single most
 //! extreme file, so one scan adds at most a handful of findings regardless of
 //! repository size.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -37,6 +47,38 @@ const PARETO_CONCENTRATION: f64 = 0.6;
 
 /// Standard deviations from the repository mean that qualify as an outlier.
 const Z_OUTLIER: f64 = 2.5;
+
+/// Every statistical detector, in the order `analyze_anomalies` runs them.
+/// These are the names accepted by a detector allow-list.
+pub const DETECTOR_NAMES: [&str; 4] = [
+    "comment-ratio-outlier",
+    "comment-concentration",
+    "identifier-diversity-outlier",
+    "file-size-outlier",
+];
+
+/// Validate a detector allow-list, naming the unknown entries. An empty list
+/// is valid: it disables the layer entirely.
+///
+/// # Errors
+///
+/// Returns a message listing every name that is not in [`DETECTOR_NAMES`],
+/// so a typo cannot silently disable the layer.
+pub fn validate_detector_names(names: &[String]) -> Result<(), String> {
+    let unknown: Vec<&str> = names
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !DETECTOR_NAMES.contains(name))
+        .collect();
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "unknown anomaly detector(s): {}. valid detectors: {}",
+        unknown.join(", "),
+        DETECTOR_NAMES.join(", "),
+    ))
+}
 
 // Line-based identifier tokens; length ≥ 2 so ubiquitous single-character
 // loop counters do not dominate the count.
@@ -202,71 +244,119 @@ fn mean_and_stddev(values: &[f64]) -> Option<(f64, f64)> {
     }
 }
 
+/// The language-group key for a path: its extension, or the empty string for
+/// extensionless sources (Makefile, Dockerfile), which are judged as one
+/// group of their own. Matched case-sensitively, consistent with the
+/// extension checks in [`is_metrics_eligible`].
+fn language_key(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    match name.rfind('.') {
+        Some(dot) => &name[dot + 1..],
+        None => "",
+    }
+}
+
+/// Group metrics by extension for per-language baselines. Sorted by key so
+/// detector output does not depend on `HashMap` iteration order.
+fn group_by_language<'a>(metrics: &[&'a FileMetrics]) -> Vec<(&'a str, Vec<&'a FileMetrics>)> {
+    let mut groups: HashMap<&str, Vec<&FileMetrics>> = HashMap::new();
+    for m in metrics {
+        groups.entry(language_key(&m.path)).or_default().push(m);
+    }
+    let mut grouped: Vec<(&str, Vec<&FileMetrics>)> = groups.into_iter().collect();
+    grouped.sort_by_key(|(key, _)| *key);
+    grouped
+}
+
 /// Run every detector over the collected metrics.
 ///
 /// Each detector contributes at most one observation — its most extreme
 /// file — so the post-pass stays bounded on repositories of any size.
 #[must_use]
 pub fn analyze_anomalies(metrics: &[FileMetrics]) -> Vec<AnomalyObservation> {
+    analyze_anomalies_with(metrics, None)
+}
+
+/// Run only the allowed detectors over the collected metrics.
+///
+/// `None` runs every detector; a list runs exactly the detectors named in
+/// it (an empty list runs none, disabling the layer). Each detector still
+/// contributes at most one observation.
+#[must_use]
+pub fn analyze_anomalies_with(
+    metrics: &[FileMetrics],
+    allowed: Option<&[String]>,
+) -> Vec<AnomalyObservation> {
     if metrics.len() < MIN_FILES {
         return Vec::new();
     }
+    let runs = |name: &str| {
+        allowed.map_or(true, |list| {
+            list.iter().any(|allowed_name| allowed_name == name)
+        })
+    };
 
     let mut observations = Vec::new();
-    observations.extend(comment_ratio_outlier(metrics));
-    observations.extend(comment_concentration(metrics));
-    observations.extend(identifier_diversity_outlier(metrics));
-    observations.extend(file_size_outlier(metrics));
+    if runs("comment-ratio-outlier") {
+        observations.extend(comment_ratio_outlier(metrics));
+    }
+    if runs("comment-concentration") {
+        observations.extend(comment_concentration(metrics));
+    }
+    if runs("identifier-diversity-outlier") {
+        observations.extend(identifier_diversity_outlier(metrics));
+    }
+    if runs("file-size-outlier") {
+        observations.extend(file_size_outlier(metrics));
+    }
     observations
 }
 
-/// Files with a comment share far above the repository norm — the hallmark
-/// of narrated, generated, or padded code.
+/// Files with a comment share far above their language group's norm — the
+/// hallmark of narrated, generated, or padded code.
 fn comment_ratio_outlier(metrics: &[FileMetrics]) -> Option<AnomalyObservation> {
-    let population: Vec<&FileMetrics> = metrics
+    let eligible: Vec<&FileMetrics> = metrics
         .iter()
         .filter(|m| m.line_count >= MIN_LINES_FOR_RATIO && m.blank_lines < m.line_count)
         .collect();
-    if population.len() < MIN_FILES {
-        return None;
-    }
 
-    let ratios: Vec<f64> = population
-        .iter()
-        .map(|m| f64::from(m.comment_lines) / f64::from(m.line_count - m.blank_lines))
-        .collect();
-    let (mean, stddev) = mean_and_stddev(&ratios)?;
-
+    let mut best: Option<AnomalyObservation> = None;
     let mut best_z = f64::NEG_INFINITY;
-    let mut best_index: Option<usize> = None;
-    for (index, ratio) in ratios.iter().enumerate() {
-        let z = (ratio - mean) / stddev;
-        if z > Z_OUTLIER && z > best_z {
-            best_z = z;
-            best_index = Some(index);
+    for (extension, group) in group_by_language(&eligible) {
+        if group.len() < MIN_FILES {
+            continue;
+        }
+
+        let ratios: Vec<f64> = group
+            .iter()
+            .map(|m| f64::from(m.comment_lines) / f64::from(m.line_count - m.blank_lines))
+            .collect();
+        let Some((mean, stddev)) = mean_and_stddev(&ratios) else {
+            continue;
+        };
+
+        for (index, ratio) in ratios.iter().enumerate() {
+            let z = (ratio - mean) / stddev;
+            if z > Z_OUTLIER && z > best_z {
+                best_z = z;
+                let description = format!(
+                    "Comment lines make up {ratio:.0}% of this file's non-blank lines \
+                     versus a mean of {mean:.0}% across its {} .{extension} peers \
+                     (z = {z:.1}). Unusually narrated for this codebase; worth a \
+                     look when the comments explain what the code should do rather \
+                     than what it does.",
+                    group.len(),
+                );
+                best = Some(AnomalyObservation {
+                    pattern_name: "comment-ratio-outlier".to_string(),
+                    path: group[index].path.clone(),
+                    evidence: format!("comment_ratio={ratio:.2}"),
+                    description,
+                });
+            }
         }
     }
-    let index = best_index?;
-    let z = best_z;
-    let file = population[index];
-
-    let outliers = ratios
-        .iter()
-        .filter(|r| (**r - mean) / stddev > Z_OUTLIER)
-        .count();
-    let description = format!(
-        "Comment lines make up {ratio:.0}% of this file's non-blank lines versus a \
-         repository mean of {mean:.0}% (z = {z:.1}, {outliers} file(s) above the \
-         outlier threshold). Unusually narrated for this codebase; worth a look \
-         when the comments explain what the code should do rather than what it does.",
-        ratio = ratios[index] * 100.0,
-    );
-    Some(AnomalyObservation {
-        pattern_name: "comment-ratio-outlier".to_string(),
-        path: file.path.clone(),
-        evidence: format!("comment_ratio={:.2}", ratios[index]),
-        description,
-    })
+    best
 }
 
 /// Pareto concentration: one file absorbing most of the repository's
@@ -299,97 +389,95 @@ fn comment_concentration(metrics: &[FileMetrics]) -> Option<AnomalyObservation> 
     })
 }
 
-/// Files reusing a tiny identifier vocabulary far below the repository norm —
-/// the statistical footprint of pasted-in or templated repetition.
+/// Files reusing a tiny identifier vocabulary far below their language
+/// group's norm — the statistical footprint of pasted-in or templated
+/// repetition.
 fn identifier_diversity_outlier(metrics: &[FileMetrics]) -> Option<AnomalyObservation> {
-    let population: Vec<&FileMetrics> = metrics
+    let eligible: Vec<&FileMetrics> = metrics
         .iter()
         .filter(|m| m.identifier_tokens >= MIN_IDENTIFIER_TOKENS)
         .collect();
-    if population.len() < MIN_FILES {
-        return None;
-    }
 
-    let diversities: Vec<f64> = population
-        .iter()
-        .map(|m| f64::from(m.unique_identifiers) / f64::from(m.identifier_tokens))
-        .collect();
-    let (mean, stddev) = mean_and_stddev(&diversities)?;
-
+    let mut best: Option<AnomalyObservation> = None;
     let mut best_z = f64::INFINITY;
-    let mut best_index: Option<usize> = None;
-    for (index, diversity) in diversities.iter().enumerate() {
-        let z = (diversity - mean) / stddev;
-        let is_outlier = z < -Z_OUTLIER && *diversity < 0.2;
-        if is_outlier && z < best_z {
-            best_z = z;
-            best_index = Some(index);
+    for (extension, group) in group_by_language(&eligible) {
+        if group.len() < MIN_FILES {
+            continue;
+        }
+
+        let diversities: Vec<f64> = group
+            .iter()
+            .map(|m| f64::from(m.unique_identifiers) / f64::from(m.identifier_tokens))
+            .collect();
+        let Some((mean, stddev)) = mean_and_stddev(&diversities) else {
+            continue;
+        };
+
+        for (index, diversity) in diversities.iter().enumerate() {
+            let z = (diversity - mean) / stddev;
+            let is_outlier = z < -Z_OUTLIER && *diversity < 0.2;
+            if is_outlier && z < best_z {
+                best_z = z;
+                let file = group[index];
+                let description = format!(
+                    "Identifier diversity is {diversity:.2} versus a mean of {mean:.2} \
+                     across its {} .{extension} peers (z = {z:.1}): the same small \
+                     vocabulary reused across {} tokens. Repetition at this scale \
+                     usually means copy-paste or template expansion rather than \
+                     fresh code.",
+                    group.len(),
+                    file.identifier_tokens,
+                );
+                best = Some(AnomalyObservation {
+                    pattern_name: "identifier-diversity-outlier".to_string(),
+                    path: file.path.clone(),
+                    evidence: format!("identifier_diversity={diversity:.2}"),
+                    description,
+                });
+            }
         }
     }
-    let index = best_index?;
-    let z = best_z;
-    let file = population[index];
-
-    let description = format!(
-        "Identifier diversity is {diversity:.2} versus a repository mean of {mean:.2} \
-         (z = {z:.1}): the same small vocabulary reused across {} tokens. Repetition \
-         at this scale usually means copy-paste or template expansion rather than \
-         fresh code.",
-        file.identifier_tokens,
-        diversity = diversities[index],
-    );
-    Some(AnomalyObservation {
-        pattern_name: "identifier-diversity-outlier".to_string(),
-        path: file.path.clone(),
-        evidence: format!(
-            "identifier_diversity={:.2}",
-            f64::from(file.unique_identifiers) / f64::from(file.identifier_tokens)
-        ),
-        description,
-    })
+    best
 }
 
-/// Files dramatically larger than every sibling — where generated dumps,
-/// bundled artifacts, or an unresolved refactor tend to hide.
+/// Files dramatically larger than every same-language sibling — where
+/// generated dumps, bundled artifacts, or an unresolved refactor tend to hide.
 fn file_size_outlier(metrics: &[FileMetrics]) -> Option<AnomalyObservation> {
-    let sizes: Vec<f64> = metrics
-        .iter()
-        .map(|m| f64::from(m.line_count))
-        .filter(|size| *size > 0.0)
-        .collect();
-    if sizes.len() < MIN_FILES {
-        return None;
-    }
-    let (mean, stddev) = mean_and_stddev(&sizes)?;
+    let eligible: Vec<&FileMetrics> = metrics.iter().filter(|m| m.line_count > 0).collect();
 
+    let mut best: Option<AnomalyObservation> = None;
     let mut best_z = f64::NEG_INFINITY;
-    let mut best_file: Option<&FileMetrics> = None;
-    for file in metrics {
-        let z = (f64::from(file.line_count) - mean) / stddev;
-        if z > Z_OUTLIER && z > best_z {
-            best_z = z;
-            best_file = Some(file);
+    for (extension, group) in group_by_language(&eligible) {
+        if group.len() < MIN_FILES {
+            continue;
+        }
+
+        let sizes: Vec<f64> = group.iter().map(|m| f64::from(m.line_count)).collect();
+        let Some((mean, stddev)) = mean_and_stddev(&sizes) else {
+            continue;
+        };
+
+        for file in &group {
+            let z = (f64::from(file.line_count) - mean) / stddev;
+            if z > Z_OUTLIER && z > best_z {
+                best_z = z;
+                let description = format!(
+                    "At {} lines this file is {z:.1} standard deviations above the \
+                     {} .{extension} mean of {mean:.0}. Size outliers are where \
+                     generated dumps and unsplit modules accumulate.",
+                    file.line_count,
+                    group.len(),
+                );
+                best = Some(AnomalyObservation {
+                    pattern_name: "file-size-outlier".to_string(),
+                    path: file.path.clone(),
+                    evidence: format!("line_count={}", file.line_count),
+                    description,
+                });
+            }
         }
     }
-    let z = best_z;
-    let file = best_file?;
-
-    let outliers = metrics
-        .iter()
-        .filter(|m| (f64::from(m.line_count) - mean) / stddev > Z_OUTLIER)
-        .count();
-    let description = format!(
-        "At {} lines this file is {z:.1} standard deviations above the repository \
-         mean of {mean:.0} ({outliers} file(s) above the outlier threshold). Size \
-         outliers are where generated dumps and unsplit modules accumulate.",
-        file.line_count,
-    );
-    Some(AnomalyObservation {
-        pattern_name: "file-size-outlier".to_string(),
-        path: file.path.clone(),
-        evidence: format!("line_count={}", file.line_count),
-        description,
-    })
+    best
 }
 
 #[cfg(test)]
@@ -601,5 +689,157 @@ mod tests {
     fn shebang_is_not_a_comment() {
         assert!(!is_comment_like("#!/usr/bin/env python3"));
         assert!(is_comment_like("# section"));
+    }
+
+    #[test]
+    fn language_key_is_the_extension() {
+        assert_eq!(language_key("src/main.rs"), "rs");
+        assert_eq!(language_key("lib/app.min.js"), "js");
+        assert_eq!(language_key("Makefile"), "");
+        assert_eq!(language_key("windows\\lib\\mod.py"), "py");
+    }
+
+    #[test]
+    fn minority_language_files_are_not_judged_against_other_languages() {
+        // Twenty terse Rust files plus one heavily-narrated Python file.
+        // Globally the Python file is an extreme outlier (90% vs 10%); with
+        // per-language baselines its group holds one file, below MIN_FILES,
+        // so it is never judged against the Rust norm.
+        let mut population = uniform_population(20);
+        population.push(metrics("scripts/helper.py", 100, 90, 5));
+        let observations = analyze_anomalies(&population);
+        assert!(observations
+            .iter()
+            .all(|o| o.pattern_name != "comment-ratio-outlier"));
+    }
+
+    #[test]
+    fn same_language_outlier_is_judged_against_its_own_extension() {
+        // The narrated file now has twenty .py peers, so the group supports a
+        // z-score and the outlier is flagged against Python's own baseline.
+        let mut population: Vec<FileMetrics> = (0..20)
+            .map(|i| metrics(&format!("src/module{i}.py"), 100, 10, 10))
+            .collect();
+        population.push(metrics("src/narrated.py", 100, 90, 5));
+        let observations = analyze_anomalies(&population);
+        let hit = observations
+            .iter()
+            .find(|o| o.pattern_name == "comment-ratio-outlier")
+            .unwrap();
+        assert_eq!(hit.path, "src/narrated.py");
+        assert!(hit.description.contains(".py"));
+    }
+
+    #[test]
+    fn file_size_outliers_are_grouped_by_extension() {
+        // A 3_000-line .js file among ten 100-line .js peers is a real size
+        // outlier; the same physical size in a lone .svg is not judged.
+        let mut population = uniform_population(20);
+        for i in 0..10 {
+            population.push(metrics(&format!("web/bundle{i}.js"), 100, 10, 10));
+        }
+        population.push(metrics("web/generated_dump.js", 3_000, 30, 100));
+        let observations = analyze_anomalies(&population);
+        let hit = observations
+            .iter()
+            .find(|o| o.pattern_name == "file-size-outlier")
+            .unwrap();
+        assert_eq!(hit.path, "web/generated_dump.js");
+
+        let mut isolated = uniform_population(20);
+        for i in 0..10 {
+            isolated.push(metrics(&format!("web/bundle{i}.js"), 100, 10, 10));
+        }
+        isolated.push(metrics("assets/diagram.svg", 3_000, 30, 100));
+        let observations = analyze_anomalies(&isolated);
+        assert!(observations
+            .iter()
+            .all(|o| o.pattern_name != "file-size-outlier"));
+    }
+
+    #[test]
+    fn identifier_diversity_groups_by_extension() {
+        // Twenty terse-vocabulary .go files make low diversity the group
+        // norm; a low-diversity .rs among diverse .rs peers stands out even
+        // though the pooled statistics would have washed it out.
+        let mut population: Vec<FileMetrics> = (0..20)
+            .map(|i| FileMetrics {
+                path: format!("src/handler{i}.go"),
+                line_count: 200,
+                comment_lines: 10,
+                blank_lines: 10,
+                max_line_length: 80,
+                total_line_length: 8_000,
+                identifier_tokens: 400,
+                unique_identifiers: 40,
+            })
+            .collect();
+        population.extend((0..20).map(|i| metrics(&format!("src/lib{i}.rs"), 200, 10, 10)));
+        population.push(FileMetrics {
+            path: "src/templated.rs".to_string(),
+            line_count: 300,
+            comment_lines: 10,
+            blank_lines: 10,
+            max_line_length: 80,
+            total_line_length: 12_000,
+            identifier_tokens: 400,
+            unique_identifiers: 30,
+        });
+        let observations = analyze_anomalies(&population);
+        let hit = observations
+            .iter()
+            .find(|o| o.pattern_name == "identifier-diversity-outlier")
+            .unwrap();
+        assert_eq!(hit.path, "src/templated.rs");
+        assert!(hit.description.contains(".rs"));
+    }
+
+    /// A population guaranteed to trip both the comment-ratio and file-size
+    /// detectors.
+    fn outlier_population() -> Vec<FileMetrics> {
+        let mut population = uniform_population(20);
+        population.push(metrics("src/narrated.rs", 100, 90, 5));
+        population.push(metrics("src/generated_dump.rs", 3_000, 30, 100));
+        population
+    }
+
+    #[test]
+    fn validate_detector_names_accepts_known_and_empty_lists() {
+        assert!(validate_detector_names(&[]).is_ok());
+        let all: Vec<String> = DETECTOR_NAMES
+            .iter()
+            .map(|name| (*name).to_string())
+            .collect();
+        assert!(validate_detector_names(&all).is_ok());
+    }
+
+    #[test]
+    fn validate_detector_names_reports_unknown_entries() {
+        let error = validate_detector_names(&["file-size-outlier".to_string(), "nope".to_string()])
+            .unwrap_err();
+        assert!(error.contains("nope"));
+        assert!(error.contains("valid detectors:"));
+        // A rejected name still appears alongside the valid ones it was
+        // submitted with.
+        assert!(error.contains("file-size-outlier"));
+    }
+
+    #[test]
+    fn allow_list_runs_only_the_named_detectors() {
+        let observations = analyze_anomalies_with(
+            &outlier_population(),
+            Some(&["file-size-outlier".to_string()]),
+        );
+        assert!(!observations.is_empty());
+        assert!(observations
+            .iter()
+            .all(|o| o.pattern_name == "file-size-outlier"));
+    }
+
+    #[test]
+    fn empty_allow_list_disables_every_detector() {
+        assert!(analyze_anomalies_with(&outlier_population(), Some(&[])).is_empty());
+        // Unset runs everything.
+        assert!(!analyze_anomalies_with(&outlier_population(), None).is_empty());
     }
 }
