@@ -26,6 +26,8 @@ aegis scan [path] [options]
 | `--diff` | Scan only the changed lines of a unified diff file | none |
 | `--staged` | Scan the staged (index) content of the git repository instead of files on disk; `<path>` selects the repository | `false` |
 | `--all` | Include disabled patterns | `false` |
+| `--anomaly-detectors` | Comma-separated allow-list of statistical anomaly detectors: `comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`; unknown names fail with the valid list | all |
+| `--no-anomalies` | Disable the statistical anomaly layer entirely (conflicts with `--anomaly-detectors`) | `false` |
 
 **Global flags:** `-f, --format <human|json|sarif>` and `-c, --config
 <profile>` are top-level options, so they must come **before** the

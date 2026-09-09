@@ -67,8 +67,12 @@ findings render in every output format but never contribute to the risk
 score and never fail the exit code, so any `--severity-threshold` keeps
 them out. Directory scans also append `statistical-anomaly` info
 observations for files that deviate sharply from their own repository —
-comment-ratio outliers, Pareto-style comment concentration, identifier
-reuse, and size outliers — as triage signals rather than verdicts.
+comment-ratio outliers (measured against each file's own language group),
+Pareto-style comment concentration, identifier reuse, and size outliers —
+as triage signals rather than verdicts. Opt out with
+`--no-anomalies`, or run a subset with
+`--anomaly-detectors file-size-outlier` (comma-separated names; unknown
+names fail with the valid list).
 
 The `-c/--config` flag takes a preset (`production`, `pipeline`,
 `development`, `mcp-integration`) or a profile JSON file, and supplies

@@ -44,6 +44,9 @@ pub struct ScanOptions {
     /// Scan the staged (index) content of the git repository at `path`
     /// instead of files on disk — pre-commit mode
     pub staged: bool,
+    /// Comma-separated allowlist of statistical anomaly detectors; `None`
+    /// runs all of them, an empty string runs none.
+    pub anomaly_detectors: Option<String>,
     /// Renderer for the report buffer, mirroring the `--format` flag.
     pub format: OutputFormat,
     /// Suppress header and stats blocks so the buffer carries findings only.
@@ -77,6 +80,20 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
+    // Split the detector allow-list and fail loudly on unknown names, the
+    // same way --categories does: a typo would otherwise silently disable
+    // every detector.
+    let anomaly_detectors: Option<Vec<String>> = opts.anomaly_detectors.as_ref().map(|list| {
+        list.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    });
+    if let Some(names) = &anomaly_detectors {
+        aegis_core::anomalies::validate_detector_names(names)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
+
     let core_opts = CoreOptions {
         follow_symlinks: opts.follow_symlinks,
         categories: categories.clone(),
@@ -84,6 +101,7 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         include_disabled: opts.all,
         diff_file: opts.diff.clone(),
         baseline: opts.baseline.clone(),
+        anomaly_detectors,
         ..Default::default()
     };
 
@@ -497,6 +515,7 @@ mod tests {
             staged: false,
             format: OutputFormat::Human,
             quiet: false,
+            anomaly_detectors: None,
         };
 
         assert!(!opts.scan_file);
@@ -523,11 +542,56 @@ mod tests {
             format: OutputFormat::Json,
             quiet: true,
             staged: false,
+            anomaly_detectors: None,
         };
 
         assert_eq!(opts.categories.as_ref().unwrap(), "secrets,pii");
         assert_eq!(opts.severity_threshold.as_ref().unwrap(), "high");
         assert!(opts.quiet);
+    }
+
+    fn opts_with_anomaly_detectors(list: Option<&str>) -> ScanOptions {
+        ScanOptions {
+            path: PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            staged: false,
+            anomaly_detectors: list.map(str::to_string),
+            format: OutputFormat::Human,
+            quiet: false,
+        }
+    }
+
+    #[test]
+    fn test_anomaly_detector_list_builds_a_scanner() {
+        let opts = opts_with_anomaly_detectors(Some("file-size-outlier, comment-ratio-outlier"));
+        assert!(build_scanner_from_opts(&opts).is_ok());
+    }
+
+    #[test]
+    fn test_empty_anomaly_detector_list_disables_the_layer() {
+        // An empty string means "run none", not "unset": the scanner builds
+        // with an explicit empty allow-list.
+        let opts = opts_with_anomaly_detectors(Some(""));
+        assert!(build_scanner_from_opts(&opts).is_ok());
+    }
+
+    #[test]
+    fn test_unknown_anomaly_detector_fails_loudly() {
+        let opts = opts_with_anomaly_detectors(Some("file-size-outlier,nope"));
+        let Err(error) = build_scanner_from_opts(&opts) else {
+            panic!("an unknown anomaly detector name must fail loudly");
+        };
+        assert!(error.to_string().contains("nope"), "got: {error}");
+        assert!(error.to_string().contains("valid detectors:"));
     }
 
     #[tokio::test]
@@ -554,6 +618,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -577,6 +642,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -600,6 +666,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let Err(err) = build_scanner_from_opts(&opts) else {
@@ -628,6 +695,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         assert!(build_scanner_from_opts(&opts).is_ok());
@@ -650,6 +718,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts);
@@ -673,6 +742,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -700,6 +770,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -726,6 +797,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts);
@@ -754,6 +826,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan_with_stdin(
@@ -783,6 +856,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -812,6 +886,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan_with_stdin(&opts, "console.log(\"debug\");\n")
@@ -852,6 +927,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -879,6 +955,7 @@ mod tests {
             format: OutputFormat::Json,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts);
@@ -912,6 +989,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts);
@@ -942,6 +1020,7 @@ mod tests {
             format: OutputFormat::Sarif,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts);
@@ -970,6 +1049,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts).unwrap();
@@ -1033,6 +1113,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let exit_code = run_scan_and_get_exit_code(opts).await;
@@ -1100,6 +1181,7 @@ mod tests {
             baseline,
             all: false,
             diff: None,
+            anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
@@ -1285,6 +1367,7 @@ mod tests {
             all: false,
             diff: None,
             staged: true,
+            anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,
         }
@@ -1420,6 +1503,7 @@ mod tests {
             format: OutputFormat::Json,
             quiet: false,
             staged: false,
+            anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts).unwrap();

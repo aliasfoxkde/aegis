@@ -7,6 +7,38 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Ten PHI-handling rules in `healthcare`, which previously only held
+  identifier-format detectors: three more provider identifiers (NPI,
+  DEA registration, Medicare MBI/HICN) plus seven HIPAA
+  technical-safeguard hazards — PHI in log or print output, hard-coded
+  patient-identifier literals, patient resources referenced over
+  plaintext HTTP, PHI routed through email, `SELECT *` over PHI tables
+  (the minimum-necessary standard), patient identifiers in URL query
+  strings, and encryption explicitly disabled next to patient data.
+  660 → 670 patterns.
+
+### Changed
+
+- Statistical anomaly z-scores are now computed per language group —
+  the eligible files sharing an extension — instead of across the whole
+  repository. Comment conventions differ too much between languages for
+  a mixed baseline to mean anything: a narrated Python file judged
+  against terse Rust siblings was a false outlier waiting to happen. A
+  group smaller than eight files supports no z-score, so files in
+  minority languages are not judged rather than judged against someone
+  else's norm; the Pareto comment-concentration detector remains
+  repository-total by definition.
+- The statistical anomaly layer is configurable:
+  `ScanOptions::anomaly_detectors` in the core API, `--no-anomalies` and
+  `--anomaly-detectors <list>` on the CLI (unknown names fail loudly
+  with the valid list), and an `anomaly_detectors` field in
+  `-c/--config` profile JSON. `null`/unset runs all four detectors, an
+  empty allow-list disables the layer entirely, and a non-empty list
+  runs exactly the named detectors. A disabled layer also skips metric
+  collection during the walk.
+
 ### Fixed
 
 - Release pipeline `checksums.txt` is now a usable verification file: it
