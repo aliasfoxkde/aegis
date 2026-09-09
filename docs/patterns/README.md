@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis ships **660 detection patterns** across **34 categories**.
+Aegis ships **670 detection patterns** across **34 categories**.
 Every pattern is compiled into every Aegis surface (CLI, MCP server,
 daemon, WASM) from the source in `crates/aegis-patterns/src/`.
 
@@ -40,8 +40,8 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | Severity | Patterns |
 |----------|----------|
 | critical | 68 |
-| high | 141 |
-| medium | 182 |
+| high | 145 |
+| medium | 188 |
 | low | 269 |
 
 ## Categories
@@ -66,7 +66,7 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | [git-hygiene](./categories/git-hygiene.md) | 28 | Repository hygiene: artifacts, debug files, history |
 | [git-ops](./categories/git-ops.md) | 3 | GitOps workflow and manifest checks |
 | [graphql](./categories/graphql.md) | 4 | GraphQL API security and usage |
-| [healthcare](./categories/healthcare.md) | 7 | Clinical data and HIPAA-adjacent rules |
+| [healthcare](./categories/healthcare.md) | 17 | Clinical data and HIPAA-adjacent rules |
 | [infrastructure](./categories/infrastructure.md) | 55 | Infrastructure as code security |
 | [kubernetes](./categories/kubernetes.md) | 11 | Kubernetes manifest hardening |
 | [llm-guardrails](./categories/llm-guardrails.md) | 25 | Prompt-injection and LLM guardrail checks |
