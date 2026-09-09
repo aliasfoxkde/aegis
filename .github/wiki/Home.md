@@ -55,8 +55,8 @@ GitHub wikis cannot link into the repository with relative paths, so repository 
 
 Counts are generated from the shipped pattern corpus; the catalog is canonical.
 
-- **660** detection patterns
-- **34** pattern categories (68 critical, 141 high, 182 medium, 269 low)
+- **670** detection patterns
+- **34** pattern categories (68 critical, 145 high, 188 medium, 269 low)
 - **7** workspace crates: aegis-core, aegis-cli, aegis-mcp, aegis-daemon, aegis-bundler, aegis-patterns, aegis-wasm
 - **4** configuration presets: production, pipeline, development, mcp-integration
 - **100%** Rust implementation

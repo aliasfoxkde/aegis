@@ -80,7 +80,7 @@ More examples in the [Quick Start Guide](docs/guides/QUICK_START.md).
 
 ## Pattern Categories
 
-Aegis includes **660 patterns** across **34 categories** (counts generated
+Aegis includes **670 patterns** across **34 categories** (counts generated
 from source; see the full catalog for every rule):
 
 | Category | Patterns | Description |
@@ -110,7 +110,7 @@ from source; see the full catalog for every rule):
 | [cryptography](docs/patterns/README.md#cryptography) | 10 | Cryptographic primitive misuse |
 | [api-integration](docs/patterns/README.md#api-integration) | 9 | HTTP client, webhook mistakes |
 | [terraform](docs/patterns/README.md#terraform) | 7 | HashiCorp Terraform |
-| [healthcare](docs/patterns/README.md#healthcare) | 7 | Clinical data rules |
+| [healthcare](docs/patterns/README.md#healthcare) | 17 | Clinical identifiers and PHI-handling hazards |
 | [data-visualization](docs/patterns/README.md#data-visualization) | 5 | Charting pitfalls |
 | [pwa](docs/patterns/README.md#pwa) | 5 | Progressive web app checks |
 | [container](docs/patterns/README.md#container) | 4 | Container hardening |
@@ -208,7 +208,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/    # 660 pattern definitions
+│   └── aegis-patterns/    # 670 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation
 ```
