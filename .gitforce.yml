@@ -22,7 +22,14 @@ jobs:
   - name: release-build
     image: localhost/aegis-release:20260910@sha256:e8459e041c91323fdc37a3d9c9483b2073ddadb91069a94312045b86695dda29
     timeout: 3600
-    needs: [quality-gate]
+    # Deliberately NOT `needs: [quality-gate]`: the orchestrator holds
+    # DAG edges in memory only, so a mid-run restart orphans every
+    # dependent job and the run wedges as a zombie (observed twice on
+    # 2026-09-10). Flat jobs survive restarts — both rows exist at
+    # trigger time and dispatch is database-driven. The gate-before-
+    # build ordering is enforced where the artifacts meet the world:
+    # publish_github_release.sh refuses to publish unless BOTH jobs of
+    # this run reached `succeeded` in the lane database.
     steps:
       - name: build-package-attest
         run: bash scripts/release/build_release.sh

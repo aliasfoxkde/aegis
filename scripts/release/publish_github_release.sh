@@ -48,6 +48,34 @@ if [ -z "$version" ]; then
 fi
 tag="v$version"
 
+# The pipeline's two jobs run flat (see .gitforce.yml), so the
+# gate-before-build ordering lives here: refuse to publish unless the
+# lane database shows the quality-gate job AND the build job both
+# succeeded for this exact run. Jobs are identified by their command
+# payloads (jobs.name is a generated uuid, and job_steps is not
+# populated). run_id crosses as argv, never interpolated.
+verdict="$(ssh "$GITFORGE_HOST" "python3 - '$run_id' '$GITFORGE_DB' <<'PY'
+import sqlite3
+import sys
+
+connection = sqlite3.connect('file:' + sys.argv[2] + '?mode=ro', uri=True)
+gate, build = connection.execute(
+    'SELECT'
+    ' (SELECT COUNT(*) FROM jobs WHERE pipeline_run_id = ?'
+    '   AND commands LIKE \'%cargo clippy%\' AND status = \'succeeded\'),'
+    ' (SELECT COUNT(*) FROM jobs WHERE pipeline_run_id = ?'
+    '   AND commands LIKE \'%build_release.sh%\' AND status = \'succeeded\')',
+    (sys.argv[1], sys.argv[1]),
+).fetchone()
+print('publish-ok' if gate and build else 'gate=%d build=%d' % (gate, build))
+PY
+")"
+echo "lane verdict for $run_id: $verdict"
+if [ "$verdict" != "publish-ok" ]; then
+  echo "REFUSING: lane evidence does not show both jobs succeeded" >&2
+  exit 1
+fi
+
 # Resolve the release-build job's workspace directory from the lane
 # database. run_id crosses as argv, never interpolated into the SQL.
 workspace="$(ssh "$GITFORGE_HOST" "python3 - '$run_id' '$GITFORGE_DB' <<'PY'
@@ -57,9 +85,10 @@ import sys
 connection = sqlite3.connect('file:' + sys.argv[2] + '?mode=ro', uri=True)
 row = connection.execute(
     'SELECT working_dir FROM jobs'
-    ' WHERE pipeline_run_id = ? AND name = ?'
+    ' WHERE pipeline_run_id = ?'
+    '   AND commands LIKE \'%build_release.sh%\''
     ' ORDER BY created_at LIMIT 1',
-    (sys.argv[1], 'release-build'),
+    (sys.argv[1],),
 ).fetchone()
 print(row[0] if row and row[0] else '')
 PY
