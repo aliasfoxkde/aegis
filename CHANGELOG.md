@@ -5,6 +5,34 @@ All notable changes to Aegis are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Binary assets for
 every release are attached to the matching GitHub release.
 
+## [0.6.1] - 2026-09-10
+
+### Fixed
+
+- The Dockerfile secret detector now anchors variable-assignment
+  matching to real Dockerfile directives, so documentation lines and
+  comments no longer read as hard-coded secrets.
+- CI-bypass detection is scoped to explicit suppression syntax; prose
+  that merely mentions checks no longer produces `ci-bypass`
+  findings. Together with the Dockerfile change this removes the two
+  loudest false-positive classes reported against 0.6.0.
+- The `unreadable_directory_entries_are_ledgered_as_failed` test no
+  longer encodes a non-root assumption as a failure: processes that
+  can read through a `0o000` directory (root in CI containers) now
+  assert the readable-path outcome instead, and the fail-closed
+  assertion still runs wherever the directory is genuinely
+  unreadable.
+
+### Changed
+
+- Releases are now built by the local GitForge release lane
+  (`aegis-release` pipeline) instead of GitHub Actions: the lane
+  produces every platform archive plus a `release-attestation.json`
+  with per-artifact hashes, and the GitHub release is published from
+  those lane artifacts. Linux archives are static musl builds — no
+  distribution glibc requirement. Release titles are the bare version
+  (`v0.6.1`).
+
 ## [0.6.0] - 2026-09-08
 
 ### Added

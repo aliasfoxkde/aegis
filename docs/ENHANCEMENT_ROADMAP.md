@@ -217,9 +217,13 @@ testing and are out of scope by design.
 Current channels:
 
 - **GitHub Releases**: checksummed binaries (SHA-256 `checksums.txt` per
-  platform) for linux-amd64, linux-arm64, macOS x86_64/arm64, Windows,
-  plus `aegis_wasm.wasm`, published by `.github/workflows/release.yml` on
-  `v*` tags — 9 assets in total
+  platform) for linux x86_64/arm64 (static musl), macOS x86_64/arm64,
+  Windows, plus `aegis-wasm.wasm`, built by the GitForge release lane
+  (`.gitforce.yml` → `ci/release/Dockerfile`) and published from the
+  lane artifacts by `scripts/release/publish_github_release.sh` —
+  10 assets plus a `release-attestation.json` in total; the
+  `.github/workflows/release.yml` workflow remains as a manual
+  fallback rebuild only
 - **From source**: `cargo install --path crates/aegis-cli` or the
   workspace build; MSRV 1.75
 - **MCP / daemon**: `aegis-mcp` and `aegis-daemon` binaries ship in the

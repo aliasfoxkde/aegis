@@ -26,7 +26,7 @@ Welcome to the Aegis wiki! This wiki contains project documentation that syncs w
 | macOS Apple Silicon | [aegis-darwin-arm64.tar.gz](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-arm64.tar.gz) |
 | macOS Intel | [aegis-darwin-x86_64.tar.gz](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-darwin-x86_64.tar.gz) |
 | Windows x86_64 | [aegis-windows-x86_64.tar.gz](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-windows-x86_64.tar.gz) |
-| WebAssembly | [aegis_wasm.wasm](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis_wasm.wasm) |
+| WebAssembly | [aegis-wasm.wasm](https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-wasm.wasm) |
 
 Each tarball contains the `aegis` CLI plus the `aegis-mcp`, `aegis-daemon`, and `aegis-bundler` binaries; `checksums.txt` covers every artifact.
 

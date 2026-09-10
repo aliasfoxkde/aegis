@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "aegis"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "assert_cmd",
  "predicates",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-bundler"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "anyhow",
@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-cli"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-core"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-patterns",
  "anyhow",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-daemon"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-mcp"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "aegis-patterns",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-patterns"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "lazy_static",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "aegis-wasm"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "aegis-core",
  "aegis-patterns",

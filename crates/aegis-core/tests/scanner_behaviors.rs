@@ -123,6 +123,26 @@ fn unreadable_directory_entries_are_ledgered_as_failed() {
     // Restore before asserting so the temp dir can always be cleaned up.
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(original_mode)).unwrap();
 
+    // Root (and any process holding CAP_DAC_OVERRIDE) reads through a
+    // 0o000 directory, so the "unreadable" premise is unobservable in
+    // that environment — for example inside root-owned CI containers.
+    // Probe readability and assert the outcome the environment owes:
+    // entries that are truly readable analyze; unreadable ones fail
+    // closed below.
+    if std::fs::File::open(locked.join("hidden.txt")).is_ok() {
+        let (_, stats) = scanner
+            .scan_dir(temp.path())
+            .expect("a readable scan must succeed");
+        assert_eq!(stats.files_failed, 0);
+        assert!(stats
+            .inspection_ledger
+            .units
+            .iter()
+            .any(|unit| unit.unit_id.ends_with("hidden.txt")
+                && unit.status == InspectionStatus::Analyzed));
+        return;
+    }
+
     // Fail closed: when every required unit failed to inspect, the scan is
     // an error carrying the stats rather than a silently empty success.
     let error = result.expect_err("an all-failed scan must error");

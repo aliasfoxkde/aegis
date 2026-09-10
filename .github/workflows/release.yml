@@ -1,9 +1,18 @@
 name: Release
 
+# Since v0.6.1 releases are built by the GitForge release lane
+# (.gitforce.yml -> ci/release/Dockerfile) and published from the lane
+# artifacts by scripts/release/publish_github_release.sh; GitHub is the
+# sharing mirror, not the build path. This workflow stays as a manual
+# fallback rebuild on GitHub infrastructure and no longer fires on tag
+# pushes.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v0.6.1)'
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -94,7 +103,7 @@ jobs:
       - name: Install cross-compilation tools
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Set up cross-compilation environment
-        run: echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> $GITHUB_ENV
+        run: echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc' >> "$GITHUB_ENV"
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
@@ -200,12 +209,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build WASM
         run: cargo build --target wasm32-unknown-unknown --release --package aegis-wasm
+      - name: Rename to release asset name
+        run: cp target/wasm32-unknown-unknown/release/aegis_wasm.wasm aegis-wasm.wasm
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: wasm
           path: |
-            target/wasm32-unknown-unknown/release/aegis_wasm.wasm
+            aegis-wasm.wasm
 
   # Create release with all assets
   create-release:
@@ -280,7 +291,7 @@ jobs:
             aegis-linux-arm64.tar.gz \
             aegis-linux-x86_64.tar.gz \
             aegis-windows-x86_64.tar.gz \
-            aegis_wasm.wasm \
+            aegis-wasm.wasm \
             checksums.txt \
             source.tar.gz \
             source.zip; do
