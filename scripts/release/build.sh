@@ -48,11 +48,15 @@ build_platform() {
     local dir bin
 
     # cargo-zigbuild wraps `cargo build` — it takes no `build` subcommand.
+    # Only the four binary packages are built: `--workspace` would also build
+    # aegis-wasm's cdylib on every platform, and its Mach-O dylib link needs
+    # a macOS SDK that a cross host does not have.
+    local -a pkgs=(-p aegis-cli -p aegis-mcp -p aegis-daemon -p aegis-bundler)
     if [[ "$target" == x86_64-unknown-linux-gnu ]]; then
-        cargo build --workspace --release
+        cargo build "${pkgs[@]}" --release
         dir="target/release"
     else
-        cargo zigbuild --workspace --release --target "$target"
+        cargo zigbuild "${pkgs[@]}" --release --target "$target"
         dir="target/$target/release"
     fi
 
