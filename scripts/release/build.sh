@@ -58,7 +58,8 @@ build_platform() {
     fi
 
     local archive members=()
-    while read -r bin; do
+    # `|| [[ -n $bin ]]` keeps a final unterminated line from being dropped.
+    while read -r bin || [[ -n "$bin" ]]; do
         members+=("$(bin_name "$bin" "$target")")
     done < <(platform_binaries)
 

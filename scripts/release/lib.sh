@@ -34,9 +34,10 @@ asset_os_arch() {
     esac
 }
 
-# The four binaries packaged per platform (plus .exe on Windows).
+# The four binaries packaged per platform (plus .exe on Windows). The
+# trailing newline matters: `while read` drops a final unterminated line.
 platform_binaries() {
-    printf 'aegis aegis-mcp aegis-daemon aegis-bundler'
+    printf 'aegis\naegis-mcp\naegis-daemon\naegis-bundler\n'
 }
 
 # Every uploaded asset, in the canonical order used by publish.sh.
