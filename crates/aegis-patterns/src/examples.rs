@@ -559,7 +559,7 @@ pub fn example_for(name: &str) -> Option<&'static str> {
         "secrets-aws-access-key" => Some(concat!("AKIAB3D7F9", "H2J5L8N1P6")),
         "secrets-aws-secret-key" => Some(concat!("aws_secret = \"wJalrXUtnFEMI", "/K7MDENGbPxRfiCYpX7vQ2mZ8kN\"")),
         "secrets-github-token" => Some(concat!("ghu_dkcmxkG4xzE6S4CqSU", "u9hgwFdTNcYWBPXxoDpUnbV")),
-        "secrets-in-dockerfile" => Some(concat!("ENV-x2Cf", "sWSECRET")),
+        "secrets-in-dockerfile" => Some(concat!("ENV SECRET=", "x2CfsW7Q")),
         "secrets-in-manifest" => Some(concat!("apiVersion: v1 ", "\n", " kind: Secret")),
         "secrets-sendgrid-api-key" => Some(concat!("SG.ievHz8RBGc_NMAwJ-JqJT7.rHV23uvE", "fh99f6GaGVL_Pwrrd24pmy89b4zfKV5qgWL")),
         "secrets-slack-token" => Some(concat!("xoxa-7324658954267-3984759328624V8HQ3W", "yCfZr4uaTdBXAS5s7z9nLoYkPc2eFUqpiwRvExm")),

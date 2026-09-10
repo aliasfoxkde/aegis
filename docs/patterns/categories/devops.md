@@ -374,15 +374,13 @@ Potential secret in Dockerfile detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)\b(?:ARG|ENV)\b[^\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
+(?im)^\s*(?:ARG|ENV)\s+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
 ```
 
-**Input that fires** (verified by the liveness test; long
-token-shaped runs are elided here — the exact input is compiled into
-`crates/aegis-patterns/src/examples.rs`):
+**Input that fires** (verified by the liveness test):
 
 ```text
-ENV-x2Cf…ET
+ENV SECRET=x2CfsW7Q
 ```
 
 ### terraform-state
