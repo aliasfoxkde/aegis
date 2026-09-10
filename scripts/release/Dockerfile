@@ -12,6 +12,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl xz-utils git \
     && rm -rf /var/lib/apt/lists/*
 
+# The `rust:1` image ships rustup without the lint/format components the
+# quality-gates job runs; add them explicitly so the image owns its toolchain.
+RUN rustup component add rustfmt clippy
+
 # Zig pinned to the version the release attestation records; bump here and
 # rebuild the image when the toolchain moves.
 ARG ZIG_VERSION=0.16.0
