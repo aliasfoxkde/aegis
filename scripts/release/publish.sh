@@ -57,12 +57,15 @@ fi
 # Create the release as a draft (mutable) unless it already exists. A
 # published release is immutable on GitHub — assets can neither be replaced
 # nor added — so publishing is deferred until the full set is verified below.
-existing_id="$(gh api "repos/$gh_repo/releases/tags/$tag" --jq '.id' 2>/dev/null || true)"
-if [[ -z "$existing_id" ]]; then
+# `gh release view` (not `gh api releases/tags/...`): the API call prints its
+# 404 body to stdout, which must never be mistaken for a release id.
+if gh release view "$tag" --repo "$gh_repo" --json id >/dev/null 2>&1; then
+    if [[ "$(gh release view "$tag" --repo "$gh_repo" --json isDraft --jq '.isDraft')" == "true" ]]; then
+        gh release edit "$tag" --repo "$gh_repo" --title "$tag" --notes-file "$notes" >/dev/null
+    fi
+else
     gh release create "$tag" --repo "$gh_repo" --verify-tag --draft \
         --title "$tag" --notes-file "$notes" >/dev/null
-elif [[ "$(gh api "repos/$gh_repo/releases/$existing_id" --jq '.draft')" == "true" ]]; then
-    gh release edit "$tag" --repo "$gh_repo" --title "$tag" --notes-file "$notes" >/dev/null
 fi
 
 while read -r asset; do
