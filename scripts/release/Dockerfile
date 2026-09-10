@@ -16,6 +16,16 @@ RUN apt-get update \
 # quality-gates job runs; add them explicitly so the image owns its toolchain.
 RUN rustup component add rustfmt clippy
 
+# Every release target's std libraries. The host triple ships with the
+# image; the four cross targets and wasm32 do not, and without their std
+# crates every cross build dies with "can't find crate for `std`".
+RUN rustup target add \
+    aarch64-unknown-linux-gnu \
+    x86_64-apple-darwin \
+    aarch64-apple-darwin \
+    x86_64-pc-windows-gnu \
+    wasm32-unknown-unknown
+
 # Zig pinned to the version the release attestation records; bump here and
 # rebuild the image when the toolchain moves.
 ARG ZIG_VERSION=0.16.0
