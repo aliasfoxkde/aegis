@@ -1,0 +1,33 @@
+# GitForge CI pipeline (https://github.com/aliasfoxkde/GitForge).
+#
+# GitForge is this project's primary CI/CD platform: the release asset matrix
+# is built here, then synced to the GitHub release by
+# `scripts/release/publish.sh`. The GitHub `Release` workflow is a
+# manual-dispatch fallback that runs the same scripts.
+#
+# Jobs run in the aegis-builder image (scripts/release/Dockerfile) with the
+# repository mounted at the working directory; the runner collects the
+# build job's `artifacts/` directory.
+name: aegis-release
+version: "1"
+trigger_on: [manual, tag]
+environment: {}
+jobs:
+  - name: quality-gates
+    image: aegis-builder:1
+    timeout: 60m
+    steps:
+      - name: format
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+
+  - name: build-release
+    image: aegis-builder:1
+    needs: [quality-gates]
+    timeout: 240m
+    steps:
+      - name: build assets
+        run: scripts/release/pipeline.sh
