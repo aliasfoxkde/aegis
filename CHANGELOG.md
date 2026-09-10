@@ -5,6 +5,35 @@ All notable changes to Aegis are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Binary assets for
 every release are attached to the matching GitHub release.
 
+## [0.6.1] - 2026-09-10
+
+### Changed
+
+- Releases are built by the GitForge pipeline (`.gitforce.yml`) and synced
+  to the GitHub release by `scripts/release/publish.sh`; the GitHub
+  `Release` workflow remains as a manual-dispatch fallback running the same
+  scripts. Every release now ships `attestation.json`
+  (`aegis.release-attestation/v1`) recording the tag, commit, builder
+  platform, toolchains, and the SHA-256 of every other asset, and the WASM
+  asset is published as `aegis-wasm.wasm` — previously the crate-mangled
+  `aegis_wasm.wasm` — to match the `aegis-<target>` naming of the platform
+  archives. Release titles are the bare tag. darwin binaries are
+  cross-linked with zig on the build host rather than built on Apple
+  hardware; the attestation states this instead of hiding it.
+
+### Fixed
+
+- The `secrets-in-dockerfile` rule is anchored to line-oriented Dockerfile
+  directives — `^\s*(ARG|ENV)\s+…` under multiline matching, where it
+  previously matched `ARG`/`ENV` and a secret-ish word anywhere in a file —
+  so Rust, Markdown, and test prose containing words like `ENV` or `TOKEN`
+  are no longer reported as Dockerfile secrets.
+- The `ci-bypass` rule now requires explicit bypass syntax (`--no-verify`,
+  `continue-on-error: true`, or a direct verb–target pairing such as
+  `skip tests`) and fires only in CI, configuration, and shell file types,
+  instead of flagging any line of prose where a bypass-like word appears
+  near a CI-like one.
+
 ## [0.6.0] - 2026-09-08
 
 ### Added

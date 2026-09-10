@@ -29,7 +29,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 authors = ["Aegis Team"]
 license = "Apache-2.0"
