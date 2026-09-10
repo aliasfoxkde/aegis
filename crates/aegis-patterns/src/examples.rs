@@ -95,7 +95,7 @@ pub fn example_for(name: &str) -> Option<&'static str> {
         "chart-types" => Some(concat!("typeUDo-3G92@hbarZyME", "uCy VLaxnoFodataL1000+")),
         "chatgpt-conversation" => Some("you are a"),
         "checkov-config" => Some("checkov"),
-        "ci-bypass" => Some(concat!("bypass3sq ", "_hhz-DnVUci")),
+        "ci-bypass" => Some(concat!("skip-ci", ": true")),
         "ci-secret-hardcoded" => Some(concat!("gh_tokenJD9h", "D'j7KUu4iwZL")),
         "circleci-config" => Some(concat!(".circleci/", "config.yml")),
         "circuit-breaker" => Some(concat!("circuit", "Breaker")),
