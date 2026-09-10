@@ -109,6 +109,15 @@ fn baseline_load_failure_falls_back_to_unfiltered_scan() {
 fn unreadable_directory_entries_are_ledgered_as_failed() {
     use std::os::unix::fs::PermissionsExt;
 
+    // The premise is that mode 000 denies entry. Root (CI containers
+    // commonly run as root) bypasses file permissions entirely, so the
+    // directory stays readable and the all-failed contract cannot be
+    // exercised there — skip rather than fail.
+    let permissions_deny = |dir: &std::path::Path| {
+        std::fs::File::open(dir).is_err()
+            && std::fs::read_dir(dir).is_err()
+    };
+
     let temp = TempDir::new().unwrap();
     let locked = temp.path().join("locked");
     std::fs::create_dir(&locked).unwrap();
@@ -116,6 +125,11 @@ fn unreadable_directory_entries_are_ledgered_as_failed() {
 
     let original_mode = std::fs::metadata(&locked).unwrap().permissions().mode();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+
+    if !permissions_deny(&locked) {
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(original_mode)).unwrap();
+        return;
+    }
 
     let scanner = bundled_scanner();
     let result = scanner.scan_dir(temp.path());
