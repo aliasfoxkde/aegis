@@ -89,13 +89,8 @@ bin_name() {
     if [[ "$target" == *windows* ]]; then printf '%s.exe\n' "$bin"; else printf '%s\n' "$bin"; fi
 }
 
-# The cargo command for a target: zigbuild everywhere we cross-compile
-# (zig's linker covers glibc, Mach-O and windows-gnu), plain cargo on the
-# native host and for wasm.
-build_command_for() {
-    local target="$1"
-    case "$target" in
-        x86_64-unknown-linux-gnu|wasm32-unknown-unknown) printf 'cargo' ;;
-        *) printf 'cargo zigbuild' ;;
-    esac
-}
+# Cross-compilation goes through `cargo zigbuild` (zig's linker covers
+# aarch64 glibc, both darwin targets and windows-gnu); the native host and
+# wasm use plain `cargo build`. cargo-zigbuild wraps `cargo build` and takes
+# no `build` subcommand of its own.
+

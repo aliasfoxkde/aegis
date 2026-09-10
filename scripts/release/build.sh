@@ -31,10 +31,9 @@ for tool in sha256sum git; do
     command -v "$tool" >/dev/null || { printf 'missing tool: %s\n' "$tool" >&2; missing=1; }
 done
 command -v cargo >/dev/null || { printf 'missing tool: cargo\n' >&2; missing=1; }
-if [[ "$(build_command_for aarch64-apple-darwin)" == "cargo zigbuild" ]]; then
-    command -v cargo-zigbuild >/dev/null || { printf 'missing tool: cargo-zigbuild (cross targets)\n' >&2; missing=1; }
-    command -v zig >/dev/null || { printf 'missing tool: zig (cross linker)\n' >&2; missing=1; }
-fi
+# The matrix always includes cross targets, which zigbuild links with zig.
+command -v cargo-zigbuild >/dev/null || { printf 'missing tool: cargo-zigbuild (cross targets)\n' >&2; missing=1; }
+command -v zig >/dev/null || { printf 'missing tool: zig (cross linker)\n' >&2; missing=1; }
 (( missing == 0 )) || exit 1
 
 out="$repo/artifacts"
@@ -46,14 +45,14 @@ zig_version="$(zig version 2>/dev/null || printf 'n/a')"
 
 build_platform() {
     local target="$1"
-    local build dir bin
-    build="$(build_command_for "$target")"
+    local dir bin
 
+    # cargo-zigbuild wraps `cargo build` — it takes no `build` subcommand.
     if [[ "$target" == x86_64-unknown-linux-gnu ]]; then
-        $build build --workspace --release
+        cargo build --workspace --release
         dir="target/release"
     else
-        $build build --workspace --release --target "$target"
+        cargo zigbuild --workspace --release --target "$target"
         dir="target/$target/release"
     fi
 
