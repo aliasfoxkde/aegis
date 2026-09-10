@@ -114,8 +114,7 @@ fn unreadable_directory_entries_are_ledgered_as_failed() {
     // directory stays readable and the all-failed contract cannot be
     // exercised there — skip rather than fail.
     let permissions_deny = |dir: &std::path::Path| {
-        std::fs::File::open(dir).is_err()
-            && std::fs::read_dir(dir).is_err()
+        std::fs::File::open(dir).is_err() && std::fs::read_dir(dir).is_err()
     };
 
     let temp = TempDir::new().unwrap();
