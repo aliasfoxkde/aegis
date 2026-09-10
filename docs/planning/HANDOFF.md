@@ -1,7 +1,7 @@
 # Aegis Handoff — Security Scanner
 
 **Last Updated:** 2026-09-07
-**Evidence boundary (central audit):** code boundary is `main` at `eb87785fbab6813eb7fd50de620918e620b499b2` (PR #91, strict workspace lints + fail-closed scanner init); this document was refreshed on branch `docs/coverage`, which carries documentation edits only. Phases 0–7 of the 2026-09 improvement plan (`docs/PLAN.md`) are merged; phase 8 (documentation coverage) is in flight on this branch, phases 9–10 remain. Numeric ratings below remain historical context, not release gates.
+**Evidence boundary (central audit):** branch `main`, HEAD `5717e06f231157b85f319a8d8584addee0954f39`, 0 dirty status entries. The code boundary is the clean `main` checkout; older phase and rating statements below remain historical context, not release gates.
 **Status:** 🔄 Active — CI (3-OS test matrix, clippy `-D warnings`, cargo-audit + cargo-deny, CodeQL, coverage), 729 workspace tests, and the release workflow are evidenced in-repo; independent stdio, deployment, and enforced consumer-gate qualification remain pending
 **Location:** `/nas/Temp/repos/aegis`
 **Rating:** 8.5/10
