@@ -13,7 +13,10 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "ci-bypass".to_string(),
             category: "devops".to_string(),
-            match_pattern: r"(?i)(bypass|skip|disable|ignore).*(ci|pipeline|check|test|lint)"
+            // Restrict this high-confidence rule to explicit configuration or
+            // command syntax. Natural-language prose and source comments often
+            // contain words such as "skip tests" without bypassing anything.
+            match_pattern: r"(?i)(?:--no-verify|continue-on-error\s*:\s*true|(?:bypass|skip|disable|ignore)[\s_-]*(?:ci|pipeline|checks?|tests?|lint)|(?:ci|pipeline|checks?|tests?|lint)[\s_-]*(?:bypass|skip|disable|ignore))"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),
@@ -25,7 +28,17 @@ pub fn get() -> Vec<Pattern> {
             env_var: false,
             binary: false,
             exclude: None,
-            file_extensions: Vec::new(),
+            file_extensions: vec![
+                "yml".to_string(),
+                "yaml".to_string(),
+                "json".to_string(),
+                "toml".to_string(),
+                "sh".to_string(),
+                "bash".to_string(),
+                "ps1".to_string(),
+                "cmd".to_string(),
+                "bat".to_string(),
+            ],
         },
         Pattern {
             name: "hardcoded-ip".to_string(),

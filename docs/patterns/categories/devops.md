@@ -64,20 +64,20 @@ CI/CD bypass marker detected
 | Severity | `high` |
 | Confidence | `high` |
 | Scope | `file content` |
-| Applies to | every text file |
+| Applies to | `.yml`, `.yaml`, `.json`, `.toml`, `.sh`, `.bash`, `.ps1`, `.cmd`, `.bat` |
 | Binary files | skipped |
 | Tags | `ci-cd`, `security` |
 
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(bypass|skip|disable|ignore).*(ci|pipeline|check|test|lint)
+(?i)(?:--no-verify|continue-on-error\s*:\s*true|(?:bypass|skip|disable|ignore)[\s_-]*(?:ci|pipeline|checks?|tests?|lint)|(?:ci|pipeline|checks?|tests?|lint)[\s_-]*(?:bypass|skip|disable|ignore))
 ```
 
 **Input that fires** (verified by the liveness test):
 
 ```text
-bypass3sq _hhz-DnVUci
+skip-ci: true
 ```
 
 ### ci-secret-hardcoded

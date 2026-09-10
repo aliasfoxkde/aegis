@@ -98,6 +98,28 @@ fn every_example_fires_its_pattern() {
     );
 }
 
+#[test]
+fn ci_bypass_requires_explicit_configuration_syntax() {
+    let pattern = aegis_patterns::all_patterns()
+        .into_iter()
+        .find(|pattern| pattern.name == "ci-bypass")
+        .expect("ci-bypass pattern must exist");
+    let scanner =
+        Scanner::from_definitions(vec![convert(&pattern)]).expect("ci-bypass pattern must compile");
+
+    assert!(scanner
+        .scan_string("skip tests while documenting the workflow", "example.rs")
+        .is_empty());
+    assert!(scanner
+        .scan_string("skip-ci: true", "workflow.yml")
+        .iter()
+        .any(|finding| finding.pattern == "ci-bypass"));
+    assert!(scanner
+        .scan_string("continue-on-error: true", "workflow.yaml")
+        .iter()
+        .any(|finding| finding.pattern == "ci-bypass"));
+}
+
 /// Env-var-only patterns are excluded from file-mode scanning by design
 /// (see `PatternDefinition::is_env_var_only`), so they are validated
 /// directly against their own regex, entropy gate, and exclude regex —
