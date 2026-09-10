@@ -120,6 +120,26 @@ fn ci_bypass_requires_explicit_configuration_syntax() {
         .any(|finding| finding.pattern == "ci-bypass"));
 }
 
+#[test]
+fn dockerfile_secret_rule_requires_a_directive_line() {
+    let pattern = aegis_patterns::all_patterns()
+        .into_iter()
+        .find(|pattern| pattern.name == "secrets-in-dockerfile")
+        .expect("secrets-in-dockerfile pattern must exist");
+    let scanner = Scanner::from_definitions(vec![convert(&pattern)]).expect("pattern must compile");
+
+    assert!(scanner
+        .scan_string(
+            "Rust code mentions ENV and TOKEN as configuration terms",
+            "config.rs"
+        )
+        .is_empty());
+    assert!(scanner
+        .scan_string("ENV CONTROL_CENTER_TOKEN=provided-at-runtime", "Dockerfile")
+        .iter()
+        .any(|finding| finding.pattern == "secrets-in-dockerfile"));
+}
+
 /// Env-var-only patterns are excluded from file-mode scanning by design
 /// (see `PatternDefinition::is_env_var_only`), so they are validated
 /// directly against their own regex, entropy gate, and exclude regex —

@@ -234,7 +234,10 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "secrets-in-dockerfile".to_string(),
             category: "devops".to_string(),
-            match_pattern: r"(?i)\b(?:ARG|ENV)\b[^\n]*(?:SECRET|KEY|TOKEN|PASSWORD)".to_string(),
+            // Dockerfile instructions are line-oriented. Anchoring the rule
+            // prevents Rust, Markdown, and test prose containing words such
+            // as `ENV` or `TOKEN` from being reported as Dockerfile secrets.
+            match_pattern: r"(?im)^\s*(?:ARG|ENV)\s+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),
