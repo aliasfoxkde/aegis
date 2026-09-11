@@ -19,10 +19,15 @@ pub struct FileOutput {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Supported file serialization formats.
 pub enum FileFormat {
+    /// JSON output.
     Json,
+    /// CSV output.
     Csv,
+    /// SARIF output.
     Sarif,
+    /// Human-readable text output.
     Human,
 }
 
@@ -64,12 +69,14 @@ impl FileOutput {
     }
 
     /// Enable append mode
+    #[must_use]
     pub fn with_append(mut self, append: bool) -> Self {
         self.append = append;
         self
     }
 
     /// Get the file path
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -93,10 +100,10 @@ impl FileOutput {
         let mut writer = self.open_writer()?;
 
         match self.format {
-            FileFormat::Json => self.write_json(&mut writer, findings, stats)?,
-            FileFormat::Csv => self.write_csv(&mut writer, findings)?,
-            FileFormat::Sarif => self.write_sarif(&mut writer, findings, stats)?,
-            FileFormat::Human => self.write_human(&mut writer, findings, stats, risk)?,
+            FileFormat::Json => Self::write_json(&mut writer, findings, stats)?,
+            FileFormat::Csv => Self::write_csv(&mut writer, findings)?,
+            FileFormat::Sarif => Self::write_sarif(&mut writer, findings, stats)?,
+            FileFormat::Human => Self::write_human(&mut writer, findings, stats, risk)?,
         }
 
         writer.flush()?;
@@ -104,7 +111,6 @@ impl FileOutput {
     }
 
     fn write_json(
-        &self,
         writer: &mut BufWriter<File>,
         findings: &[Finding],
         stats: &ScanStats,
@@ -117,11 +123,11 @@ impl FileOutput {
 
         let output = JsonOutput { findings, stats };
         let json = serde_json::to_string_pretty(&output)?;
-        writeln!(writer, "{}", json)?;
+        writeln!(writer, "{json}")?;
         Ok(())
     }
 
-    fn write_csv(&self, writer: &mut BufWriter<File>, findings: &[Finding]) -> OutputResult {
+    fn write_csv(writer: &mut BufWriter<File>, findings: &[Finding]) -> OutputResult {
         let mut csv_writer = csv::Writer::from_writer(writer);
 
         // Write header
@@ -156,7 +162,6 @@ impl FileOutput {
     }
 
     fn write_sarif(
-        &self,
         writer: &mut BufWriter<File>,
         findings: &[Finding],
         stats: &ScanStats,
@@ -295,12 +300,11 @@ impl FileOutput {
         };
 
         let json = serde_json::to_string_pretty(&output)?;
-        writeln!(writer, "{}", json)?;
+        writeln!(writer, "{json}")?;
         Ok(())
     }
 
     fn write_human(
-        &self,
         writer: &mut BufWriter<File>,
         findings: &[Finding],
         stats: &ScanStats,
@@ -308,7 +312,7 @@ impl FileOutput {
     ) -> OutputResult {
         writeln!(writer, "Aegis Security Scan")?;
         writeln!(writer, "==================")?;
-        writeln!(writer, "{}", risk)?;
+        writeln!(writer, "{risk}")?;
         writeln!(writer)?;
 
         if findings.is_empty() {
@@ -341,7 +345,7 @@ impl FileOutput {
         }
 
         writeln!(writer)?;
-        writeln!(writer, "{}", stats)?;
+        writeln!(writer, "{stats}")?;
         Ok(())
     }
 }
@@ -356,7 +360,7 @@ impl SyncOutputHandler for FileOutput {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "file"
     }
 }
@@ -365,6 +369,7 @@ impl SyncOutputHandler for FileOutput {
 mod tests {
     use super::*;
     use crate::Location;
+    use std::collections::HashMap;
     use tempfile::TempDir;
 
     fn make_test_finding() -> Finding {
@@ -387,7 +392,7 @@ mod tests {
         let output = FileOutput::json(&path);
         let findings = vec![make_test_finding()];
         let stats = ScanStats::new();
-        let risk = RiskScore::new(&[], &Default::default(), &Default::default());
+        let risk = RiskScore::new(&[], &HashMap::default(), &HashMap::default());
 
         output.emit_sync(&findings, &stats, &risk).unwrap();
 
@@ -404,7 +409,7 @@ mod tests {
         let output = FileOutput::csv(&path);
         let findings = vec![make_test_finding()];
         let stats = ScanStats::new();
-        let risk = RiskScore::new(&[], &Default::default(), &Default::default());
+        let risk = RiskScore::new(&[], &HashMap::default(), &HashMap::default());
 
         output.emit_sync(&findings, &stats, &risk).unwrap();
 
@@ -421,7 +426,7 @@ mod tests {
         let output = FileOutput::sarif(&path);
         let findings = vec![make_test_finding()];
         let stats = ScanStats::new();
-        let risk = RiskScore::new(&[], &Default::default(), &Default::default());
+        let risk = RiskScore::new(&[], &HashMap::default(), &HashMap::default());
 
         output.emit_sync(&findings, &stats, &risk).unwrap();
 
@@ -441,7 +446,7 @@ mod tests {
         let output = FileOutput::json(&path).with_append(true);
         let findings = vec![make_test_finding()];
         let stats = ScanStats::new();
-        let risk = RiskScore::new(&[], &Default::default(), &Default::default());
+        let risk = RiskScore::new(&[], &HashMap::default(), &HashMap::default());
 
         output.emit_sync(&findings, &stats, &risk).unwrap();
         output.emit_sync(&findings, &stats, &risk).unwrap();
@@ -466,7 +471,7 @@ mod tests {
         );
         let findings = vec![finding.clone()];
         let stats = ScanStats::for_content("config.toml", 32);
-        let risk = RiskScore::new(&findings, &Default::default(), &Default::default());
+        let risk = RiskScore::new(&findings, &HashMap::default(), &HashMap::default());
 
         let outputs = [
             (

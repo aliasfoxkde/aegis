@@ -18,6 +18,7 @@ pub struct WebhookOutput {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Webhook payload dialects supported by the output handler.
 pub enum WebhookType {
     /// Generic HTTP webhook
     Http,
@@ -75,24 +76,27 @@ impl WebhookOutput {
     }
 
     /// Set retry count
+    #[must_use]
     pub fn with_retries(mut self, count: u32) -> Self {
         self.retry_count = count;
         self
     }
 
     /// Set timeout in seconds
+    #[must_use]
     pub fn with_timeout(mut self, secs: u64) -> Self {
         self.timeout_secs = secs;
         self
     }
 
     /// Enable or disable this output
+    #[must_use]
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
     }
 
-    fn get_risk_emoji(risk: &RiskLevel) -> &'static str {
+    fn get_risk_emoji(risk: RiskLevel) -> &'static str {
         match risk {
             RiskLevel::Critical | RiskLevel::High => "🔴",
             RiskLevel::Medium => "🟡",
@@ -100,7 +104,7 @@ impl WebhookOutput {
         }
     }
 
-    fn get_risk_color(risk: &RiskLevel) -> &'static str {
+    fn get_risk_color(risk: RiskLevel) -> &'static str {
         match risk {
             RiskLevel::Critical | RiskLevel::High => "FF0000",
             RiskLevel::Medium => "FFFF00",
@@ -108,32 +112,27 @@ impl WebhookOutput {
         }
     }
 
-    fn is_high_risk(risk: &RiskLevel) -> bool {
+    fn is_high_risk(risk: RiskLevel) -> bool {
         matches!(risk, RiskLevel::Critical | RiskLevel::High)
     }
 
-    fn is_medium_risk(risk: &RiskLevel) -> bool {
+    fn is_medium_risk(risk: RiskLevel) -> bool {
         matches!(risk, RiskLevel::Medium)
     }
 
     fn build_payload(&self, findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> String {
         match self.webhook_type {
-            WebhookType::Discord => self.build_discord_payload(findings, stats, risk),
-            WebhookType::Slack => self.build_slack_payload(findings, stats, risk),
-            WebhookType::Teams => self.build_teams_payload(findings, stats, risk),
-            WebhookType::Http => self.build_json_payload(findings, stats, risk),
+            WebhookType::Discord => Self::build_discord_payload(findings, stats, risk),
+            WebhookType::Slack => Self::build_slack_payload(findings, stats, risk),
+            WebhookType::Teams => Self::build_teams_payload(findings, stats, risk),
+            WebhookType::Http => Self::build_json_payload(findings, stats, risk),
         }
     }
 
-    fn build_discord_payload(
-        &self,
-        findings: &[Finding],
-        stats: &ScanStats,
-        risk: &RiskScore,
-    ) -> String {
-        let severity = if Self::is_high_risk(&risk.level) {
+    fn build_discord_payload(findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> String {
+        let severity = if Self::is_high_risk(risk.level) {
             "🔴 HIGH"
-        } else if Self::is_medium_risk(&risk.level) {
+        } else if Self::is_medium_risk(risk.level) {
             "🟡 MEDIUM"
         } else {
             "🟢 LOW"
@@ -170,13 +169,8 @@ impl WebhookOutput {
         }).to_string()
     }
 
-    fn build_slack_payload(
-        &self,
-        findings: &[Finding],
-        stats: &ScanStats,
-        risk: &RiskScore,
-    ) -> String {
-        let emoji = Self::get_risk_emoji(&risk.level);
+    fn build_slack_payload(findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> String {
+        let emoji = Self::get_risk_emoji(risk.level);
 
         let blocks: Vec<serde_json::Value> = vec![
             serde_json::json!({
@@ -196,13 +190,8 @@ impl WebhookOutput {
         serde_json::json!({"blocks": blocks}).to_string()
     }
 
-    fn build_teams_payload(
-        &self,
-        findings: &[Finding],
-        stats: &ScanStats,
-        risk: &RiskScore,
-    ) -> String {
-        let color = Self::get_risk_color(&risk.level);
+    fn build_teams_payload(findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> String {
+        let color = Self::get_risk_color(risk.level);
 
         serde_json::json!({
             "@type": "MessageCard",
@@ -223,12 +212,7 @@ impl WebhookOutput {
         }).to_string()
     }
 
-    fn build_json_payload(
-        &self,
-        findings: &[Finding],
-        stats: &ScanStats,
-        risk: &RiskScore,
-    ) -> String {
+    fn build_json_payload(findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> String {
         serde_json::json!({
             "findings": findings,
             "stats": stats,
@@ -293,7 +277,7 @@ impl SyncOutputHandler for WebhookOutput {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         match self.webhook_type {
             WebhookType::Discord => "discord",
             WebhookType::Slack => "slack",

@@ -16,21 +16,27 @@ pub type OutputResult = Result<(), OutputError>;
 /// Output error types
 #[derive(Debug, thiserror::Error)]
 pub enum OutputError {
+    /// The underlying file or stream could not be read or written.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Findings could not be serialized into the requested representation.
     #[error("Serialization error: {0}")]
     Serialization(String),
 
+    /// A database output could not store the findings.
     #[error("Database error: {0}")]
     Database(String),
 
+    /// An HTTP request failed at the transport layer.
     #[error("HTTP error: {0}")]
     Http(String),
 
+    /// A webhook endpoint rejected the delivered payload.
     #[error("Webhook error: {0}")]
     Webhook(String),
 
+    /// The output configuration is invalid (e.g. a value out of range).
     #[error("Configuration error: {0}")]
     Config(String),
 }
@@ -56,13 +62,19 @@ impl From<rusqlite::Error> for OutputError {
 /// Synchronous output handler trait for simple outputs
 pub trait SyncOutputHandler: Send + Sync + Debug {
     /// Write findings to this output (synchronous)
+    /// # Errors
+    ///
+    /// Returns an error when the destination cannot accept the findings.
     fn emit_sync(&self, findings: &[Finding], stats: &ScanStats, risk: &RiskScore) -> OutputResult;
 
     /// Flush any buffered data
+    /// # Errors
+    ///
+    /// Returns an error when buffered output cannot be flushed.
     fn flush_sync(&self) -> OutputResult;
 
     /// Get the output name for logging
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
 
     /// Check if this output is enabled
     fn is_enabled(&self) -> bool {
@@ -78,6 +90,7 @@ pub struct OutputPipeline {
 
 impl OutputPipeline {
     /// Create a new empty pipeline
+    #[must_use]
     pub fn new() -> Self {
         Self {
             outputs: Vec::new(),
@@ -86,6 +99,7 @@ impl OutputPipeline {
 
     /// Add a synchronous output handler
     #[allow(clippy::should_implement_trait)]
+    #[must_use]
     pub fn add(mut self, output: Box<dyn SyncOutputHandler>) -> Self {
         self.outputs.push(output);
         self
@@ -112,11 +126,13 @@ impl OutputPipeline {
     }
 
     /// Get the number of outputs in this pipeline
+    #[must_use]
     pub fn len(&self) -> usize {
         self.outputs.len()
     }
 
     /// Check if the pipeline is empty
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.outputs.is_empty()
     }
@@ -145,16 +161,16 @@ impl std::str::FromStr for OutputFormat {
             "json" => Ok(OutputFormat::Json),
             "sarif" => Ok(OutputFormat::Sarif),
             "csv" => Ok(OutputFormat::Csv),
-            _ => Err(format!("Unknown output format: {}", s)),
+            _ => Err(format!("Unknown output format: {s}")),
         }
     }
 }
 
 /// Severity level mapping for outputs
+#[must_use]
 pub fn severity_to_level(severity: &str) -> &'static str {
     match severity.to_lowercase().as_str() {
-        "critical" => "error",
-        "high" => "error",
+        "critical" | "high" => "error",
         "medium" | "moderate" => "warning",
         "low" => "note",
         _ => "none",
@@ -164,6 +180,7 @@ pub fn severity_to_level(severity: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_pipeline_empty() {
@@ -173,7 +190,7 @@ mod tests {
 
         let findings = vec![];
         let stats = ScanStats::new();
-        let risk = RiskScore::new(&[], &Default::default(), &Default::default());
+        let risk = RiskScore::new(&[], &HashMap::default(), &HashMap::default());
         pipeline.emit(&findings, &stats, &risk);
     }
 

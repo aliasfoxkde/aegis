@@ -10,6 +10,7 @@ use aegis_core::{
     SyncOutputHandler,
 };
 use serde_json::Value;
+use std::collections::HashMap;
 use tempfile::TempDir;
 
 fn fixture() -> (Vec<Finding>, ScanStats, RiskScore) {
@@ -59,8 +60,8 @@ fn fixture() -> (Vec<Finding>, ScanStats, RiskScore) {
     stats.finding_count = 1;
     let risk = RiskScore::new(
         std::slice::from_ref(&finding),
-        &Default::default(),
-        &Default::default(),
+        &HashMap::default(),
+        &HashMap::default(),
     );
     (vec![finding], stats, risk)
 }

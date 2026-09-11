@@ -1448,7 +1448,7 @@ mod tree_sitter_tests {
 
         assert_eq!(root.node_type, "source_file");
         assert!(!root.children.is_empty());
-        assert!(root.descendants_of_type("function_item").len() == 1);
+        assert_eq!(root.descendants_of_type("function_item").len(), 1);
     }
 
     #[test]

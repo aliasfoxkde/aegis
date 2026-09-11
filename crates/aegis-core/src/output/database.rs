@@ -19,6 +19,7 @@ pub enum DatabaseOutput {
 }
 
 #[derive(Debug)]
+/// SQLite output configuration.
 pub struct SqliteOutput {
     path: std::path::PathBuf,
     table_name: String,
@@ -27,6 +28,7 @@ pub struct SqliteOutput {
 
 #[derive(Debug)]
 #[allow(dead_code)]
+/// PostgreSQL output configuration.
 pub struct PostgreSqlOutput {
     connection_string: String,
     table_name: String,
@@ -35,6 +37,7 @@ pub struct PostgreSqlOutput {
 
 #[derive(Debug)]
 #[allow(dead_code)]
+/// MySQL output configuration.
 pub struct MySqlOutput {
     connection_string: String,
     table_name: String,
@@ -52,12 +55,14 @@ impl SqliteOutput {
     }
 
     /// Set the table name
+    #[must_use]
     pub fn with_table(mut self, table: impl Into<String>) -> Self {
         self.table_name = table.into();
         self
     }
 
     /// Enable or disable
+    #[must_use]
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -146,12 +151,14 @@ impl PostgreSqlOutput {
     }
 
     /// Set the table name
+    #[must_use]
     pub fn with_table(mut self, table: impl Into<String>) -> Self {
         self.table_name = table.into();
         self
     }
 
     /// Enable or disable
+    #[must_use]
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -169,12 +176,14 @@ impl MySqlOutput {
     }
 
     /// Set the table name
+    #[must_use]
     pub fn with_table(mut self, table: impl Into<String>) -> Self {
         self.table_name = table.into();
         self
     }
 
     /// Enable or disable
+    #[must_use]
     pub fn with_enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -201,7 +210,7 @@ impl SyncOutputHandler for SqliteOutput {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "sqlite"
     }
 
@@ -235,7 +244,7 @@ impl SyncOutputHandler for PostgreSqlOutput {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "postgresql"
     }
 
@@ -269,7 +278,7 @@ impl SyncOutputHandler for MySqlOutput {
         Ok(())
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "mysql"
     }
 
@@ -295,7 +304,7 @@ impl SyncOutputHandler for DatabaseOutput {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         match self {
             DatabaseOutput::Sqlite(output) => output.name(),
             DatabaseOutput::PostgreSql(output) => output.name(),
@@ -318,12 +327,13 @@ fn uuid_v4() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    format!("{:032x}", timestamp)
+    format!("{timestamp:032x}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_sqlite_output_creation() {
@@ -385,7 +395,7 @@ mod tests {
             .emit_sync(
                 std::slice::from_ref(&finding),
                 &ScanStats::for_content("config.toml", 32),
-                &RiskScore::new(&[], &Default::default(), &Default::default()),
+                &RiskScore::new(&[], &HashMap::default(), &HashMap::default()),
             )
             .unwrap();
 
