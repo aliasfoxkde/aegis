@@ -21,12 +21,46 @@ jobs:
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: test
-        run: cargo test --workspace
+
+  # Keep test lanes independent: the aggregate workspace command can spend
+  # several minutes inside benchmark-heavy targets and obscures which lane is
+  # responsible for a timeout. GitForge schedules jobs with its own capacity
+  # limits, so these lanes do not create uncontrolled local fan-out.
+  - name: tests-core
+    image: aegis-builder:1
+    needs: [quality-gates]
+    timeout: 15m
+    steps:
+      - name: core tests
+        run: cargo test -p aegis-core --all-targets -- --test-threads=1
+
+  - name: tests-cli
+    image: aegis-builder:1
+    needs: [quality-gates]
+    timeout: 20m
+    steps:
+      - name: cli tests
+        run: cargo test -p aegis-cli --all-targets -- --test-threads=1
+
+  - name: tests-patterns
+    image: aegis-builder:1
+    needs: [quality-gates]
+    timeout: 10m
+    steps:
+      - name: pattern tests
+        run: cargo test -p aegis-patterns --all-targets -- --test-threads=1
+
+  - name: tests-support
+    image: aegis-builder:1
+    needs: [quality-gates]
+    timeout: 20m
+    steps:
+      - name: support crate tests
+        run: cargo test -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm --all-targets -- --test-threads=1
 
   - name: build-release
     image: aegis-builder:1
-    needs: [quality-gates]
+    needs: [quality-gates, tests-core, tests-cli, tests-patterns, tests-support]
     timeout: 240m
     steps:
       - name: build assets

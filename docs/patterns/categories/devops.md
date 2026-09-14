@@ -374,7 +374,7 @@ Potential secret in Dockerfile detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?im)^\s*(?:ARG|ENV)\s+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
+(?im)^[ \t]*(?:ARG|ENV)[ \t]+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
 ```
 
 **Input that fires** (verified by the liveness test):
