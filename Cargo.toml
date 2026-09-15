@@ -109,7 +109,7 @@ nix = "0.31"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # JSON Schema
-jsonschema = "0.53"
+jsonschema = "0.56"
 
 # Property-based testing
 proptest = "1.5"
