@@ -2,7 +2,7 @@
 # Shared helpers for the release scripts. Source this, don't execute it.
 #
 # Every release asset this project publishes is named from one of the two
-# tables below; build.sh assembles them and publish.sh refuses to upload a
+# tables below; build.sh assembles them and publish.sh refuses to upload a # aegis:ignore:executable-file-upload -- prose comment; this helper performs no upload
 # directory that does not hold exactly this set. Keep both tables identical.
 
 # Platform archives and the WASM module, by target triple. Order matters
