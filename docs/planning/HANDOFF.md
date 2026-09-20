@@ -6,7 +6,7 @@
 **Location:** `/nas/Temp/repos/aegis`
 **Rating:** 8.5/10
 
-> **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions. Aegis is the intended active security successor to Atheon-Enhanced; release, stdio, and benchmark claims remain unverified until reproduced from this checkout. Pattern count and category count are reproducible here: 633 across 33 categories (see `docs/patterns/README.md`, freshness-tested in CI).
+> **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions. Aegis is the intended active security successor to Atheon-Enhanced; release, stdio, and benchmark claims remain unverified until reproduced from this checkout. The current documented pattern/category count is 670 across 34 categories (see `docs/patterns/README.md` and the 0.6.0 changelog entry; freshness-tested in CI).
 
 ---
 
@@ -26,7 +26,7 @@ aegis-cli/        — Command-line interface (binary: aegis)
 aegis-mcp/        — MCP server (binary: aegis-mcp, stdio transport)
 aegis-daemon/     — Long-running daemon (binary: aegis-daemon, Unix socket)
 aegis-bundler/    — Pattern bundle creation/packaging (binary: aegis-bundler)
-aegis-patterns/   — 633 patterns, 33 categories, compiled into the binary
+aegis-patterns/   — 670 patterns, 34 categories, compiled into the binary
 aegis-wasm/       — WebAssembly target
 ```
 
@@ -98,7 +98,7 @@ plan). The original roadmap items, honestly restated:
 
 ### Phase 1 — Production Hardening
 - [x] Core scanning engine complete
-- [x] 633 patterns across 33 categories
+- [x] 670 patterns across 34 categories
 - [x] CLI and MCP server
 - [x] Clippy clean (workspace `[lints]`: pedantic + `missing_docs`)
 - [ ] Publish to crates.io (`cargo publish`)

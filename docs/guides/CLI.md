@@ -114,7 +114,9 @@ aegis disable <pattern-id>
 
 Pattern state is not persisted, so these only print the requested change;
 they do not alter what a later scan loads. Use `scan --all` to include
-disabled patterns in a scan.
+disabled patterns in a scan. These subcommands are informational no-ops
+today — there is no on-disk enable/disable registry yet, so a pattern
+state change in one invocation has no effect on the next.
 
 ### aegis update
 
