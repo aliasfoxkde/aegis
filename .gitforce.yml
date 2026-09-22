@@ -5,65 +5,38 @@
 # `scripts/release/publish.sh`. The GitHub `Release` workflow is a
 # manual-dispatch fallback that runs the same scripts.
 #
-# Jobs run in the aegis-builder image (scripts/release/Dockerfile) with the
-# repository mounted at the working directory; the runner collects the
-# build job's `artifacts/` directory.
+# ONE job, ordered steps. GitForge's deployed trigger path queues only the
+# pipeline's first job with empty `needs` and never schedules dependents
+# (gitforge-api webhook.rs), so any `needs`-based lane split silently
+# degrades to "first job only" — the release build would never run. A single
+# job makes every stage actually execute; the steps are ordered so a failure
+# fails the job immediately.
+#
+# Runs in the aegis-builder image (scripts/release/Dockerfile) with the
+# repository mounted at the working directory; the runner collects the job's
+# `artifacts/` directory. Every cargo invocation passes --locked: a drifted
+# Cargo.lock must fail the run instead of silently building a different
+# dependency graph.
 name: aegis-release
 version: "1"
 trigger_on: [manual, tag]
 environment: {}
 jobs:
-  - name: quality-gates
+  - name: gates-and-release
     image: aegis-builder:1
-    timeout: 60m
+    timeout: 360m
     steps:
       - name: format
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
-
-  # Keep test lanes independent: the aggregate workspace command can spend
-  # several minutes inside benchmark-heavy targets and obscures which lane is
-  # responsible for a timeout. GitForge schedules jobs with its own capacity
-  # limits, so these lanes do not create uncontrolled local fan-out.
-  # Every lane passes --locked: a drifted Cargo.lock must fail the run
-  # instead of silently building a different dependency graph.
-  - name: tests-core
-    image: aegis-builder:1
-    needs: [quality-gates]
-    timeout: 15m
-    steps:
       - name: core tests
         run: cargo test --locked -p aegis-core --all-targets -- --test-threads=1
-
-  - name: tests-cli
-    image: aegis-builder:1
-    needs: [quality-gates]
-    timeout: 20m
-    steps:
       - name: cli tests
         run: cargo test --locked -p aegis-cli --all-targets -- --test-threads=1
-
-  - name: tests-patterns
-    image: aegis-builder:1
-    needs: [quality-gates]
-    timeout: 10m
-    steps:
       - name: pattern tests
         run: cargo test --locked -p aegis-patterns --all-targets -- --test-threads=1
-
-  - name: tests-support
-    image: aegis-builder:1
-    needs: [quality-gates]
-    timeout: 20m
-    steps:
       - name: support crate tests
         run: cargo test --locked -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm --all-targets -- --test-threads=1
-
-  - name: build-release
-    image: aegis-builder:1
-    needs: [quality-gates, tests-core, tests-cli, tests-patterns, tests-support]
-    timeout: 240m
-    steps:
       - name: build assets
         run: scripts/release/pipeline.sh

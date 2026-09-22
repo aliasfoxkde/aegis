@@ -353,6 +353,17 @@ README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
 
 ### Phase 12 — Measured pattern quality (next up)
 
+**Platform prerequisite (found during the v0.6.2 release, 2026-09-22):**
+GitForge's deployed trigger path queues only a pipeline's first
+`needs`-empty job and never schedules dependents — the DAG engine in
+`gitforge-ci` exists with tests but is not wired into the deployed
+services, so every historical aegis pipeline run executed exactly one job
+(the v0.6.1 release assets were never actually built by the GitForge
+pipeline). `.gitforce.yml` is therefore a single ordered job until
+GitForge wires the DAG in; a `needs`-based lane split there would silently
+degrade to "first job only". This is a GitForge product fix, tracked on
+the GitForge side.
+
 Phase 11 fixed false positives one regex at a time, by hand. Make it
 data-driven:
 
