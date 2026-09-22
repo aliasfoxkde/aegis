@@ -26,7 +26,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use lazy_static::lazy_static;
 use regex::Regex;
 
 /// Minimum files that must be analyzed before any detector is trusted. A
@@ -82,9 +81,9 @@ pub fn validate_detector_names(names: &[String]) -> Result<(), String> {
 
 // Line-based identifier tokens; length ≥ 2 so ubiquitous single-character
 // loop counters do not dominate the count.
-lazy_static! {
-    static ref IDENTIFIER_RE: Regex = Regex::new(r"[A-Za-z_][A-Za-z0-9_]{1,}").unwrap();
-}
+static IDENTIFIER_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    Regex::new(r"[A-Za-z_][A-Za-z0-9_]{1,}").expect("static regex compiles")
+});
 
 /// File extensions that carry prose rather than code. Comment heuristics are
 /// meaningless there (every Markdown heading looks like a `#` comment), so
@@ -291,9 +290,7 @@ pub fn analyze_anomalies_with(
         return Vec::new();
     }
     let runs = |name: &str| {
-        allowed.map_or(true, |list| {
-            list.iter().any(|allowed_name| allowed_name == name)
-        })
+        allowed.is_none_or(|list| list.iter().any(|allowed_name| allowed_name == name))
     };
 
     let mut observations = Vec::new();

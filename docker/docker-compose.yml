@@ -45,7 +45,7 @@ services:
     working_dir: /workspace
     environment:
       - RUST_LOG=info
-    command: scan /workspace --format json
+    command: --format json scan /workspace
 
   # CI/CD mode: the shipped pipeline profile (SARIF output written next to
   # the checkout; the container exits 1 when findings survive the
@@ -62,4 +62,4 @@ services:
     working_dir: /workspace
     environment:
       - RUST_LOG=warn
-    command: scan /workspace -c /etc/aegis/profiles/pipeline.json --format sarif --output-file /workspace/aegis-results.sarif
+    command: --format sarif scan /workspace -c /etc/aegis/profiles/pipeline.json --output-file /workspace/aegis-results.sarif

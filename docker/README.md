@@ -43,7 +43,7 @@ docker run --rm -v "$(pwd)":/workspace aegis \
 
 ```bash
 docker run --rm -v "$(pwd)":/workspace aegis \
-  scan /workspace --format sarif --output-file /workspace/aegis-results.sarif
+  --format sarif scan /workspace --output-file /workspace/aegis-results.sarif
 ```
 
 ## Environment variables

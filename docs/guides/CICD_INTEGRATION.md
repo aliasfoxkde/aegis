@@ -158,29 +158,15 @@ docker run --rm -v $(pwd):/workspace aegis:latest \
   --format sarif scan /workspace --output-file /workspace/aegis-results.sarif
 ```
 
-`docker/docker-compose.yml` wraps these in profiles (`default`, `ci`,
-`test`, `daemon`); see `docker/README.md`.
+`docker/docker-compose.yml` wraps these in profiles (`default`,
+`json`, `ci`); see `docker/README.md`.
 
-## Kubernetes Admission Controller
+## Kubernetes
 
-Use Aegis as a Kubernetes admission controller to scan container images before deployment.
-
-```yaml
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingWebhookConfiguration
-metadata:
-  name: aegis-scan
-webhooks:
-  - name: scan.aegis.dev
-    rules:
-      - apiGroups: [""]
-        apiVersions: ["v1"]
-        operations: ["CREATE"]
-        resources: ["pods"]
-    clientConfig:
-      url: https://aegis.example.com/validate
-      caBundle: <base64-ca>
-```
+There is no admission-controller integration: Aegis is a filesystem
+scanner with no HTTP server, so it cannot receive webhook callbacks.
+Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
+(mount the workspace, scan it, SARIF report next to the source).
 
 ## CI/CD Best Practices
 
@@ -193,13 +179,13 @@ webhooks:
    baseline outside the scanned tree (or add it to `.aegisignore`) so it
    does not get scanned itself:
    ```bash
-   aegis scan . --baseline=../baseline.json
+   aegis scan . --baseline ../baseline.json
    ```
 
 3. **Diff Mode**: Scan only the changed lines of a PR
    ```bash
    git diff origin/main...HEAD > pr.diff
-   aegis scan . --diff=pr.diff
+   aegis scan . --diff pr.diff
    ```
 
 4. **Severity Threshold**: Start with critical only

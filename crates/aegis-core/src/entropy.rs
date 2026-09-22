@@ -128,13 +128,13 @@ pub fn is_base64_suggestive(content: &str) -> bool {
     let alpha_count = content.chars().filter(char::is_ascii_alphabetic).count();
     let alpha_density = alpha_count as f64 / content.len() as f64;
 
-    has_padding || (alpha_density > 0.5 && content.len() % 4 == 0)
+    has_padding || (alpha_density > 0.5 && content.len().is_multiple_of(4))
 }
 
 /// Check if content appears to be hex encoded
 #[must_use]
 pub fn is_hex_suggestive(content: &str) -> bool {
-    if content.len() < 4 || content.len() % 2 != 0 {
+    if content.len() < 4 || !content.len().is_multiple_of(2) {
         return false;
     }
 

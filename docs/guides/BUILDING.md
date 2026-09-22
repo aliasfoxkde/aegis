@@ -150,7 +150,7 @@ aegis/
 │   ├── aegis-mcp/         # MCP server
 │   ├── aegis-daemon/      # Daemon mode (Unix sockets)
 │   ├── aegis-bundler/     # Pattern bundler
-│   └── aegis-patterns/    # 633 pattern definitions
+│   └── aegis-patterns/    # 670 pattern definitions
 │       └── src/
 │           ├── secrets.rs
 │           ├── pii.rs

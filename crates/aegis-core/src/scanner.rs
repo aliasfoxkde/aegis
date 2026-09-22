@@ -589,7 +589,7 @@ impl Scanner {
         self.options
             .anomaly_detectors
             .as_ref()
-            .map_or(true, |detectors| !detectors.is_empty())
+            .is_none_or(|detectors| !detectors.is_empty())
     }
 
     /// Convert statistical anomaly observations into `Severity::Info`

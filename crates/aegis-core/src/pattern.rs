@@ -7,7 +7,6 @@
 //! - Severity and confidence levels
 //! - Optional entropy threshold for secrets
 
-use lazy_static::lazy_static;
 use parking_lot::RwLock;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -212,30 +211,80 @@ impl Default for PatternDefinition {
     }
 }
 
-lazy_static! {
-    /// Default categories with weights
-    pub static ref DEFAULT_CATEGORIES: HashMap<String, Category> = {
+/// Default categories with weights
+pub static DEFAULT_CATEGORIES: std::sync::LazyLock<HashMap<String, Category>> =
+    std::sync::LazyLock::new(|| {
         let mut m = HashMap::new();
-        m.insert("secrets".to_string(), Category::new("secrets", "API keys, tokens, credentials", 1.5));
-        m.insert("security-hardening".to_string(), Category::new("security-hardening", "Security hardening", 1.4));
-        m.insert("code-quality".to_string(), Category::new("code-quality", "Code quality issues", 0.8));
-        m.insert("devops".to_string(), Category::new("devops", "CI/CD and DevOps", 1.2));
-        m.insert("ai-detection".to_string(), Category::new("ai-detection", "AI-generated code", 1.0));
-        m.insert("accessibility".to_string(), Category::new("accessibility", "Accessibility issues", 0.7));
-        m.insert("web-security".to_string(), Category::new("web-security", "Web security", 1.3));
-        m.insert("pii".to_string(), Category::new("pii", "Personal identifiable information", 1.3));
-        m.insert("cloud-native".to_string(), Category::new("cloud-native", "Cloud native patterns", 1.1));
-        m.insert("performance".to_string(), Category::new("performance", "Performance issues", 0.6));
-        m.insert("supply-chain".to_string(), Category::new("supply-chain", "Supply chain security", 1.4));
-        m.insert("infrastructure".to_string(), Category::new("infrastructure", "Infrastructure as code", 1.2));
-        m.insert("compliance".to_string(), Category::new("compliance", "Compliance requirements", 1.2));
-        m.insert("git-hygiene".to_string(), Category::new("git-hygiene", "Git hygiene", 0.5));
-        m.insert("ai-safety".to_string(), Category::new("ai-safety", "AI safety issues", 1.3));
-        m.insert("llm-guardrails".to_string(), Category::new("llm-guardrails", "LLM safety guardrails", 1.3));
-        m.insert("shift-left".to_string(), Category::new("shift-left", "Shift-left patterns", 1.0));
+        m.insert(
+            "secrets".to_string(),
+            Category::new("secrets", "API keys, tokens, credentials", 1.5),
+        );
+        m.insert(
+            "security-hardening".to_string(),
+            Category::new("security-hardening", "Security hardening", 1.4),
+        );
+        m.insert(
+            "code-quality".to_string(),
+            Category::new("code-quality", "Code quality issues", 0.8),
+        );
+        m.insert(
+            "devops".to_string(),
+            Category::new("devops", "CI/CD and DevOps", 1.2),
+        );
+        m.insert(
+            "ai-detection".to_string(),
+            Category::new("ai-detection", "AI-generated code", 1.0),
+        );
+        m.insert(
+            "accessibility".to_string(),
+            Category::new("accessibility", "Accessibility issues", 0.7),
+        );
+        m.insert(
+            "web-security".to_string(),
+            Category::new("web-security", "Web security", 1.3),
+        );
+        m.insert(
+            "pii".to_string(),
+            Category::new("pii", "Personal identifiable information", 1.3),
+        );
+        m.insert(
+            "cloud-native".to_string(),
+            Category::new("cloud-native", "Cloud native patterns", 1.1),
+        );
+        m.insert(
+            "performance".to_string(),
+            Category::new("performance", "Performance issues", 0.6),
+        );
+        m.insert(
+            "supply-chain".to_string(),
+            Category::new("supply-chain", "Supply chain security", 1.4),
+        );
+        m.insert(
+            "infrastructure".to_string(),
+            Category::new("infrastructure", "Infrastructure as code", 1.2),
+        );
+        m.insert(
+            "compliance".to_string(),
+            Category::new("compliance", "Compliance requirements", 1.2),
+        );
+        m.insert(
+            "git-hygiene".to_string(),
+            Category::new("git-hygiene", "Git hygiene", 0.5),
+        );
+        m.insert(
+            "ai-safety".to_string(),
+            Category::new("ai-safety", "AI safety issues", 1.3),
+        );
+        m.insert(
+            "llm-guardrails".to_string(),
+            Category::new("llm-guardrails", "LLM safety guardrails", 1.3),
+        );
+        m.insert(
+            "shift-left".to_string(),
+            Category::new("shift-left", "Shift-left patterns", 1.0),
+        );
         m
-    };
-}
+    });
 
 /// A compiled pattern ready for matching
 #[derive(Clone)]

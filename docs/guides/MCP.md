@@ -1,13 +1,26 @@
-# MCP Server
+# MCP Server (`aegis-mcp`)
 
-Aegis provides a Model Context Protocol (MCP) server for integration with AI tools.
+Aegis ships a JSON-RPC 2.0 server over stdio for integration with AI
+tools and scripts.
+
+**Protocol disclosure:** despite the crate's name, this is **not** a
+Model Context Protocol endpoint. The server implements a custom method
+set — `scan_string`, `scan_file`, `scan_dir`, `scan_env`,
+`list_patterns`, `list_categories`, `update_bundle` — and there is no
+MCP lifecycle or tool-discovery adapter: `initialize`,
+`notifications/initialized`, `tools/list`, and `tools/call` all return
+JSON-RPC error `-32601 Method not found`. Clients that drive it do so
+by speaking raw JSON-RPC over the process's stdio (examples below). An
+MCP client that requires standard discovery needs a translation shim
+in front of this server today.
 
 ## Starting the Server
 
-The MCP server communicates over stdio (standard input/output):
+The server communicates over stdio (standard input/output); diagnostics
+go to stderr so stdout carries only JSON responses:
 
 ```bash
-# Start the MCP server (listens on stdin/stdout)
+# Start the server (listens on stdin/stdout)
 aegis-mcp
 ```
 
@@ -122,25 +135,31 @@ Update pattern bundle. Takes a two-element array: an optional bundle path
 `scan_file` and `scan_dir` are sandboxed to the server's working
 directory: a path that escapes it is rejected.
 
-## MCP Client Integration
+## Client Integration
 
-### Claude Desktop
+### Claude Desktop / MCP clients
 
-Add to your Claude Desktop configuration:
+The configuration below will start the process, but the handshake will
+fail: the server does not implement MCP's `initialize`/`tools/list`.
+Until a translation shim exists, integrate by driving the JSON-RPC
+methods directly (see *Available Tools* and *Parameter Shapes*):
 
 ```json
 {
   "mcpServers": {
     "aegis": {
-      "command": "aegis-mcp"
+      "command": "aegis-mcp",
+      "_note": "will not pass MCP discovery; raw JSON-RPC only"
     }
   }
 }
 ```
 
-### Cursor / Other AI IDEs
+### Scripts and AI IDE terminals
 
-Consult your IDE's documentation for MCP server configuration. The server uses the standard MCP protocol over stdio.
+Any process-spawning environment that can write a line and read a line
+can drive the server; examples in this guide are copy-pasteable with
+`echo ... | aegis-mcp`.
 
 ## Response Format
 

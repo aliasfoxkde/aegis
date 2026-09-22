@@ -5,6 +5,41 @@ All notable changes to Aegis are documented here. The format follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Binary assets for
 every release are attached to the matching GitHub release.
 
+## [Unreleased]
+
+### Removed
+
+- The never-wired `output-pipeline` feature of `aegis-core` (file,
+  SQLite, webhook, PostgreSQL, and MySQL outputs plus the parallel YAML
+  preset configuration world). The PostgreSQL and MySQL implementations
+  logged what they "would insert" and returned success — fake
+  implementations — and no binary consumed any of it. Code that needs
+  database sinks should call `serde_json` and its own client.
+
+### Fixed
+
+- `aegis disable <pattern>` / `aegis enable <pattern>` now persist to
+  `<config dir>/aegis/pattern-state.json` and are honored by scans and
+  `aegis list`; previously both subcommands printed a confirmation and
+  changed nothing. Unknown pattern names fail loud with the valid-name
+  hint. Integration tests run against an isolated `XDG_CONFIG_HOME`.
+- `ScanOptions::workers` now actually sizes the scan thread pool (rayon's
+  global pool ignored it), pool-build failures warn and fall back once,
+  and `workers_used` merges as a maximum across shard stats instead of
+  being lost.
+- Silent-failure paths: an unscannable pattern is logged with its name
+  instead of vanishing from scans; the clone tokenizer advances by
+  UTF-8 width instead of one byte (panicked on multibyte escapes);
+  `trim_string` truncates on character boundaries; MCP and daemon
+  response writes surface transport errors instead of `.ok()`-ing them.
+
+### Security
+
+- Container/deploy hardening: the Docker image now builds (rust 1.88,
+  `--locked`, non-root) and the Kubernetes phantom HTTP daemon
+  (endpoints that never existed) was replaced by a scan CronJob with no
+  Kubernetes API access.
+
 ## [0.6.1] - 2026-09-10
 
 ### Changed
@@ -227,7 +262,8 @@ every release are attached to the matching GitHub release.
 
 - Release pipeline fixes; supersedes the poisoned v0.2.6 draft release.
 
-[Unreleased]: https://github.com/aliasfoxkde/aegis/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/aliasfoxkde/aegis/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/aliasfoxkde/aegis/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/aliasfoxkde/aegis/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/aliasfoxkde/aegis/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/aliasfoxkde/aegis/compare/v0.3.0...v0.4.0
