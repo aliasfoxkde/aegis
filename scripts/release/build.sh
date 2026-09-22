@@ -53,10 +53,10 @@ build_platform() {
     # a macOS SDK that a cross host does not have.
     local -a pkgs=(-p aegis-cli -p aegis-mcp -p aegis-daemon -p aegis-bundler)
     if [[ "$target" == x86_64-unknown-linux-gnu ]]; then
-        cargo build "${pkgs[@]}" --release
+        cargo build "${pkgs[@]}" --release --locked
         dir="target/release"
     else
-        cargo zigbuild "${pkgs[@]}" --release --target "$target"
+        cargo zigbuild "${pkgs[@]}" --release --locked --target "$target"
         dir="target/$target/release"
     fi
 
@@ -84,7 +84,7 @@ done
 # WASM module. The crate is `aegis-wasm`; its artifact is `aegis_wasm.wasm`
 # (cargo munges the crate name), and the published name uses the same dash
 # style as every other asset.
-cargo build --release --package aegis-wasm --target wasm32-unknown-unknown
+cargo build --release --locked --package aegis-wasm --target wasm32-unknown-unknown
 cp target/wasm32-unknown-unknown/release/aegis_wasm.wasm "$out/aegis-wasm.wasm"
 printf 'built aegis-wasm.wasm\n'
 
@@ -121,7 +121,8 @@ bytes_of()  { stat -c '%s' "$out/$1"; }
     printf '  "source": {\n'
     printf '    "url": "https://github.com/aliasfoxkde/aegis",\n'
     printf '    "ref": "%s",\n' "$tag"
-    printf '    "commit": "%s"\n' "$commit"
+    printf '    "commit": "%s",\n' "$commit"
+    printf '    "lockfile_sha256": "%s"\n' "$(sha256sum Cargo.lock | awk '{print $1}')"
     printf '  },\n'
     printf '  "checks": {\n'
     printf '    "version_match": true,\n'
