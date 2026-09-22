@@ -7,16 +7,16 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-22, phases 0–11 of the improvement plan merged; v0.6.1 released)
+## Current state (2026-09-22, phases 0–11 of the improvement plan merged; v0.6.2 released)
 
 | Dimension | State |
 | --- | --- |
 | Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 763 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 764 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (custom JSON-RPC method set, not MCP-discoverable), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob |
-| Release | v0.6.1 published; **GitForge-first** since v0.6.1 — the `.gitforce.yml` pipeline builds all assets in the `rust:1.88` builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256 |
+| Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
@@ -362,7 +362,11 @@ services, so every historical aegis pipeline run executed exactly one job
 pipeline). `.gitforce.yml` is therefore a single ordered job until
 GitForge wires the DAG in; a `needs`-based lane split there would silently
 degrade to "first job only". This is a GitForge product fix, tracked on
-the GitForge side.
+the GitForge side. The single-job pipeline itself was validated
+end-to-end on the v0.6.2 tag run (all seven steps green, ten artifacts
+collected and published). One lane-shape rule learned there: test steps
+must not use `--all-targets` — that selector runs bench binaries, and
+criterion rejects the piped `--test-threads` flag.
 
 Phase 11 fixed false positives one regex at a time, by hand. Make it
 data-driven:
@@ -476,7 +480,7 @@ is a straight weighted sum (`aegis-core::risk`).
 - Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
   (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
   gate rises with measured reality, never above it (see Phase 6)
-- 763 tests: unit tests per crate; integration tests per surface; property
+- 764 tests: unit tests per crate; integration tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
   benchmarks; labelled corpus with precision/recall gates
 
