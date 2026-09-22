@@ -30,13 +30,17 @@ jobs:
         run: cargo fmt --all -- --check
       - name: clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      # Test steps deliberately omit --all-targets: that selector runs bench
+      # binaries too, and criterion rejects --test-threads ("unexpected
+      # argument"), failing the step after every real test has passed.
+      # Default `cargo test` runs unit + integration + doc tests.
       - name: core tests
-        run: cargo test --locked -p aegis-core --all-targets -- --test-threads=1
+        run: cargo test --locked -p aegis-core -- --test-threads=1
       - name: cli tests
-        run: cargo test --locked -p aegis-cli --all-targets -- --test-threads=1
+        run: cargo test --locked -p aegis-cli -- --test-threads=1
       - name: pattern tests
-        run: cargo test --locked -p aegis-patterns --all-targets -- --test-threads=1
+        run: cargo test --locked -p aegis-patterns -- --test-threads=1
       - name: support crate tests
-        run: cargo test --locked -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm --all-targets -- --test-threads=1
+        run: cargo test --locked -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm -- --test-threads=1
       - name: build assets
         run: scripts/release/pipeline.sh
