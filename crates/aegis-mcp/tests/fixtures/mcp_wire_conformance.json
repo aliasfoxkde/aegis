@@ -1,0 +1,165 @@
+{
+  "description": "Golden wire fixtures for the aegis-mcp JSON-RPC/stdio surface. Each case is one session: 'requests' are the exact stdin lines in order, 'frames' is the expected subset of each stdout response frame in order (a notification produces no frame), and 'error_code' pins a JSON-RPC error instead of a result. 'text' pins assertions against the JSON payload inside frame.result.content[0].text of tools/call results. Replayed by tests/mcp_wire_conformance.rs; edit both together.",
+  "cases": [
+    {
+      "name": "initialize echoes a supported protocol version",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"conformance\",\"version\":\"0.0.1\"}},\"id\":1}"
+      ],
+      "frames": [
+        {
+          "id": 1,
+          "error_code": null,
+          "match": {
+            "result.protocolVersion": "2025-03-26",
+            "result.serverInfo.name": "aegis-mcp",
+            "result.capabilities.tools.listChanged": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize falls back to the latest supported version",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"1999-01-01\",\"capabilities\":{},\"clientInfo\":{\"name\":\"conformance\",\"version\":\"0.0.1\"}},\"id\":2}"
+      ],
+      "frames": [
+        {
+          "id": 2,
+          "error_code": null,
+          "match": {
+            "result.protocolVersion": "2025-06-18"
+          }
+        }
+      ]
+    },
+    {
+      "name": "notifications/initialized produces no response frame",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"},\"id\":3}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"
+      ],
+      "frames": [
+        {
+          "id": 3,
+          "error_code": null,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "tools/list exposes the seven tools with object schemas",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"params\":{},\"id\":4}"
+      ],
+      "frames": [
+        {
+          "id": 4,
+          "error_code": null,
+          "match": {
+            "result.tools.0.name": "scan_string",
+            "result.tools.0.inputSchema.type": "object",
+            "result.tools.1.name": "scan_file",
+            "result.tools.2.name": "scan_dir",
+            "result.tools.3.name": "scan_env",
+            "result.tools.4.name": "list_patterns",
+            "result.tools.5.name": "list_categories",
+            "result.tools.6.name": "update_bundle"
+          }
+        }
+      ],
+      "text": null
+    },
+    {
+      "name": "ping answers an empty result",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":5}"
+      ],
+      "frames": [
+        {
+          "id": 5,
+          "error_code": null,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "unknown tool is an isError result, not a protocol error",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"no_such_tool\"},\"id\":6}"
+      ],
+      "frames": [
+        {
+          "id": 6,
+          "error_code": null,
+          "match": {
+            "result.isError": true
+          }
+        }
+      ],
+      "text": {
+        "frame": 0,
+        "must_contain": ["unknown tool"]
+      }
+    },
+    {
+      "name": "sandbox escape via tools/call is an isError result",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"scan_file\",\"arguments\":{\"path\":\"/etc/passwd\"}},\"id\":7}"
+      ],
+      "frames": [
+        {
+          "id": 7,
+          "error_code": null,
+          "match": {
+            "result.isError": true
+          }
+        }
+      ],
+      "text": {
+        "frame": 0,
+        "must_contain": ["outside allowed directory"],
+        "must_not_contain": ["root:"]
+      }
+    },
+    {
+      "name": "tools/call without a name is invalid params",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"arguments\":{}},\"id\":8}"
+      ],
+      "frames": [
+        {
+          "id": 8,
+          "error_code": -32602,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "unimplemented MCP surface stays method-not-found",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"params\":{},\"id\":9}"
+      ],
+      "frames": [
+        {
+          "id": 9,
+          "error_code": -32601,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "malformed JSON is a parse error with null id",
+      "requests": [
+        "{not json"
+      ],
+      "frames": [
+        {
+          "id": null,
+          "error_code": -32700,
+          "match": {}
+        }
+      ]
+    }
+  ]
+}

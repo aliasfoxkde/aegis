@@ -60,13 +60,14 @@ one):
 5. `cargo test -p aegis-core --test pattern_liveness` — fails if any enabled
    pattern no longer fires on its generated example
 
-**MCP transport, honestly stated:** `aegis-mcp` speaks JSON-RPC 2.0 over
-stdio with a custom method set (`scan_string`, `scan_file`, `scan_dir`,
-`scan_env`, `list_patterns`, `list_categories`, `update_bundle`). It does
-**not** answer MCP discovery (`initialize`, `tools/list` → error −32601),
-so generic MCP clients (e.g. Claude Desktop) cannot use it without an
-adapter. See `docs/guides/MCP.md`. Scan paths are sandboxed to the server's
-working directory.
+**MCP transport:** `aegis-mcp` speaks JSON-RPC 2.0 over stdio and answers
+the MCP lifecycle (`initialize`, `notifications/initialized`, `tools/list`,
+`tools/call`, `ping`) across protocol revisions 2024-11-05 / 2025-03-26 /
+2025-06-18, plus the original custom method set with positional params.
+Both surfaces share one implementation; wire shapes are pinned by the
+conformance fixtures in `crates/aegis-mcp/tests/fixtures/`. See
+`docs/guides/MCP.md`. Scan paths are sandboxed to the server's working
+directory.
 
 **Daemon transport:** Unix socket only (env: `AEGIS_DAEMON_SOCKET_PATH`,
 `AEGIS_DAEMON_SCAN_ROOT`). There is no HTTP interface and therefore no
@@ -160,28 +161,27 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
 
 ## Known Issues (honest, current)
 
-1. **`aegis-mcp` is not MCP-discoverable** — custom JSON-RPC method set;
-   generic MCP clients need an adapter (`docs/guides/MCP.md`).
-2. **GitForge pipelines run one job** — the deployed trigger path queues
+1. **GitForge pipelines run one job** — the deployed trigger path queues
    only the first `needs`-empty job and never schedules dependents, so
    `.gitforce.yml` is a single ordered job (format → clippy → four test
    lanes → release build). Until GitForge wires in its DAG engine, a
    multi-job pipeline here would silently skip everything after the first
    job.
-3. **MCP integration tests are the slow slice** — each spawns a real
-   server process.
-4. **No crates.io publishing** — binaries ship via release tarballs and
+2. **MCP integration tests are the slow slice** — each spawns a real
+   server process (and a successful `tools/call` pays the one-time
+   pattern compilation).
+3. **No crates.io publishing** — binaries ship via release tarballs and
    the container image; a `cargo publish` job (or a recorded decision not
    to) is still open (`docs/PLAN.md` Phase 13).
-5. **Performance targets are targets** — the 10GB/min throughput and
+4. **Performance targets are targets** — the 10GB/min throughput and
    <100MB memory figures in `docs/PLAN.md` are aspirational; only startup
    latency is criterion-measured.
-6. **Pattern false-positive tuning is regex-heuristic, not data-driven** —
+5. **Pattern false-positive tuning is regex-heuristic, not data-driven** —
    the 2026-09-22 audit fixed five false-positive-prone rules by hand
    (hipaa-phi, code-injection-request, mesa-optimization,
    executable-file-upload, k8s-run-as-non-root); there is no measured
    FP-rate harness over a labelled corpus per rule yet.
-7. **`ast` proximity matching and ML/regex hybrid detection** remain
+6. **`ast` proximity matching and ML/regex hybrid detection** remain
    unshipped roadmap items (Phase 14).
 
 Resolved 2026-09-22 (previously listed here): pattern state not persisted
@@ -189,7 +189,8 @@ Resolved 2026-09-22 (previously listed here): pattern state not persisted
 pool), placeholder PostgreSQL/MySQL output handlers (module removed), the
 phantom Kubernetes HTTP daemon (replaced by the CronJob), the
 non-building Docker image (rebuilt on `rust:1.88-slim` and verified
-end-to-end).
+end-to-end), and `aegis-mcp` not speaking MCP discovery (the lifecycle
+and `tools/*` are now implemented and conformance-tested).
 
 ---
 
