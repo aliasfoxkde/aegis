@@ -19,7 +19,7 @@ echo $PATH | grep -E '(usr|local|bin)'
 ### Build failures
 
 ```bash
-# Ensure Rust 1.75+ (the MSRV) is installed
+# Ensure Rust 1.88+ (the MSRV) is installed
 rustc --version
 
 # Update Rust

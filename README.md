@@ -215,11 +215,18 @@ aegis/
 
 ## Contributing Patterns
 
-Patterns are defined as YAML files for easy contribution. A pattern file
-holds a **list** of rules:
+The 670 shipped patterns live as Rust definitions in
+`crates/aegis-patterns/src/` and are compiled into every binary. For
+one-off organization rules without a code change, a `.aegis.yml` /
+`.aegis.yaml` at the scan root accepts custom patterns (fail-loud
+validated: unknown fields, invalid regex, unknown severity, and
+duplicate names all abort the scan naming the file and pattern).
+
+Standalone pattern sets can also be distributed as bundles: put pattern
+files — each holding a **list** of rules — into a directory,
 
 ```yaml
-# community/secrets/my-api-key.yaml
+# my-patterns/my-api-key.yaml
 - name: my-api-key
   category: secrets
   match: '(?i)myapi[_-]?key\s*[:=]\s*["''][A-Za-z0-9]{16,}'
@@ -233,10 +240,11 @@ holds a **list** of rules:
     - api-key
 ```
 
-Build it into a distributable bundle with `aegis-bundler`:
+and `aegis-bundler` packs the directory into a versioned, checksummed
+bundle:
 
 ```bash
-cargo run -p aegis-bundler -- community/secrets my.bundle
+cargo run -p aegis-bundler -- my-patterns/ my.bundle
 ```
 
 See [Adding Patterns](docs/guides/ADDING_PATTERNS.md) for contribution guidelines.

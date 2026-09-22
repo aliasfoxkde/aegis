@@ -505,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_finding_creation() {
-        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password,password-field
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_finding_display() {
-        let loc = Location::new("test.rs", 10, 5, "secret = 'abc'"); // aegis:ignore:hardcoded-password
+        let loc = Location::new("test.rs", 10, 5, "secret = 'abc'"); // aegis:ignore:hardcoded-password,password-field
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
@@ -542,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_finding_with_options() {
-        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password,password-field
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_finding_fingerprint() {
-        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password,password-field
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
@@ -676,13 +676,13 @@ mod tests {
 
     #[test]
     fn test_finding_public_serialization_redacts_source_and_match() {
-        let secret = "TOP-SECRET-FIXTURE-VALUE"; // aegis:ignore:hardcoded-password
+        let secret = "TOP-SECRET-FIXTURE-VALUE"; // aegis:ignore:hardcoded-password,hardcoded-tf-secrets,password-field,rust-hardcoded-secret
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
             "high",
             "high",
-            Location::new("config.toml", 4, 2, format!("token = '{secret}'")),
+            Location::new("config.toml", 4, 2, format!("token = '{secret}'")), // aegis:ignore:rust-hardcoded-secret
             secret,
             "Hardcoded secret detected",
         );
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn test_finding_serialize_deserialize() {
-        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password
+        let loc = Location::new("test.rs", 1, 0, "secret = 'abc'"); // aegis:ignore:hardcoded-password,password-field
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",

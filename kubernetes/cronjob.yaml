@@ -1,0 +1,96 @@
+# Aegis Security Scanner - Scheduled Scan CronJob
+# =============================================================================
+#
+# The scanner is a filesystem batch tool, not a network service: the
+# daemon (`aegis-daemon`) serves a local Unix socket and the MCP server
+# (`aegis-mcp`) speaks stdio JSON-RPC, so neither can be exposed through a
+# Kubernetes Service. Cluster usage is therefore a CronJob that mounts the
+# workspace to scan.
+#
+# The container exits 1 when findings survive the profile's filters — the
+# Job is then recorded as failed, which is the intended signal for
+# alerting (restartPolicy is Never so findings are not retried away).
+#
+# Usage:
+#   kubectl apply -f kubernetes/cronjob.yaml
+#   kubectl get cronjob aegis-scan-cron
+#   kubectl create job --from=cronjob/aegis-scan-cron aegis-scan-manual
+#
+# Requires a PersistentVolumeClaim named `aegis-workspace` holding the
+# source tree to scan:
+#   kubectl create pvc aegis-workspace --request=10Gi (adjust to your storage class)
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aegis-scan-cron
+  labels:
+    app: aegis
+    component: scanner
+spec:
+  schedule: "0 2 * * *" # Daily at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: aegis
+            component: scanner
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: aegis-scan
+              image: aegis:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: RUST_LOG
+                  value: "warn"
+              args:
+                - scan
+                - /workspace
+                - -c
+                - /etc/aegis/profiles/production.json
+                - --format
+                - sarif
+                - --output-file
+                - /workspace/scan-results.sarif
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop:
+                    - ALL
+              volumeMounts:
+                - name: workspace
+                  mountPath: /workspace
+                - name: config-cache
+                  mountPath: /home/aegis/.config
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            # Source tree to scan; SARIF output is written to
+            # /workspace/scan-results.sarif.
+            - name: workspace
+              persistentVolumeClaim:
+                claimName: aegis-workspace
+            # Writable home config for pattern disablement state.
+            - name: config-cache
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000

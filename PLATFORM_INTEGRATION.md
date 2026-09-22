@@ -59,7 +59,7 @@ For transport health, start `aegis-mcp` from the configured allowed root and sen
 
 **Protocol boundary:** the server implements a custom JSON-RPC method set — `scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`. These are not a superset of MCP and there is currently **no** MCP lifecycle or tool-discovery adapter: `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` all return JSON-RPC error `-32601 Method not found`. A client that requires standard MCP discovery cannot talk to Aegis today without a translation shim. All registered methods share the same sandboxed scanner functions.
 
-`update_bundle` installs either the embedded rule set (633 patterns) or a bundle loaded from a sandboxed path, and reports the installed `pattern_count`.
+`update_bundle` installs either the embedded rule set (670 patterns) or a bundle loaded from a sandboxed path, and reports the installed `pattern_count`.
 
 ## API Surface
 

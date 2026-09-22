@@ -837,7 +837,7 @@ mod tests {
 
         let result = execute_scan_with_stdin(
             &opts,
-            "let password = 'secret123';", // aegis:ignore:hardcoded-password,hardcoded-credential
+            "let password = 'secret123';", // aegis:ignore:hardcoded-credential,hardcoded-password,hardcoded-tf-secrets,password-field,rust-hardcoded-secret
         );
         assert!(result.is_ok());
         let scan_result = result.unwrap();
@@ -1166,7 +1166,7 @@ mod tests {
     fn baseline_fixture_path() -> PathBuf {
         let path = scan_fixture_path();
         std::fs::write(
-            path.join("fixture.env"),
+            path.join("fixture.env"), // aegis:ignore:env-file-in-git
             // AWS docs example key; directive shares the flagged line.
             "aws_key: AKIAIOSFODNN7EXAMPLE\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n", // aegis:ignore:aws-access-key
         )
@@ -1297,7 +1297,7 @@ mod tests {
         write_baseline_document(&baseline_path, &findings[..1]);
 
         std::fs::write(
-            fixture.join("fixture.env"),
+            fixture.join("fixture.env"), // aegis:ignore:env-file-in-git
             "# the key moved down\n# with the edit\nsecond_line_key: AKIAIOSFODNN7EXAMPLE\n", // aegis:ignore:aws-access-key
         )
         .expect("rewrite fixture with key moved down");
@@ -1384,25 +1384,25 @@ mod tests {
     #[test]
     fn test_staged_scan_reports_staged_secret() {
         let fixture = tempfile::tempdir().unwrap();
-        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]);
+        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]); // aegis:ignore:env-file-in-git
 
         let scanner = build_scanner_from_opts(&staged_scan_opts(fixture.path().into())).unwrap();
         let (findings, stats) =
             perform_scan(&scanner, &staged_scan_opts(fixture.path().into())).unwrap();
         assert_eq!(findings.len(), 1, "staged secret must be reported");
         assert_eq!(stats.files_scanned, 1);
-        assert_eq!(findings[0].location.file, "config.env");
+        assert_eq!(findings[0].location.file, "config.env"); // aegis:ignore:env-file-in-git
     }
 
     #[test]
     fn test_staged_scan_reads_index_not_working_tree() {
         let fixture = tempfile::tempdir().unwrap();
-        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]);
+        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]); // aegis:ignore:env-file-in-git
 
         // The working tree was cleaned after staging and an unrelated
         // secret was never staged at all; neither may change the result.
-        std::fs::write(fixture.path().join("config.env"), "aws_key: clean\n").unwrap();
-        std::fs::write(fixture.path().join("untracked.env"), STAGED_SECRET).unwrap();
+        std::fs::write(fixture.path().join("config.env"), "aws_key: clean\n").unwrap(); // aegis:ignore:env-file-in-git
+        std::fs::write(fixture.path().join("untracked.env"), STAGED_SECRET).unwrap(); // aegis:ignore:env-file-in-git
 
         let opts = staged_scan_opts(fixture.path().into());
         let scanner = build_scanner_from_opts(&opts).unwrap();
@@ -1419,7 +1419,7 @@ mod tests {
         let fixture = tempfile::tempdir().unwrap();
         // Secret present on disk but never staged: nothing to commit,
         // nothing to scan.
-        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap();
+        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap(); // aegis:ignore:env-file-in-git
         std::process::Command::new("git")
             .args(["init", "-q"])
             .arg(fixture.path())
@@ -1435,7 +1435,7 @@ mod tests {
     #[test]
     fn test_staged_scan_outside_repository_is_an_error() {
         let fixture = tempfile::tempdir().unwrap();
-        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap();
+        std::fs::write(fixture.path().join("config.env"), STAGED_SECRET).unwrap(); // aegis:ignore:env-file-in-git
 
         let opts = staged_scan_opts(fixture.path().into());
         let scanner = build_scanner_from_opts(&opts).unwrap();

@@ -4,7 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 0.6.x   | :white_check_mark: |
+| < 0.6   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -13,7 +14,10 @@ If you discover a security vulnerability in Aegis, please report it responsibly.
 ### How to Report
 
 1. **Do NOT** create a public GitHub issue for security vulnerabilities
-2. Email the maintainers at the repository's contact address
+2. Use GitHub **private vulnerability reporting**
+   ([Security → Report a vulnerability](https://github.com/aliasfoxkde/aegis/security/advisories/new));
+   if you cannot use it, contact the maintainers directly and mark the
+   message confidential
 3. Include the following information:
    - Description of the vulnerability
    - Steps to reproduce

@@ -385,7 +385,7 @@ Potential mesa-optimization risk detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(mesa.?optim|inner.?optim|acquisit|power.?seek)
+(?i)(mesa.?optim|inner.?optim|acquisition.{0,24}(power|resource|control)|power.?seek)
 ```
 
 **Input that fires** (verified by the liveness test):

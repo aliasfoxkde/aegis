@@ -17,7 +17,9 @@ struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Output format
+    /// Output format. A top-level flag: it goes before the subcommand
+    /// (`aegis --format json scan .`) because `-f` is bound to `--file`
+    /// on `scan` and top-level shorts must stay unique.
     #[arg(short, long, value_enum)]
     format: Option<OutputFormat>,
 

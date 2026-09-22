@@ -189,8 +189,11 @@ impl CloneDetector {
                         break;
                     }
                     if ch == '\\' {
-                        if let Some((idx2, _)) = chars.next() {
-                            end = idx2 + 1;
+                        // Advance past the escaped code point by its full
+                        // UTF-8 width; `idx2 + 1` would split multibyte
+                        // escapes and panic the `content[start..end]` slice.
+                        if let Some((idx2, escaped)) = chars.next() {
+                            end = idx2 + escaped.len_utf8();
                         }
                     }
                 }

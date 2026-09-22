@@ -157,12 +157,15 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "k8s-run-as-non-root".to_string(),
             category: "kubernetes".to_string(),
-            match_pattern: r"(runAsNonRoot|runAsRoot):\s*(true|false)".to_string(),
+            // A line regex cannot assert "runAsNonRoot is missing from the
+            // block", so this rule detects the expressible violation: a
+            // manifest that explicitly opts into running as root.
+            match_pattern: r"runAsNonRoot:\s*false".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
             min_entropy: None,
-            description: "Container run as root or missing runAsNonRoot configuration".to_string(),
+            description: "Manifest explicitly sets runAsNonRoot: false (container runs as root)".to_string(),
             reference: None,
             tags: vec!["kubernetes".to_string(), "security".to_string(), "root".to_string()],
             env_var: false,

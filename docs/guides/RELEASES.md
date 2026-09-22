@@ -57,7 +57,7 @@ GitForge pipeline to create the release first.
 ## The builder image
 
 `scripts/release/Dockerfile` defines `aegis-builder:1`: Rust plus
-[cargo-zigbuild](https://github.com/cross-rs/cargo-zigbuild) and a pinned
+[cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and a pinned
 Zig, whose linker covers aarch64 glibc, both darwin targets and
 windows-gnu — no per-target gcc or SDK packages. Rebuild it locally where
 the runner executes:

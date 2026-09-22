@@ -319,7 +319,7 @@ Executable file upload detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)\.(exe|sh|php|asp|jsp)\s*.*upload|move_uploaded_file
+(?i)\bupload[\w-]{0,10}\s*\(?\s*["']?[^\s"']{0,60}\.(exe|sh|php|asp|jsp)\b|move_uploaded_file
 ```
 
 **Reference**: <https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload>
@@ -327,7 +327,7 @@ Executable file upload detected
 **Input that fires** (verified by the liveness test):
 
 ```text
-.exe 7upload
+uploads file.php
 ```
 
 ### graphql-batch-limit

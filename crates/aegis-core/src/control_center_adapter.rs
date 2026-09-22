@@ -902,7 +902,7 @@ mod tests {
         let request = WorkRequest {
             work_request_id: "wr-456".to_string(),
             content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(), // aegis:ignore:aws-access-key
-            source: "config.env".to_string(),
+            source: "config.env".to_string(), // aegis:ignore:env-file-in-git
         };
 
         let result = adapter.scan_work_sync(request).unwrap();
@@ -920,7 +920,7 @@ mod tests {
             .scan_work_sync(WorkRequest {
                 work_request_id: "wr-persist".to_string(),
                 content: "AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE".to_string(), // aegis:ignore:aws-access-key
-                source: "config.env".to_string(),
+                source: "config.env".to_string(), // aegis:ignore:env-file-in-git
             })
             .unwrap();
         let root = std::env::temp_dir().join(format!("aegis-evidence-{}", std::process::id()));

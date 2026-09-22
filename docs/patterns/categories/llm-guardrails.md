@@ -79,15 +79,13 @@ Request for malicious code guidance
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(give|writ|show|explain).*(malicious|exploit|rce|payload)
+(?i)\b(give|writ\w*|show|explain)\b.*\b(malicious|exploit|rce|payload)\b
 ```
 
-**Input that fires** (verified by the liveness test; long
-token-shaped runs are elided here — the exact input is compiled into
-`crates/aegis-patterns/src/examples.rs`):
+**Input that fires** (verified by the liveness test):
 
 ```text
-givep6ma…us
+writZWi5MzJH..Hg@malicious
 ```
 
 ### copyright-material

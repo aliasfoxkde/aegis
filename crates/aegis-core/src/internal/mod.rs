@@ -65,15 +65,26 @@ pub fn format_duration_ms(ms: u64) -> String {
     }
 }
 
-/// Trim string to max length with ellipsis
+/// Trim string to max length with ellipsis.
+///
+/// Truncation walks back to a UTF-8 character boundary; slicing at
+/// `max_len` directly would panic on multibyte input.
 pub fn trim_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
-        s.to_string()
-    } else if max_len > 3 {
-        format!("{}...", &s[..max_len - 3])
-    } else {
-        s[..max_len].to_string()
+        return s.to_string();
     }
+    if max_len <= 3 {
+        let mut end = max_len;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        return s[..end].to_string();
+    }
+    let mut end = max_len - 3;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...", &s[..end])
 }
 
 /// Check if a line is likely a comment
@@ -110,6 +121,18 @@ mod tests {
         assert_eq!(trim_string("hello", 10), "hello");
         assert_eq!(trim_string("hello world", 8), "hello...");
         assert_eq!(trim_string("hello", 3), "hel");
+    }
+
+    #[test]
+    fn test_trim_string_respects_utf8_boundaries() {
+        // "héllo wörld" has a 2-byte é at index 1.
+        let multibyte = "héllo wörld";
+        let trimmed = trim_string(multibyte, 8);
+        assert!(trimmed.ends_with("..."));
+        let stem = trimmed.trim_end_matches("...");
+        assert!(std::str::from_utf8(stem.as_bytes()).is_ok());
+        // Short cap inside a multibyte character must not slice mid-codepoint.
+        assert_eq!(trim_string("éé", 2), "é");
     }
 
     #[test]

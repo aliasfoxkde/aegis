@@ -229,7 +229,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "code-injection-request".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r"(?i)(give|writ|show|explain).*(malicious|exploit|rce|payload)"
+            match_pattern: r"(?i)\b(give|writ\w*|show|explain)\b.*\b(malicious|exploit|rce|payload)\b"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),

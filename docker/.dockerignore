@@ -49,7 +49,7 @@ azure-pipelines.yml
 # Local config overrides
 config/local/
 *.local
-.env.local
+.env.local  # aegis:ignore:env-file-in-git
 
 # Logs
 *.log

@@ -77,7 +77,7 @@ CI/CD bypass marker detected
 **Input that fires** (verified by the liveness test):
 
 ```text
-skip-ci: true
+--no-verify
 ```
 
 ### ci-secret-hardcoded
@@ -374,13 +374,13 @@ Potential secret in Dockerfile detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?im)^\s*(?:ARG|ENV)\s+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
+(?im)^[ \t]*(?:ARG|ENV)[ \t]+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)
 ```
 
 **Input that fires** (verified by the liveness test):
 
 ```text
-ENV SECRET=x2CfsW7Q
+ ARG 6q_SECRET
 ```
 
 ### terraform-state

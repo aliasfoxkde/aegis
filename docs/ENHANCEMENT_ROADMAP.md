@@ -221,7 +221,7 @@ Current channels:
   plus `aegis_wasm.wasm`, published by `.github/workflows/release.yml` on
   `v*` tags — 9 assets in total
 - **From source**: `cargo install --path crates/aegis-cli` or the
-  workspace build; MSRV 1.75
+  workspace build; MSRV 1.88
 - **MCP / daemon**: `aegis-mcp` and `aegis-daemon` binaries ship in the
   same release assets for editor and service integrations
 

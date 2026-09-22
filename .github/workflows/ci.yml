@@ -61,7 +61,7 @@ jobs:
           toolchain: stable
           components: clippy
       - name: Run Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   test:
     name: Test (${{ matrix.os }})
@@ -79,7 +79,7 @@ jobs:
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
   build:
     name: Build
@@ -93,7 +93,7 @@ jobs:
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build
-        run: cargo build --workspace --release
+        run: cargo build --locked --workspace --release
 
   coverage:
     name: Coverage

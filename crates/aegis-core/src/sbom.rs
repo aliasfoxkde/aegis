@@ -699,7 +699,7 @@ mod tests {
     fn file_hash_is_cached_and_missing_files_return_none() {
         let dir = tempfile::tempdir().expect("tempdir");
         let file = dir.path().join("payload.txt");
-        std::fs::write(&file, b"aegis sbom").expect("write payload");
+        std::fs::write(&file, b"aegis sbom").expect("write payload"); // aegis:ignore:code-injection-request
 
         let mut sbom = SbomGenerator::new("root", None);
         let first = sbom.add_file_hash(&file).expect("hash present");
