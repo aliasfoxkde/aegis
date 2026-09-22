@@ -2,7 +2,7 @@
 
 ## Getting Help
 
-- **Documentation**: Start with [docs/](docs/) directory
+- **Documentation**: Start with the [docs/](../docs/) directory
 - **FAQ**: Check existing [issues](https://github.com/aliasfoxkde/aegis/issues) for similar questions
 - **Discussions**: Use [GitHub Discussions](https://github.com/aliasfoxkde/aegis/discussions) for questions
 
@@ -31,7 +31,7 @@
 ### Add Patterns
 
 - Check existing patterns first
-- Follow the [YAML pattern format](docs/guides/ADDING_PATTERNS.md)
+- Follow the [pattern guide](../docs/guides/ADDING_PATTERNS.md)
 - Include test cases
 - Submit via pull request
 

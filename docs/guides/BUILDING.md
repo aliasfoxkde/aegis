@@ -4,7 +4,7 @@ This guide is for contributors who want to build Aegis from source.
 
 ## Requirements
 
-- **Rust 1.75+** (the workspace `rust-version`) - Install via
+- **Rust 1.88+** (the workspace `rust-version`) - Install via
   [rustup](https://rustup.rs/)
 - **Cargo** - Included with Rust
 - **Git**

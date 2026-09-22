@@ -35,7 +35,7 @@ aegis --version
 
 ### From Source
 
-Requires Rust 1.75+ (`rustup update stable` if needed):
+Requires Rust 1.88+ (`rustup update stable` if needed):
 
 ```bash
 git clone https://github.com/aliasfoxkde/aegis

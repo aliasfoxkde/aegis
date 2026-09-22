@@ -1,13 +1,17 @@
 # Contributing to Aegis
 
-Aegis grows through patterns. Every pattern is one YAML file — no Rust required, no engine changes, fast to review, and immediately useful to every user once merged.
+Aegis is a security scanner with 670 built-in patterns across 34
+categories, shipped as Rust definitions in `crates/aegis-patterns/`.
+Contributions fall into three buckets: patterns, engine/CLI code, and
+documentation.
 
 ---
 
 ## 🎯 Which Project to Contribute To?
 
 ### **Official aliasfoxkde/aegis**
-- **Best for**: Stable patterns, bug fixes, documentation
+
+- **Best for**: Pattern additions, engine fixes, documentation
 - **Process**: Standard PR review and testing
 - **Impact**: Immediate benefit to all users
 - **Repository**: [https://github.com/aliasfoxkde/aegis](https://github.com/aliasfoxkde/aegis)
@@ -16,7 +20,8 @@ Aegis grows through patterns. Every pattern is one YAML file — no Rust require
 
 ## 👥 Contributors
 
-All contributions are permanently credited in the [contributors graph](https://github.com/aliasfoxkde/aegis/graphs/contributors).
+All contributions are permanently credited in the
+[contributors graph](https://github.com/aliasfoxkde/aegis/graphs/contributors).
 
 ---
 
@@ -24,7 +29,8 @@ All contributions are permanently credited in the [contributors graph](https://g
 
 ### Prerequisites
 
-- **Rust 1.70+** - Install via [rustup](https://rustup.rs/)
+- **Rust 1.88+** (the workspace MSRV, driven by locked dependencies) -
+  Install via [rustup](https://rustup.rs/)
 - **Git**
 
 ### Clone and Build
@@ -35,60 +41,62 @@ cd aegis
 cargo build --workspace
 ```
 
-### Run Tests
+### Quality Gates
+
+CI (and every merge) requires all three:
 
 ```bash
-cargo test --workspace
+cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all
+cargo test --workspace
 ```
+
+The workspace compiles with `pedantic` + `missing_docs` lints; new public
+items need doc comments.
 
 ---
 
-## Adding a YAML Pattern
+## Adding a Pattern
 
 **1. Check it doesn't already exist**
 
 ```bash
-cargo run --bin aegis-cli -- list
-cargo run --bin aegis-cli -- list --category secrets
+cargo run --bin aegis -- list
+cargo run --bin aegis -- list --category secrets
 ```
 
-**2. Create the YAML file**
+**2. Add the pattern to `crates/aegis-patterns/src/`**
 
-Drop a `.yaml` file into the appropriate `community/<category>/` folder:
+Patterns are Rust `Pattern` values grouped by theme module. Full field
+reference, naming rules (kebab-case names, enforced by the registry
+hygiene tests), and the generated-catalog step live in
+[docs/guides/ADDING_PATTERNS.md](../docs/guides/ADDING_PATTERNS.md).
 
-```yaml
-name: my-service-api-key
-match: '\bmsvc_[A-Za-z0-9]{32}\b'
-severity: high
-confidence: high
-minEntropy: 3.5
-description: 'Detects MyService API keys'
-tags:
-  - secrets
-  - api-key
-```
+**3. Test the pattern in both directions**
 
-**Required Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Unique pattern name (snake_case) |
-| `match` | string | Valid regex pattern |
-| `severity` | string | `critical`, `high`, `medium`, or `low` |
-| `confidence` | string | `high`, `medium`, or `low` |
-| `description` | string | Human-readable description |
-
-**3. Test the pattern**
-
-```bash
-cargo run --bin aegis-cli -- scan --help
-```
+Add positive and negative fixtures to
+`crates/aegis-cli/tests/pattern_fixtures.rs` — a pattern must detect its
+target *and* ignore placeholder examples.
 
 **4. Submit**
 
-Open a pull request. Include what the pattern detects, why it matters, and test cases.
+Open a pull request. Include what the pattern detects, why it matters,
+and the fixtures proving both directions.
+
+### Organization-specific rules without a code change
+
+A `.aegis.yml` / `.aegis.yaml` at the scan root accepts custom patterns.
+Validation is fail-loud: unknown fields, invalid regex, unknown severity,
+or duplicate names abort the scan naming the file and the pattern.
+
+### Distributable bundles
+
+`aegis-bundler` packs a directory of YAML pattern files into a
+versioned, checksummed bundle:
+
+```bash
+cargo run -p aegis-bundler -- my-patterns/ my.bundle
+```
 
 ---
 
@@ -103,7 +111,11 @@ Any Rust code contributed must be clean and idiomatic:
 - `cargo fmt` and `cargo clippy -D warnings` must pass
 - Tests in `tests/` or `#[cfg(test)]` modules
 
-The engine is intentionally minimal and stable. If you're unsure whether a change is in scope, open an issue first.
+The engine follows two standing principles: **fail loud** (never
+silently degrade — an ignored error must be a logged warning at minimum)
+and **no synthetic shortcuts** (tests assert real behavior, not mocks of
+the thing under test). If you're unsure whether a change is in scope,
+open an issue first.
 
 ---
 
@@ -120,11 +132,12 @@ All commits follow [Conventional Commits](https://www.conventionalcommits.org/):
 **Types:** `feat` | `fix` | `docs` | `test` | `refactor` | `chore` | `ci` | `build` | `perf`
 
 **Examples:**
+
 ```
-feat(secrets): add new AWS pattern
-fix(scanner): guard against nil bundle panic
+feat(secrets): add msvc API key pattern
+fix(scanner): advance clone tokenizer by UTF-8 width
 docs: update CONTRIBUTING.md
-chore: bump regex crate to v1.10
+chore: bump clap to 4.6.6
 ```
 
 ---
@@ -145,11 +158,13 @@ chore: bump regex crate to v1.10
 aegis/
 ├── crates/
 │   ├── aegis-core/       # Core scanning engine
-│   ├── aegis-cli/        # CLI application
-│   ├── aegis-mcp/        # MCP server
-│   ├── aegis-daemon/     # Daemon mode
+│   ├── aegis-cli/        # CLI application (binary: `aegis`)
+│   ├── aegis-mcp/        # JSON-RPC server for editor/agent integration
+│   ├── aegis-daemon/     # Unix-socket daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   └── aegis-patterns/   # Pattern definitions (620 patterns)
-├── config/profiles/       # Configuration profiles
-└── docs/                 # Documentation
+│   ├── aegis-patterns/   # 670 pattern definitions
+│   └── aegis-wasm/       # WebAssembly binding
+├── config/profiles/      # Configuration profiles
+├── docs/                 # Documentation and guides
+└── scripts/release/      # GitForge-first release pipeline
 ```
