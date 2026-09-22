@@ -237,7 +237,7 @@ pub fn get() -> Vec<Pattern> {
             // Dockerfile instructions are line-oriented. Anchoring the rule
             // prevents Rust, Markdown, and test prose containing words such
             // as `ENV` or `TOKEN` from being reported as Dockerfile secrets.
-            match_pattern: r"(?im)^\s*(?:ARG|ENV)\s+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)".to_string(),
+            match_pattern: r"(?im)^[ \t]*(?:ARG|ENV)[ \t]+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "medium".to_string(),

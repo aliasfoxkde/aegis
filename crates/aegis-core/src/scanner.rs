@@ -660,6 +660,14 @@ impl Scanner {
         for m in matches {
             let pattern = m.pattern;
 
+            // Dockerfile rules are line-oriented and must be scoped by
+            // basename: extension-less source files otherwise share the
+            // universal scanner bucket. Keep this explicit until pattern
+            // definitions gain first-class filename scopes.
+            if pattern.name() == "secrets-in-dockerfile" && !Self::is_dockerfile_source(source) {
+                continue;
+            }
+
             // Entropy gate
             if let Some(min_entropy) = pattern.min_entropy() {
                 let entropy = shannon_entropy(m.matched_text);
@@ -706,6 +714,16 @@ impl Scanner {
         }
 
         findings
+    }
+
+    fn is_dockerfile_source(source: &str) -> bool {
+        Path::new(source)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.eq_ignore_ascii_case("dockerfile")
+                    || name.to_ascii_lowercase().starts_with("dockerfile.")
+            })
     }
 
     /// Scan a single file
@@ -2142,6 +2160,32 @@ mod tests {
         assert_eq!(
             Scanner::extension_of_source("archive.tar.gz"),
             Some("gz".into())
+        );
+    }
+
+    #[test]
+    fn dockerfile_pattern_is_scoped_by_basename() {
+        let scanner = Scanner::from_definitions(vec![def(
+            "secrets-in-dockerfile",
+            "devops",
+            r"(?im)^[ \t]*(?:ARG|ENV)[ \t]+[^\r\n]*(?:SECRET|KEY|TOKEN|PASSWORD)",
+        )])
+        .unwrap();
+
+        assert!(!scanner
+            .scan_string("ENV API_TOKEN=example", "Dockerfile")
+            .is_empty());
+        assert!(
+            scanner
+                .scan_string("ENV API_TOKEN=example", "src/client.rs")
+                .is_empty(),
+            "Dockerfile-specific rule must not report Rust source"
+        );
+        assert!(
+            !scanner
+                .scan_string("ENV API_TOKEN=example", "Dockerfile.dev")
+                .is_empty(),
+            "Dockerfile variants must remain in scope"
         );
     }
 
