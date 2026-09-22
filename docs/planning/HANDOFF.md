@@ -140,8 +140,10 @@ would collide with `scan --file`); `-c/--config`, `-q`, `-v` are global.
    endpoint and scan something with it.
 
 The `.gitforce.yml` trigger list is `[manual, tag]`; the GitHub
-`release.yml` workflow is a manual-dispatch fallback only. A red GitHub
-Actions run is not a code signal — the pipeline of record is GitForge.
+`release.yml` workflow is a manual-dispatch fallback only. The pipeline of
+record is GitForge. GitHub Actions does run green on this public repo
+(CodeQL, 3-OS matrix, coverage) and its CodeQL result gates merges on
+GitHub.
 
 ---
 
@@ -149,20 +151,26 @@ Actions run is not a code signal — the pipeline of record is GitForge.
 
 1. **`aegis-mcp` is not MCP-discoverable** — custom JSON-RPC method set;
    generic MCP clients need an adapter (`docs/guides/MCP.md`).
-2. **MCP integration tests are the slow slice** — each spawns a real
+2. **GitForge pipelines run one job** — the deployed trigger path queues
+   only the first `needs`-empty job and never schedules dependents, so
+   `.gitforce.yml` is a single ordered job (format → clippy → four test
+   lanes → release build). Until GitForge wires in its DAG engine, a
+   multi-job pipeline here would silently skip everything after the first
+   job.
+3. **MCP integration tests are the slow slice** — each spawns a real
    server process.
-3. **No crates.io publishing** — binaries ship via release tarballs and
+4. **No crates.io publishing** — binaries ship via release tarballs and
    the container image; a `cargo publish` job (or a recorded decision not
    to) is still open (`docs/PLAN.md` Phase 13).
-4. **Performance targets are targets** — the 10GB/min throughput and
+5. **Performance targets are targets** — the 10GB/min throughput and
    <100MB memory figures in `docs/PLAN.md` are aspirational; only startup
    latency is criterion-measured.
-5. **Pattern false-positive tuning is regex-heuristic, not data-driven** —
+6. **Pattern false-positive tuning is regex-heuristic, not data-driven** —
    the 2026-09-22 audit fixed five false-positive-prone rules by hand
    (hipaa-phi, code-injection-request, mesa-optimization,
    executable-file-upload, k8s-run-as-non-root); there is no measured
    FP-rate harness over a labelled corpus per rule yet.
-6. **`ast` proximity matching and ML/regex hybrid detection** remain
+7. **`ast` proximity matching and ML/regex hybrid detection** remain
    unshipped roadmap items (Phase 14).
 
 Resolved 2026-09-22 (previously listed here): pattern state not persisted
