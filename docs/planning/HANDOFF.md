@@ -1,7 +1,9 @@
 # Aegis Handoff — Security Scanner
 
 **Last Updated:** 2026-09-22
-**Status:** 🔄 Active — v0.6.1 released; full gate set green (`--locked` fmt /
+**Status:** 🔄 Active — v0.6.2 released (first release whose assets were
+actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
+checksums verified at publish); full gate set green (`--locked` fmt /
 clippy `-D warnings` / tests); repository self-scan clean (0 findings at
 `--severity-threshold high`); releases run GitForge-first with GitHub as the
 sync mirror
@@ -78,7 +80,7 @@ Kubernetes Service; cluster usage is the scan CronJob in
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 763 tests
+cargo test --workspace --locked                         ✅ 764 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
@@ -144,6 +146,15 @@ The `.gitforce.yml` trigger list is `[manual, tag]`; the GitHub
 record is GitForge. GitHub Actions does run green on this public repo
 (CodeQL, 3-OS matrix, coverage) and its CodeQL result gates merges on
 GitHub.
+
+v0.6.2 (2026-09-22) is the first release actually built by that pipeline:
+a tag push triggers it (a same-commit `push` run also fires — cancel the
+duplicate), the single job runs the seven ordered steps, and the runner
+collects `artifacts/` (5 platform tarballs, wasm, source archives,
+`checksums.txt`, `attestation.json`). `publish.sh` verifies every SHA-256
+against the runner receipt before uploading. Two lane-shape rules the run
+enforced: test steps must omit `--all-targets` (criterion benches reject
+`--test-threads`), and the build step refuses non-tag HEADs by design.
 
 ---
 
