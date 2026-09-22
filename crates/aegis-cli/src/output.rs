@@ -301,8 +301,18 @@ pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
 }
 
 /// Format patterns for listing (testable)
+///
+/// Enabled/disabled status comes from the persisted [`PatternState`]: a
+/// pattern the user disabled with `aegis disable` is marked `[ ]` and
+/// excluded by `--enabled`, while `--disabled` lists exactly the persisted
+/// set (intersected with patterns this build ships).
 #[must_use]
-pub fn format_patterns(enabled: bool, disabled: bool, category: Option<&str>) -> String {
+pub fn format_patterns(
+    enabled: bool,
+    disabled: bool,
+    category: Option<&str>,
+    state: &crate::pattern_state::PatternState,
+) -> String {
     use std::fmt::Write as _;
 
     use aegis_core::Severity;
@@ -315,11 +325,17 @@ pub fn format_patterns(enabled: bool, disabled: bool, category: Option<&str>) ->
         None => patterns,
     };
 
-    // Filter by enabled/disabled status
+    // Filter by persisted enabled/disabled status
     let patterns: Vec<_> = if enabled && !disabled {
-        patterns.into_iter().filter(|p| p.enabled).collect()
+        patterns
+            .into_iter()
+            .filter(|p| p.enabled && !state.is_disabled(&p.name))
+            .collect()
     } else if disabled && !enabled {
-        patterns.into_iter().filter(|p| !p.enabled).collect()
+        patterns
+            .into_iter()
+            .filter(|p| state.is_disabled(&p.name))
+            .collect()
     } else {
         patterns
     };
@@ -336,7 +352,11 @@ pub fn format_patterns(enabled: bool, disabled: bool, category: Option<&str>) ->
     output.push('\n');
 
     for p in &patterns {
-        let status = if p.enabled { "[+]" } else { "[ ]" };
+        let status = if state.is_disabled(&p.name) {
+            "[ ]"
+        } else {
+            "[+]"
+        };
         let severity_str = match Severity::parse(&p.severity) {
             Some(Severity::Critical) => "\x1b[31mCRITICAL\x1b[0m",
             Some(Severity::High) => "\x1b[33mHIGH\x1b[0m",
@@ -365,14 +385,20 @@ pub fn list_patterns(
     enabled: bool,
     disabled: bool,
     category: Option<&str>,
+    state: &crate::pattern_state::PatternState,
 ) -> Result<String, anyhow::Error> {
-    Ok(format_patterns(enabled, disabled, category))
+    Ok(format_patterns(enabled, disabled, category, state))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pattern_state::PatternState;
     use aegis_core::{Finding, Location, RiskScore, ScanStats};
+
+    fn test_state() -> PatternState {
+        PatternState::default()
+    }
 
     fn make_test_finding() -> Finding {
         Finding::new(
@@ -785,26 +811,26 @@ mod tests {
 
     #[test]
     fn test_format_patterns_basic() {
-        let output = format_patterns(false, false, None);
+        let output = format_patterns(false, false, None, &test_state());
         assert!(output.contains("Aegis Patterns"));
         assert!(output.contains("Total:"));
     }
 
     #[test]
     fn test_format_patterns_with_category() {
-        let output = format_patterns(false, false, Some("secrets"));
+        let output = format_patterns(false, false, Some("secrets"), &test_state());
         assert!(output.contains("Category: secrets"));
     }
 
     #[test]
     fn test_format_patterns_enabled_only() {
-        let output = format_patterns(true, false, None);
+        let output = format_patterns(true, false, None, &test_state());
         assert!(output.contains("[+]"));
     }
 
     #[test]
     fn test_format_patterns_disabled_only() {
-        let output = format_patterns(false, true, None);
+        let output = format_patterns(false, true, None, &test_state());
         // When filtering disabled only, format is still correct
         assert!(output.contains("Total:"));
         assert!(output.contains("patterns"));
@@ -813,20 +839,20 @@ mod tests {
     #[test]
     fn test_format_patterns_all_statuses() {
         // Both enabled and disabled - should show all
-        let output = format_patterns(true, true, None);
+        let output = format_patterns(true, true, None, &test_state());
         assert!(output.contains("[+]") || output.contains("[ ]"));
     }
 
     #[test]
     fn test_format_patterns_severity_colors() {
-        let output = format_patterns(false, false, None);
+        let output = format_patterns(false, false, None, &test_state());
         // Should contain ANSI color codes for severity
         assert!(output.contains("\x1b[31m") || output.contains("\x1b[33m"));
     }
 
     #[test]
     fn test_list_patterns_returns_ok() {
-        let result = list_patterns(false, false, None);
+        let result = list_patterns(false, false, None, &test_state());
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Aegis Patterns"));
@@ -834,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_list_patterns_with_category() {
-        let result = list_patterns(false, false, Some("secrets"));
+        let result = list_patterns(false, false, Some("secrets"), &test_state());
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("Category: secrets"));

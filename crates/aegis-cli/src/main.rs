@@ -6,10 +6,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use aegis_cli::{
-    benchmark, config, disable_pattern_message, enable_pattern_message, output, scanner,
-    OutputFormat,
-};
+use aegis_cli::{benchmark, config, output, pattern_state, scanner, OutputFormat};
 
 #[derive(Parser)]
 #[command(name = "aegis")]
@@ -256,18 +253,19 @@ async fn main() -> Result<()> {
             disabled,
             category,
         } => {
+            let state = pattern_state::load(&pattern_state::state_dir()?)?;
             println!(
                 "{}",
-                output::list_patterns(enabled, disabled, category.as_deref())?
+                output::list_patterns(enabled, disabled, category.as_deref(), &state)?
             );
         }
         Commands::Enable { pattern } => {
-            config::enable_pattern(&pattern)?;
-            println!("{}", enable_pattern_message(&pattern));
+            let dir = pattern_state::state_dir()?;
+            println!("{}", pattern_state::enable_pattern(&dir, &pattern)?);
         }
         Commands::Disable { pattern } => {
-            config::disable_pattern(&pattern)?;
-            println!("{}", disable_pattern_message(&pattern));
+            let dir = pattern_state::state_dir()?;
+            println!("{}", pattern_state::disable_pattern(&dir, &pattern)?);
         }
         Commands::Update { force } => {
             scanner::update_bundle(force).await?;

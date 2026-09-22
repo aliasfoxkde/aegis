@@ -5,14 +5,13 @@
 pub mod benchmark;
 pub mod config;
 pub mod output;
+pub mod pattern_state;
 pub mod scanner;
 
 pub use benchmark::{run_benchmark, BenchmarkOptions};
-pub use config::{
-    disable_pattern, disable_pattern_message, enable_pattern, enable_pattern_message, load_config,
-    resolve_profile, save_config,
-};
+pub use config::{load_config, resolve_profile, save_config};
 pub use output::Output;
+pub use pattern_state::PatternState;
 pub use scanner::{
     execute_scan, execute_scan_with_stdin, run_scan_and_get_exit_code, update_bundle, ScanOptions,
 };

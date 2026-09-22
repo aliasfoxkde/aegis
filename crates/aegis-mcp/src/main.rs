@@ -3,7 +3,6 @@
 //! Model Context Protocol server for Aegis security scanning.
 
 mod sandbox;
-mod tools;
 
 use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
@@ -14,8 +13,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
-
-pub use tools::*;
 
 /// MCP server state
 pub struct ServerState {
@@ -789,5 +786,93 @@ mod tests {
         assert!(result.is_ok());
         let categories = result.unwrap();
         assert!(!categories.is_empty());
+    }
+
+    async fn ready_state() -> Arc<ServerState> {
+        let state = Arc::new(ServerState::new());
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner().expect("bundled patterns compile");
+        }
+        state
+    }
+
+    #[tokio::test]
+    async fn scan_file_outside_sandbox_is_rejected() {
+        let rpc = AegisRpcImpl::new(ready_state().await);
+        // /etc/passwd is outside the sandbox cwd.
+        let error = rpc
+            .scan_file("/etc/passwd".to_string())
+            .await
+            .expect_err("sandbox must refuse absolute paths outside cwd");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
+    }
+
+    #[tokio::test]
+    async fn scan_dir_outside_sandbox_is_rejected() {
+        let rpc = AegisRpcImpl::new(ready_state().await);
+        let error = rpc
+            .scan_dir("/etc".to_string())
+            .await
+            .expect_err("sandbox must refuse directories outside cwd");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
+    }
+
+    #[tokio::test]
+    async fn scan_file_inside_cwd_reports_findings_and_stats() {
+        let rpc = AegisRpcImpl::new(ready_state().await);
+
+        // `temp/` is inside the sandbox cwd and gitignored.
+        let fixture_dir = PathBuf::from("temp/mcp-fixtures");
+        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
+        std::fs::write(
+            fixture_dir.join("leak.txt"),
+            concat!("token = \"ghp_", "0123456789abcdefghijklmnopqrstuvwxyzAB\""),
+        )
+        .expect("write fixture");
+
+        let result = rpc
+            .scan_file("temp/mcp-fixtures/leak.txt".to_string())
+            .await;
+        let _removed = std::fs::remove_dir_all(&fixture_dir);
+
+        let response = result.expect("scan_file inside cwd must succeed");
+        assert!(response.finding_count > 0, "leaked token must be detected");
+    }
+
+    #[tokio::test]
+    async fn scan_file_missing_file_maps_to_internal_error() {
+        let rpc = AegisRpcImpl::new(ready_state().await);
+
+        // Nonexistent but inside cwd: the sandbox allows it, the scan fails.
+        let error = rpc
+            .scan_file("temp/absent-file.txt".to_string())
+            .await
+            .expect_err("missing file must surface an error");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InternalError);
+    }
+
+    #[tokio::test]
+    async fn scan_dir_inside_cwd_reports_findings() {
+        let rpc = AegisRpcImpl::new(ready_state().await);
+
+        let fixture_dir = PathBuf::from("temp/mcp-dir-fixture");
+        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
+        // The console.log line gives the test a finding to assert on; the
+        // credential line is a synthetic fixture, suppressed on its own line.
+        std::fs::write(
+            fixture_dir.join("creds.txt"),
+            "console.log(\"debug\");\nAWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures
+        )
+        .expect("write fixture");
+
+        let result = rpc.scan_dir("temp/mcp-dir-fixture".to_string()).await;
+        let _removed = std::fs::remove_dir_all(&fixture_dir);
+
+        let response = result.expect("scan_dir inside cwd must succeed");
+        assert!(
+            response.finding_count > 0,
+            "finding in nested fixture must be reported"
+        );
     }
 }

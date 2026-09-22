@@ -347,7 +347,9 @@ pub struct ScanStats {
     pub scan_time_ms: u64,
     /// Time spent on I/O (milliseconds)
     pub io_time_ms: u64,
-    /// Number of workers used
+    /// Worker threads that took part in the scan: one for single-unit
+    /// scans, the scan-pool width (capped by the work available) for
+    /// directory walks. Aggregated as a maximum, never a sum.
     pub workers_used: usize,
     /// Files by extension
     pub files_by_extension: std::collections::HashMap<String, usize>,
@@ -411,6 +413,9 @@ impl ScanStats {
         self.patterns_matched += other.patterns_matched;
         self.scan_time_ms += other.scan_time_ms;
         self.io_time_ms += other.io_time_ms;
+        // Workers overlap across partial scans, so the aggregate is the
+        // widest pool any part ran on, not a sum.
+        self.workers_used = self.workers_used.max(other.workers_used);
 
         for (ext, count) in &other.files_by_extension {
             *self.files_by_extension.entry(ext.clone()).or_insert(0) += count;

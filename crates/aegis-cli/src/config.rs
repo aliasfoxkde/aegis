@@ -2,42 +2,6 @@
 
 use std::path::PathBuf;
 
-/// Enable a pattern.
-///
-/// # Errors
-///
-/// None yet: pattern state is not persisted, so this always returns
-/// `Ok(())`.
-#[allow(dead_code)]
-pub fn enable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
-    // In real implementation, this would update the pattern state file
-    Ok(())
-}
-
-/// Disable a pattern.
-///
-/// # Errors
-///
-/// None yet: pattern state is not persisted, so this always returns
-/// `Ok(())`.
-#[allow(dead_code)]
-pub fn disable_pattern(_pattern: &str) -> Result<(), anyhow::Error> {
-    // In real implementation, this would update the pattern state file
-    Ok(())
-}
-
-/// Get the message to display when enabling a pattern
-#[must_use]
-pub fn enable_pattern_message(pattern: &str) -> String {
-    format!("Enabled pattern: {pattern}")
-}
-
-/// Get the message to display when disabling a pattern
-#[must_use]
-pub fn disable_pattern_message(pattern: &str) -> String {
-    format!("Disabled pattern: {pattern}")
-}
-
 /// Load a configuration document from disk.
 ///
 /// # Errors
@@ -91,32 +55,6 @@ pub fn resolve_profile(name_or_path: &str) -> Result<aegis_core::Config, anyhow:
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_enable_pattern() {
-        let result = enable_pattern("test-pattern");
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_disable_pattern() {
-        let result = disable_pattern("test-pattern");
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_enable_pattern_message() {
-        let msg = enable_pattern_message("my-pattern");
-        assert!(msg.contains("Enabled"));
-        assert!(msg.contains("my-pattern"));
-    }
-
-    #[test]
-    fn test_disable_pattern_message() {
-        let msg = disable_pattern_message("my-pattern");
-        assert!(msg.contains("Disabled"));
-        assert!(msg.contains("my-pattern"));
-    }
 
     #[test]
     fn test_load_config_missing_file() {
