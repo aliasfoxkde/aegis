@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn scan_content_finds_a_leaked_credential() {
         let json =
-            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed");
+            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed"); // aegis:ignore:aws-access-key
         let findings: Vec<WasmFinding> =
             serde_json::from_str(&json).expect("scan_content emits a finding array");
         assert!(
@@ -163,7 +163,7 @@ mod tests {
     #[test]
     fn finding_shape_survives_the_json_round_trip() {
         let json =
-            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed");
+            scan_content("key = \"AKIAIOSFODNN7EXAMPLE\"", "demo.js").expect("scan must succeed"); // aegis:ignore:aws-access-key
         let findings: Vec<WasmFinding> =
             serde_json::from_str(&json).expect("scan_content emits a finding array");
         let f = &findings[0];

@@ -109,7 +109,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "mesa-optimization".to_string(),
             category: "ai-safety".to_string(),
-            match_pattern: r"(?i)(mesa.?optim|inner.?optim|acquisit|power.?seek)".to_string(),
+            match_pattern: r"(?i)(mesa.?optim|inner.?optim|acquisition.{0,24}(power|resource|control)|power.?seek)".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "low".to_string(),

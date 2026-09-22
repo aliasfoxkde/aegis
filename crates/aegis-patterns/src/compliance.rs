@@ -96,7 +96,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hipaa-phi".to_string(),
             category: "compliance".to_string(),
-            match_pattern: r"(?i)phi|protected\s*health\s*information".to_string(),
+            match_pattern: r"(?i)\bphi\b|protected\s*health\s*information".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

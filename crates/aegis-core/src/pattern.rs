@@ -1871,7 +1871,7 @@ mod tests {
         )
         .unwrap();
 
-        let content = "token = 'abc';\nsecret = 'xyz';\n"; // aegis:ignore:hardcoded-password
+        let content = "token = 'abc';\nsecret = 'xyz';\n"; // aegis:ignore:hardcoded-password,password-field
         let matches = scanner.find_matches(content);
 
         assert_eq!(matches.len(), 2);
@@ -1912,9 +1912,9 @@ mod tests {
         def.exclude_pattern = Some(r"placeholder|example".to_string());
 
         let pattern = Pattern::new(def).unwrap();
-        assert!(pattern.matches("secret = 'hunter2'")); // aegis:ignore:hardcoded-password
-        assert!(pattern.is_excluded("secret = 'example_key'")); // aegis:ignore:hardcoded-password
-        assert!(!pattern.is_excluded("secret = 'hunter2'")); // aegis:ignore:hardcoded-password
+        assert!(pattern.matches("secret = 'hunter2'")); // aegis:ignore:hardcoded-password,password-field
+        assert!(pattern.is_excluded("secret = 'example_key'")); // aegis:ignore:hardcoded-password,hardcoded-tf-secrets,password-field,rust-hardcoded-secret
+        assert!(!pattern.is_excluded("secret = 'hunter2'")); // aegis:ignore:hardcoded-password,password-field
     }
 
     #[test]

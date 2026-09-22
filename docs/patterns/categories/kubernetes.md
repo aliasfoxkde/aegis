@@ -16,7 +16,7 @@ reference.
 | [`k8s-empty-dir-memory-backed`](#k8s-empty-dir-memory-backed) | medium | high | EmptyDir volume uses memory-backed storage |
 | [`k8s-missing-capability-drop`](#k8s-missing-capability-drop) | medium | medium | Security context defined but missing capability drop |
 | [`k8s-no-network-policy`](#k8s-no-network-policy) | medium | high | No network policy defined for namespace |
-| [`k8s-run-as-non-root`](#k8s-run-as-non-root) | high | high | Container run as root or missing runAsNonRoot configuration |
+| [`k8s-run-as-non-root`](#k8s-run-as-non-root) | high | high | Manifest explicitly sets runAsNonRoot: false (container runs as root) |
 | [`kubernetes-latest-tag`](#kubernetes-latest-tag) | medium | high | Container image uses latest tag |
 | [`kubernetes-privileged-container`](#kubernetes-privileged-container) | critical | high | Container runs in privileged mode |
 | [`no-resource-limits`](#no-resource-limits) | medium | high | Container has no resource limits defined |
@@ -189,7 +189,7 @@ NetworkP…X3: | - {
 
 ### k8s-run-as-non-root
 
-Container run as root or missing runAsNonRoot configuration
+Manifest explicitly sets runAsNonRoot: false (container runs as root)
 
 | Field | Value |
 |-------|-------|
@@ -203,13 +203,13 @@ Container run as root or missing runAsNonRoot configuration
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(runAsNonRoot|runAsRoot):\s*(true|false)
+runAsNonRoot:\s*false
 ```
 
 **Input that fires** (verified by the liveness test):
 
 ```text
-runAsNonRoot: true
+runAsNonRoot: false
 ```
 
 ### kubernetes-latest-tag

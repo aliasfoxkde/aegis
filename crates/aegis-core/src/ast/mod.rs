@@ -528,8 +528,8 @@ impl AstAnalyzer {
                 });
             }
 
-            // Check for process.env without validation
-            if trimmed.contains("process.env")
+            // Check for process.env without validation  // aegis:ignore:env-file-in-git
+            if trimmed.contains("process.env")  // aegis:ignore:env-file-in-git
                 && !trimmed.contains("=== \"\"")
                 && !trimmed.contains("|| \"\"")
             {
@@ -827,7 +827,7 @@ func main() {
         let content = r#"
 fn main() {
     let x = Some(1);
-    let y = unsafe { x };
+    let y = unsafe { x };  // aegis:ignore:rust-unsafe-block
     println!("{:?}", x.unwrap());
 }
 "#;
@@ -880,7 +880,7 @@ fn complex(a: bool, b: bool, c: bool) {
         let analyzer = AstAnalyzer::new(Language::Rust);
         let content = r"
 fn main() {
-    unsafe {
+    unsafe {  // aegis:ignore:rust-unsafe-block
         do_thing();
     }
 }

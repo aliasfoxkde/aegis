@@ -77,7 +77,7 @@ CI/CD bypass marker detected
 **Input that fires** (verified by the liveness test):
 
 ```text
-skip-ci: true
+--no-verify
 ```
 
 ### ci-secret-hardcoded
@@ -380,7 +380,7 @@ Potential secret in Dockerfile detected
 **Input that fires** (verified by the liveness test):
 
 ```text
-ENV SECRET=x2CfsW7Q
+ ARG 6q_SECRET
 ```
 
 ### terraform-state

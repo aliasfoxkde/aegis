@@ -7,17 +7,17 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-07, phases 0–10 of the improvement plan merged; v0.4.0 released)
+## Current state (2026-09-22, phases 0–11 of the improvement plan merged; v0.6.1 released)
 
 | Dimension | State |
 | --- | --- |
-| Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates |
-| Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode |
+| Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit |
+| Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 735 tests, multi-OS test matrix, codecov gate (97.24% lines measured), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
-| Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server, Unix-socket daemon, wasm build, 5-platform release tarballs |
-| Release | v0.4.0 published (2026-09-07): 9 assets, `CHANGELOG.md` tracking begins here; workflows bumped to Node-24-native action releases (#95) |
-| Known defects | None open. The CI-parity self-scan is clean (0 findings); stats agree with findings on every scan path; exit codes verified e2e per mode |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 763 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
+| Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (custom JSON-RPC method set, not MCP-discoverable), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob |
+| Release | v0.6.1 published; **GitForge-first** since v0.6.1 — the `.gitforce.yml` pipeline builds all assets in the `rust:1.88` builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256 |
+| Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
 [docs/architecture/OVERVIEW.md](architecture/OVERVIEW.md). Per-category
@@ -93,7 +93,7 @@ Measured with the new `scanner_init` criterion bench (release,
 this machine): registry from bundled definitions 164.6 ms; first scan of a
 new extension 73.7 ms (was ~216 ms when every pattern compiled); cached
 rescan 2.5 ms. Findings are byte-identical to the eager build across the
-workspace suite (651 tests at the time; 729 now).
+workspace suite (651 tests at the time; 763 now).
 
 - **Exit criteria:** criterion bench steady state unchanged; startup and
   MCP handshake compile only what they need. ✅
@@ -103,7 +103,7 @@ workspace suite (651 tests at the time; 729 now).
 The self-scan ranked every firing rule and each finding was traced to its
 source line before anything was retuned. Self-scan findings: 941 → 817;
 CI-parity scan (`secrets,security-hardening,web-security` at high+) 3 → 0.
-Corpus precision/recall thresholds unchanged and green (651 tests at the time; 729 now).
+Corpus precision/recall thresholds unchanged and green (651 tests at the time; 763 now).
 
 What actually caused the noise, and the fix for each:
 
@@ -252,7 +252,7 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   custom rule fires); GitForge hook routes the cargo gates; all workflow
   YAMLs validated.
 
-### Phase 10 — Release — DELIVERED (v0.4.0, #94)
+### Phase 10 — Release — DELIVERED (v0.4.0, #94; superseded by v0.5.0/v0.6.0/v0.6.1)
 
 - Full gates, version bump PR (`cargo update -w` for workspace lock
   entries, `fuzz/Cargo.lock` refreshed), `CHANGELOG.md` created
@@ -262,6 +262,147 @@ At the start: 94.51% lines / 90.65% regions; aegis-wasm at 0%.
   flagged for Node 20 deprecation moved to Node-24-native releases
   (checkout v7.0.1, upload-artifact v7.0.1, download-artifact v8.0.1,
   action-gh-release v3.0.3).
+
+---
+
+### Phase 11 — Full-repo audit: honesty pass, pattern FP corrections, ship-fix — DELIVERED (2026-09-22)
+
+A whole-repository audit against the guiding principles. Every finding was
+either fixed at root or, where a suppressible fixture line was the correct
+answer, suppressed with an inline `aegis:ignore:` directive naming the
+pattern.
+
+**Pattern false positives (fixed at the regex, regenerated examples + docs,
+liveness re-proven):**
+
+- `hipaa-phi` matched any bare word "phi" (flags every PHI-acronym prose
+  line); now requires the expansion or a word-bounded `phi` in a clinical
+  context.
+- `code-injection-request` matched any sentence containing bare `rce`;
+  now requires an imperative verb + malicious-intent noun in one line.
+- `mesa-optimization` matched the bare substring `acquisit` (flags
+  "acquisition", "acquisitions" everywhere); now anchors on mesa/inner
+  alignment terms or power-seeking phrasing.
+- `executable-file-upload` had its direction inverted: `\.sh\s*.*upload`
+  flags prose like "publish.sh refuses to upload". Now requires
+  `upload…<contiguous path>.(exe|sh|php|asp|jsp)` (code-shaped) or the
+  PHP `move_uploaded_file` builtin.
+- `k8s-run-as-non-root` fired **on** `runAsNonRoot: true` — flagging every
+  compliant manifest at high severity while manifests missing the setting
+  (the described threat) never matched — and matched `runAsRoot`, a field
+  Kubernetes does not have. A line regex cannot assert "field missing from
+  the block", so the rule now detects the expressible violation
+  (`runAsNonRoot: false`) and its description says so.
+
+**Removed (fake or phantom implementations):**
+
+- `output-pipeline` feature of `aegis-core`: PostgreSQL/MySQL "handlers"
+  that logged what they would insert and returned success; nothing
+  consumed the feature.
+- `crates/aegis-mcp/src/tools.rs`: a dead `#[allow(dead_code)]` duplicate
+  of the RPC implementation.
+- `crates/aegis-cli/tests/output_contract_matrix.rs`: tested the removed
+  pipeline.
+- `kubernetes/{deployment,service,configmap}.yaml`: a phantom HTTP daemon
+  with `/health`, `/ready`, `/metrics` endpoints that never existed.
+- `community/`: a phantom "620-pattern" catalog describing rules that do
+  not exist; `.github/CHANGELOG.md`: a stale frozen copy.
+
+**Rebuilt and verified (not merely written):**
+
+- `docker/Dockerfile` did not build (rust 1.81 < MSRV, empty `apt-get`,
+  shell syntax inside `COPY`, nonexistent binary). Rebuilt on
+  `rust:1.88-slim`, `--locked`, non-root, ships the three binaries plus
+  baked profiles; verified with a real `docker build` + containerized
+  scan of this repo (18 findings on README.md, correct version string).
+- `kubernetes/cronjob.yaml` is the supported cluster shape (no Service —
+  the daemon is Unix-socket-only): nightly scan over a PVC, SARIF output,
+  `restartPolicy: Never` so findings surface as a failed Job, container+
+  pod `runAsNonRoot`, dropped capabilities, read-only rootfs.
+
+**Correctness:**
+
+- `aegis enable/disable` now persist to
+  `<config dir>/aegis/pattern-state.json` and are honored by scans and
+  `list`; unknown names fail loud; integration tests run under an isolated
+  `XDG_CONFIG_HOME` instead of the developer's real config.
+- `ScanOptions::workers` now sizes the scan thread pool; pool-build
+  failures warn and fall back; `workers_used` merges as a max across
+  shards.
+- Silent failures made loud: unscannable patterns log their name; the
+  clone tokenizer advances by UTF-8 width (was byte — panicked on
+  multibyte escapes); `trim_string` respects char boundaries; MCP/daemon
+  transport errors propagate instead of `.ok()`-ing.
+- Suppressed-with-directive fixture lines across 10 source files (37
+  lines) that genuinely match rules by construction (test fixtures, docs
+  of the remediation strings).
+
+**CI/release hardening:** `--locked` on every clippy/test/build
+invocation (CI, `.gitforce.yml`, release build script); release
+attestation now includes the `Cargo.lock` SHA-256; dependabot gained the
+github-actions ecosystem (grouped); MSRV corrected 1.75 → 1.88 everywhere
+(locked `time`/`ignore` require it).
+
+**Docs honesty sweep:** MCP guide now states the custom-protocol reality
+instead of implying Claude Desktop compatibility; CICD guide dropped the
+impossible admission-controller webhook; counts/MSRV reconciled across
+README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
+`std::sync::LazyLock` with the dependency removed.
+
+---
+
+### Phase 12 — Measured pattern quality (next up)
+
+Phase 11 fixed false positives one regex at a time, by hand. Make it
+data-driven:
+
+1. **Per-rule FP/FP-rate harness** — extend the labelled corpus harness
+   (today: aggregate precision/recall 0.95) to report per-rule precision,
+   and gate on it: any rule below its band fails CI with the offending
+   corpus files listed.
+2. **Confidence calibration** — `confidence` is currently hand-assigned
+   prose ("high"/"medium"/"low"); recalibrate each rule's confidence from
+   measured precision and record the mapping in the pattern docs.
+3. **Negative corpus growth** — every FP fixed in an audit becomes a
+   permanent regression corpus entry so the same regex mistake cannot
+   ship twice.
+
+### Phase 13 — Distribution decision: crates.io
+
+Seven workspace crates, zero of them published. Either (a) add a
+`cargo publish` stage to the GitForge tag pipeline in dependency order
+with `--allow-dirty` forbidden and dry-run verification, or (b) record the
+decision not to publish with reasons in this file. Both close the gap; the
+current state (binaries only, silent on crates.io) does not.
+
+### Phase 14 — Scanner capability roadmap (carried from the original roadmap)
+
+- **AST proximity matching** — `aegis-core::clone` finds exact token-level
+  clones; extend to near-miss detection (renamed identifiers, reordered
+  statements) for copy-paste-with-modification vulnerability patterns.
+- **ML/regex hybrid detection** — the regex+entropy pipeline is the work
+  horse; an optional statistical ranker over candidate findings (still
+  explainable: feature weights published per rule) could cut residual
+  FPs without hiding the reason for a match.
+- **API-call verification** — patterns today match call *shapes*; verify
+  argument semantics for the top frameworks (OAuth flows, crypto API
+  misuse) via the AST module.
+
+### Phase 15 — Protocol conformance suites
+
+MCP and daemon are smoke-tested e2e but have no documented wire fixtures.
+Record golden request/response pairs (including malformed input, oversize
+lines, sandbox-escape attempts) and replay them in CI so the wire format
+is pinned. Unblocks Phase 16.
+
+### Phase 16 — Control Center gate promotion
+
+Outside this repo's boundary but tracked here because Aegis is the
+enforcement engine: the Control Center pre-pipeline adapter is an enforced
+candidate (receipt persisted, 202-proof path works); promotion requires
+the full failure matrix (clean/finding/malformed/unavailable-scanner),
+owner-scoped receipt API/UI, and one clean completed pipeline. Prereq:
+Phase 15 fixtures for the daemon/MCP surface Control Center consumes.
 
 ---
 
@@ -313,8 +454,8 @@ is a straight weighted sum (`aegis-core::risk`).
 - Throughput: 10GB+/minute on modern hardware (target, not a measured gate)
 - Memory: <100MB baseline, scales with patterns (target)
 - Latency: <10ms per file (avg) (target)
-- Concurrency: rayon's global pool, one thread per core;
-  `ScanOptions::workers` is recorded but not yet wired to the pool
+- Concurrency: rayon pool sized by `ScanOptions::workers` (default: one
+  thread per core)
 - Startup (measured, release, criterion `scanner_init`): registry from
   bundled definitions 164.6 ms; first scan of a new extension 73.7 ms;
   cached rescan 2.5 ms
@@ -324,7 +465,7 @@ is a straight weighted sum (`aegis-core::risk`).
 - Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
   (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
   gate rises with measured reality, never above it (see Phase 6)
-- 729 tests: unit tests per crate; integration tests per surface; property
+- 763 tests: unit tests per crate; integration tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
   benchmarks; labelled corpus with precision/recall gates
 

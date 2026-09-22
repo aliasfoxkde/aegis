@@ -406,7 +406,7 @@ mod tests {
             "secrets",
             "high",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password,password-field
             "abc",
             "Hardcoded secret detected",
         )
@@ -658,7 +658,7 @@ mod tests {
             "secrets",
             "high",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password,password-field
             "abc",
             "High severity finding",
         );
@@ -722,7 +722,7 @@ mod tests {
             "secrets",
             "invalid_severity",
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password,password-field
             "abc",
             "Finding with unknown severity",
         );
@@ -781,13 +781,13 @@ mod tests {
 
     #[test]
     fn test_public_outputs_redact_sensitive_material() {
-        let secret = "TOP-SECRET-CLI-FIXTURE"; // aegis:ignore:hardcoded-password
+        let secret = "TOP-SECRET-CLI-FIXTURE"; // aegis:ignore:hardcoded-password,hardcoded-tf-secrets,password-field,rust-hardcoded-secret
         let finding = Finding::new(
             "hardcoded-secret",
             "secrets",
             "high",
             "high",
-            Location::new("config.toml", 4, 2, format!("token = '{secret}'")),
+            Location::new("config.toml", 4, 2, format!("token = '{secret}'")), // aegis:ignore:rust-hardcoded-secret
             secret,
             "Hardcoded secret detected",
         );

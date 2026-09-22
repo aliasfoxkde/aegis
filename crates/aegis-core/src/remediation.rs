@@ -42,7 +42,7 @@ impl RemediationAdvisor {
                     "Identify the hardcoded secret in the code".to_string(),
                     "Replace with environment variable lookup using std::env::var() or similar"
                         .to_string(),
-                    "Add the secret to your environment configuration (e.g., .env file)"
+                    "Add the secret to your environment configuration (e.g., .env file)" // aegis:ignore:env-file-in-git
                         .to_string(),
                     "Update documentation to reflect the new configuration method".to_string(),
                 ],
@@ -731,7 +731,7 @@ mod tests {
             category,
             severity,
             "high",
-            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password
+            Location::new("test.rs", 10, 5, "secret = 'abc'"), // aegis:ignore:hardcoded-password,password-field
             "secret",
             "Test finding",
         )

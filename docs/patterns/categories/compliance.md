@@ -436,7 +436,7 @@ HIPAA Protected Health Information (PHI) reference detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)phi|protected\s*health\s*information
+(?i)\bphi\b|protected\s*health\s*information
 ```
 
 **Reference**: <https://www.hhs.gov/hipaa/for-professionals/special-topics/health-information-privacy/>
