@@ -1,103 +1,58 @@
 # Aegis Docker Support
 
-This directory contains Docker configuration for running Aegis in containers.
+This directory contains the container build for Aegis and Compose
+profiles for common invocations.
 
-## Quick Start
-
-### Build the Docker image
+## Build the image
 
 ```bash
 docker build -t aegis:latest -f docker/Dockerfile .
 ```
 
-### Run a basic scan
+The image carries three binaries — the `aegis` scanner, the
+`aegis-daemon` Unix-socket server, and the `aegis-mcp` stdio JSON-RPC
+server — plus the shipped configuration profiles under
+`/etc/aegis/profiles`. It runs as a non-root user (`uid 1000`).
+
+## Run a scan
 
 ```bash
-docker run --rm -v $(pwd):/workspace aegis scan /workspace
+docker run --rm -v "$(pwd)":/workspace aegis scan /workspace
 ```
+
+Exit codes follow the CLI contract: `1` when findings are reported, `0`
+on a clean scan. To fail a CI step on findings, just run the container.
 
 ## Using Docker Compose
 
-Docker Compose provides convenient profiles for different use cases:
+| Profile | Invocation | What it does |
+|---------|------------|--------------|
+| `default` | `docker compose --profile default run --rm aegis` | Human-readable scan of the checkout |
+| `json` | `docker compose --profile json run --rm aegis` | JSON output for downstream tooling |
+| `ci` | `docker compose --profile ci run --rm aegis` | `pipeline.json` profile, SARIF written to `aegis-results.sarif` next to the checkout |
+| shell | `docker compose run --rm -it aegis /bin/bash` | Interactive shell |
 
-### Default scan
-
-```bash
-docker compose --profile default run --rm aegis scan /workspace
-```
-
-### CI/CD mode (exits with SARIF output)
-
-```bash
-docker compose --profile ci up
-```
-
-### Run tests
+## Scan with a specific profile
 
 ```bash
-docker compose --profile test up
+docker run --rm -v "$(pwd)":/workspace aegis \
+  scan /workspace -c /etc/aegis/profiles/production.json
 ```
 
-### Interactive shell
+## SARIF output for GitHub Security
 
 ```bash
-docker compose run --rm -it aegis /bin/bash
+docker run --rm -v "$(pwd)":/workspace aegis \
+  scan /workspace --format sarif --output-file /workspace/aegis-results.sarif
 ```
 
-## Environment Variables
+## Environment variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AEGIS_HOME` | Aegis home directory | `/home/aegis/.aegis` |
-| `RUST_LOG` | Logging level | `info` |
-| `AEGIS_SEVERITY_THRESHOLD` | Minimum severity to report | `medium` |
-| `AEGIS_EXIT_ON_FINDINGS` | Exit with non-zero on findings (CI mode) | `false` |
-| `AEGIS_FORMAT` | Output format (human, json, sarif) | `human` |
+`RUST_LOG` is the only behavior-affecting variable (default `info`).
+There are no `AEGIS_FORMAT`/`AEGIS_EXIT_ON_FINDINGS`-style switches —
+format and thresholds are CLI flags, and the findings exit code is
+built into the binary.
 
-## Examples
-
-### Scan with JSON output
-
-```bash
-docker run --rm -v $(pwd):/workspace \
-  -e AEGIS_FORMAT=json \
-  aegis scan /workspace --format json > results.json
-```
-
-### SARIF output for GitHub Security
-
-```bash
-docker run --rm -v $(pwd):/workspace \
-  -e AEGIS_FORMAT=sarif \
-  -e AEGIS_EXIT_ON_FINDINGS=true \
-  aegis scan /workspace --format sarif --output results.sarif
-```
-
-### Scan with pipeline preset (strict mode)
-
-```bash
-docker run --rm -v $(pwd):/workspace \
-  aegis scan /workspace --preset pipeline
-```
-
-## Multi-platform Build
-
-To build for multiple platforms:
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t aegis:latest -f docker/Dockerfile . --push
-```
-
-## Security Considerations
-
-- The Docker image runs as non-root user `aegis`
-- File volumes are mounted read-only by default
-- No secrets are stored in the image
-- Minimal attack surface with distroless/slim base images
-
-## Image Size Optimization
-
-The multi-stage build produces a minimal image:
-- Builder stage: includes Rust toolchain (~1.5GB)
-- Runtime stage: minimal Debian with Aegis binary (~100MB)
+The daemon does take `AEGIS_DAEMON_SOCKET_PATH` and
+`AEGIS_DAEMON_SCAN_ROOT`, but it listens on a **Unix socket**; it is a
+local integration surface and is not exposed as a container port.

@@ -2,16 +2,21 @@
 # Aegis Security Scanner - Docker Compose Configuration
 # =============================================================================
 #
+# The CLI exits 1 when findings are reported and 0 on a clean scan; there
+# is no separate "exit on findings" switch. Output format and profile are
+# plain flags. RUST_LOG is the only environment variable the binaries
+# read for behavior (the daemon additionally reads AEGIS_DAEMON_SOCKET_PATH
+# and AEGIS_DAEMON_SCAN_ROOT, but it is a local Unix-socket server and is
+# not included here as a networked service).
+#
 # Usage:
-#   Scan current directory:     docker compose run --rm aegis scan /workspace
-#   Scan with JSON output:     docker compose run --rm aegis scan /workspace --format json
-#   Interactive shell:          docker compose run --rm -it aegis /bin/bash
-#   Run pre-pipeline checks:    docker compose run --rm aegis scan /workspace --preset pipeline
-
-version: '3.8'
+#   Scan current directory:  docker compose --profile default run --rm aegis
+#   JSON output:             docker compose --profile json run --rm aegis
+#   SARIF for CI:            docker compose --profile ci run --rm aegis
+#   Interactive shell:       docker compose run --rm -it aegis /bin/bash
 
 services:
-  # Main Aegis scanner
+  # Human-readable scan of the checkout (read-only mount).
   aegis:
     build:
       context: ..
@@ -22,15 +27,29 @@ services:
       - default
     volumes:
       - ..:/workspace:ro
-      - aegis-cache:/home/aegis/.aegis
-    environment:
-      - AEGIS_HOME=/home/aegis/.aegis
-      - RUST_LOG=info
-      - AEGIS_SEVERITY_THRESHOLD=medium
     working_dir: /workspace
+    environment:
+      - RUST_LOG=info
     command: scan /workspace
 
-  # Aegis with CI/CD mode (exits on findings)
+  # JSON output for downstream tooling.
+  aegis-json:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: aegis:latest
+    profiles:
+      - json
+    volumes:
+      - ..:/workspace:ro
+    working_dir: /workspace
+    environment:
+      - RUST_LOG=info
+    command: scan /workspace --format json
+
+  # CI/CD mode: the shipped pipeline profile (SARIF output written next to
+  # the checkout; the container exits 1 when findings survive the
+  # profile's filters).
   aegis-ci:
     build:
       context: ..
@@ -40,51 +59,7 @@ services:
       - ci
     volumes:
       - ..:/workspace:ro
-      - aegis-cache:/home/aegis/.aegis
+    working_dir: /workspace
     environment:
-      - AEGIS_HOME=/home/aegis/.aegis
       - RUST_LOG=warn
-      - AEGIS_EXIT_ON_FINDINGS=true
-      - AEGIS_FORMAT=sarif
-    working_dir: /workspace
-    command: scan /workspace --preset pipeline --format sarif --output /workspace/aegis-results.sarif
-
-  # Aegis with pre-pipeline fixture tests
-  aegis-test:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: aegis:latest
-    profiles:
-      - test
-    volumes:
-      - ..:/workspace:ro
-      - aegis-cache:/home/aegis/.aegis
-    environment:
-      - AEGIS_HOME=/home/aegis/.aegis
-      - RUST_LOG=debug
-    working_dir: /workspace
-    command: scan /workspace --preset pipeline
-
-  # Aegis daemon for long-running monitoring
-  aegis-daemon:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    image: aegis:latest
-    profiles:
-      - daemon
-    volumes:
-      - ..:/workspace:ro
-      - aegis-cache:/home/aegis/.aegis
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - AEGIS_HOME=/home/aegis/.aegis
-      - RUST_LOG=info
-    ports:
-      - "8080:8080"
-    command: daemon --host 0.0.0.0 --port 8080
-
-volumes:
-  aegis-cache:
-    driver: local
+    command: scan /workspace -c /etc/aegis/profiles/pipeline.json --format sarif --output-file /workspace/aegis-results.sarif

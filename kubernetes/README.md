@@ -1,133 +1,74 @@
 # Aegis Kubernetes Deployment
 
-This directory contains Kubernetes manifests for deploying Aegis in a cluster.
+Aegis in a cluster is a **scheduled batch scanner**. The daemon
+(`aegis-daemon`) serves a local Unix socket and the MCP server
+(`aegis-mcp`) speaks stdio JSON-RPC — neither is a network service, so
+there is deliberately no Deployment/Service pair here: a TCP Service in
+front of a Unix-socket server would answer nothing.
+
+## What exists
+
+| Manifest | Purpose |
+|----------|---------|
+| `cronjob.yaml` | Nightly `aegis scan` over a mounted workspace; SARIF report written next to the source |
 
 ## Prerequisites
 
 - Kubernetes 1.24+
-- kubectl configured with cluster access
-- Container registry with Aegis image
+- A container registry holding the image built from `docker/Dockerfile`
+  (update `image:` in `cronjob.yaml`)
+- A PersistentVolumeClaim named `aegis-workspace` holding the source tree
+  to scan
 
 ## Quick Start
 
-### 1. Build and push the image
-
 ```bash
-# Build multi-arch image
+# 1. Build and push the image
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t your-registry/aegis:latest -f docker/Dockerfile . --push
 
-# Or use pre-built image from Docker Hub
-# Update deployment.yaml image to: docker.io/aegis/aegis:latest
+# 2. Apply the CronJob
+kubectl apply -f kubernetes/cronjob.yaml
+
+# 3. Trigger a scan immediately (don't wait for 2 AM)
+kubectl create job --from=cronjob/aegis-scan-cron aegis-scan-manual
+
+# 4. Read the result
+kubectl logs job/aegis-scan-manual
+# SARIF report: /workspace/scan-results.sarif on the aegis-workspace volume
 ```
 
-### 2. Apply the manifests
+## Exit-code semantics
 
-```bash
-# Apply all manifests
-kubectl apply -f kubernetes/
-
-# Check status
-kubectl get pods -l app=aegis
-kubectl get services -l app=aegis
-```
-
-### 3. Access the service
-
-```bash
-# Port-forward for local access
-kubectl port-forward svc/aegis-service 8080:80
-
-# Or use ingress (requires ingress controller)
-# Edit service.yaml with your domain and apply
-```
-
-## Components
-
-### Daemon Deployment
-Long-running HTTP server for on-demand scanning:
-- 2 replicas with HPA support
-- Health check endpoints (/health, /ready)
-- Prometheus metrics endpoint (/metrics)
-
-### CronJob
-Scheduled scans using production preset:
-- Runs daily at 2 AM
-- Outputs SARIF to persistent volume
-- Configurable schedule and preset
-
-### ServiceAccount & RBAC
-- Minimal permissions for scanning
-- Read-only access to secrets
+The container exits `1` when findings survive the profile's filters and
+`0` on a clean scan. `restartPolicy: Never` means a findings run is
+recorded as a **failed Job** — the intended alerting signal, not an error
+to retry away.
 
 ## Configuration
 
-### Via ConfigMap
+- **Scan profile**: the image ships `config/profiles/*.json` under
+  `/etc/aegis/profiles`; the CronJob uses `production.json`. Swap in
+  `pipeline.json` (broader categories, JSON output defaults) or mount
+  your own profile and change the `-c` argument.
+- **Schedule**: edit `spec.schedule` (default `0 2 * * *`).
+- **Logging**: `RUST_LOG` (`info` default in the image, `warn` in the
+  CronJob). This is the only behavior-affecting environment variable.
 
-```yaml
-kubectl create configmap aegis-config --from-file=kubernetes/configmap.yaml
-```
+## Security posture
 
-### Via Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AEGIS_HOME` | Aegis home directory | `/home/aegis/.aegis` |
-| `RUST_LOG` | Logging level | `info` |
-| `AEGIS_DAEMON_PORT` | Daemon port | `8080` |
-
-### Via CLI Arguments
-
-```yaml
-args:
-  - daemon
-  - --host
-  - "0.0.0.0"
-  - --port
-  - "8080"
-  - --config
-  - /etc/aegis/aegis.yaml
-```
-
-## Scaling
-
-```bash
-# Manual scaling
-kubectl scale deployment aegis-daemon --replicas=5
-
-# Enable HPA
-kubectl autoscale deployment aegis-daemon \
-  --cpu-percent=70 \
-  --min=2 \
-  --max=10
-```
-
-## Monitoring
-
-The daemon exposes Prometheus metrics at `/metrics`:
-- `aegis_scans_total` - Total scans
-- `aegis_scan_duration_seconds` - Scan duration histogram
-- `aegis_findings_total` - Total findings by severity
-
-Grafana dashboard available in `/kubernetes/grafana-dashboard.json`.
+The container runs non-root (`uid 1000`) with a read-only root
+filesystem, all capabilities dropped, and `allowPrivilegeEscalation`
+off. It needs **no Kubernetes API access** — no RBAC, no ServiceAccount
+mount — because the scanner only reads the mounted filesystem. Mount the
+tokenless default service account is still auto-injected; harden with
+`automountServiceAccountToken: false` in the pod spec if your cluster
+policy allows.
 
 ## Troubleshooting
 
 ```bash
-# Check logs
-kubectl logs -l app=aegis -f
-
-# Check events
-kubectl get events --sort-by='.lastTimestamp'
-
-# Exec into pod
-kubectl exec -it deploy/aegis-daemon -- /bin/bash
+kubectl get jobs --selector=app=aegis
+kubectl logs job/<job-name>
+kubectl get events --sort-by='.lastTimestamp' | grep aegis
 ```
-
-## Production Considerations
-
-1. **Security**: Use read-only root filesystem and non-root user
-2. **Storage**: Use PVC for scan results persistence
-3. **Networking**: Configure TLS via ingress
-4. **Secrets**: Mount API keys via Kubernetes secrets
-5. **Monitoring**: Enable Prometheus scraping via ServiceMonitor
