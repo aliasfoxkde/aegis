@@ -142,6 +142,12 @@ pub struct Scanner {
     /// statistical anomaly post-pass. Shared across rayon workers; drained by
     /// `scan_dir` after the parallel phase.
     metrics_sink: Arc<RwLock<Vec<FileMetrics>>>,
+    /// Rayon pool backing directory scans, built once from
+    /// [`ScanOptions::workers`]. rayon's global pool is sized independently
+    /// of scan options, so honoring the option requires a dedicated pool.
+    /// `Err` records a build failure so later walks can report the fallback
+    /// instead of retrying per scan.
+    scan_pool: std::sync::OnceLock<Result<rayon::ThreadPool, rayon::ThreadPoolBuildError>>,
 }
 
 /// Load the set of finding fingerprints recorded in a baseline file.
@@ -221,6 +227,7 @@ impl Scanner {
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
+            scan_pool: std::sync::OnceLock::new(),
         }
     }
 
@@ -242,6 +249,7 @@ impl Scanner {
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
+            scan_pool: std::sync::OnceLock::new(),
         })
     }
 
@@ -265,6 +273,7 @@ impl Scanner {
             loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
+            scan_pool: std::sync::OnceLock::new(),
         })
     }
 
@@ -968,14 +977,27 @@ impl Scanner {
 
         // Keep parallel file scanning, but retain every result so an I/O
         // failure becomes an explicit ledger record rather than disappearing.
-        let outcomes: Vec<_> = entries
-            .par_iter()
-            .map(|entry| {
-                let path = entry.path().to_path_buf();
-                let result = self.scan_file(&path);
-                (path, result)
-            })
-            .collect();
+        let scan_one = |entry: &walkdir::DirEntry| {
+            let path = entry.path().to_path_buf();
+            let result = self.scan_file(&path);
+            (path, result)
+        };
+        let outcomes: Vec<_> = match self.scan_pool.get_or_init(|| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(self.options.workers.max(1))
+                .build()
+        }) {
+            Ok(pool) => pool.install(|| entries.par_iter().map(scan_one).collect()),
+            Err(error) => {
+                tracing::warn!(
+                    "worker pool unavailable ({error}); scanning on rayon's global pool"
+                );
+                entries.par_iter().map(scan_one).collect()
+            }
+        };
+        // Every file in this walk shares the one pool, so the honest
+        // worker count is the pool width, capped by the amount of work.
+        merged_stats.workers_used = self.options.workers.max(1).min(entries.len().max(1));
 
         let mut all_findings = Vec::new();
         for (path, result) in outcomes {

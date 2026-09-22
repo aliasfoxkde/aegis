@@ -111,6 +111,12 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         .map_err(|e| anyhow::anyhow!("Failed to load patterns: {e}"))?
         .with_options(core_opts);
 
+    // Persisted `aegis disable` choices narrow the registry before any
+    // scan. A state file that exists but cannot be parsed fails the scan:
+    // an ignored preference would silently change results.
+    let state = crate::pattern_state::load(&crate::pattern_state::state_dir()?)?;
+    crate::pattern_state::apply_to_registry(&state, scanner.registry());
+
     // Fail loudly on unknown --categories values; a typo would otherwise
     // filter every scanner out and report a clean pass.
     if !categories.is_empty() {

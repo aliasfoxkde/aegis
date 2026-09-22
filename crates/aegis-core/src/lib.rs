@@ -41,9 +41,6 @@ pub mod scanner;
 pub mod suppression;
 pub mod user_patterns;
 
-#[cfg(feature = "output-pipeline")]
-pub mod output;
-
 // Internal helpers - not part of public API. Some are intentionally kept as
 // reusable seams for analyzers that are being integrated incrementally.
 #[allow(dead_code)]
@@ -71,14 +68,6 @@ pub use risk::{RiskClassification, RiskLevel, RiskScore};
 pub use sbom::{Sbom, SbomComponent, SbomDependency, SbomFormat, SbomFormat::Spdx, SbomGenerator};
 pub use scanner::{ScanError, ScanOptions, Scanner};
 pub use suppression::Suppression;
-
-#[cfg(feature = "output-pipeline")]
-pub use output::{
-    database::{DatabaseOutput, MySqlOutput, PostgreSqlOutput, SqliteOutput},
-    file::FileOutput,
-    webhook::WebhookOutput,
-    OutputError, OutputFormat, OutputPipeline, OutputResult, SyncOutputHandler,
-};
 
 use std::path::PathBuf;
 

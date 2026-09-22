@@ -18,11 +18,6 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
-thiserror = { workspace = true }
-futures = { workspace = true }
-
-# Unix sockets
-nix = "0.31"
 
 [[bin]]
 name = "aegis-daemon"

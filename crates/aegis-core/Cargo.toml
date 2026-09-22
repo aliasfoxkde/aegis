@@ -12,20 +12,15 @@ keywords = ["security", "scanning", "pattern-matching", "secrets-detection"]
 
 [dependencies]
 regex = { workspace = true }
-regex-syntax = { workspace = true }
 lazy_static = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-anyhow = { workspace = true }
 tokio = { workspace = true, features = ["sync", "fs", "io-util", "rt"], optional = true }
 tracing = { workspace = true }
-futures = { workspace = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
-miette = { workspace = true }
 flate2 = { workspace = true }
-jsonschema = { workspace = true, optional = true }
 
 # Parallel processing
 rayon = "1.10"
@@ -42,21 +37,12 @@ walkdir = "2.5"
 
 # Diffs
 similar = "3.1"
-indicatif = { workspace = true }
 
 # Time
 time = { version = "0.3", features = ["formatting"] }
 
-# Env variables
-env_logger = "0.11"
-
 # Directories
 dirs = "7.0"
-
-# Output pipeline dependencies
-reqwest = { version = "0.12", features = ["json", "blocking"], optional = true }
-rusqlite = { version = "0.40", features = ["bundled"], optional = true }
-csv = "1.3"
 
 # Preset configuration
 serde_yaml = "0.9"
@@ -77,10 +63,8 @@ tempfile = "3.10"
 pretty_assertions = "1.4"
 
 [features]
-default = ["tokio", "jsonschema"]
+default = ["tokio"]
 tokio = ["dep:tokio"]
-jsonschema = ["dep:jsonschema"]
-output-pipeline = ["dep:reqwest", "dep:rusqlite"]
 tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-go", "dep:tree-sitter-rust", "dep:tree-sitter-python", "dep:tree-sitter-javascript", "dep:tree-sitter-typescript"]
 
 [[bench]]

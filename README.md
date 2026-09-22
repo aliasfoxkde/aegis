@@ -7,7 +7,7 @@
 
 ## Features
 
-- **[660 Detection Patterns](docs/patterns/README.md)** across 34 categories
+- **[670 Detection Patterns](docs/patterns/README.md)** across 34 categories
 - **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
@@ -120,7 +120,7 @@ from source; see the full catalog for every rule):
 | [cloudformation](docs/patterns/README.md#cloudformation) | 3 | CloudFormation templates |
 | [arm](docs/patterns/README.md#arm) | 2 | Azure Resource Manager |
 
-Browse all [660 detection patterns](docs/patterns/README.md).
+Browse all [670 detection patterns](docs/patterns/README.md).
 
 ## Documentation
 

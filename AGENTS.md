@@ -4,7 +4,7 @@ This file provides guidance for AI agents working on the Aegis project.
 
 ## Project Overview
 
-Aegis is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust with 633 detection patterns across 33 categories.
+Aegis is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust with 670 detection patterns across 34 categories.
 
 ## Key Commands
 
@@ -48,7 +48,7 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
 - **WASM**: The aegis-wasm crate provides WASM bindings. It must be built with `cargo build --target wasm32-unknown-unknown --package aegis-wasm` (a normal `cargo build --workspace` does not produce it). The browser binding keeps `matched_text` on each finding, unlike the native serialization, which strips it.
 - **Daemon**: aegis-daemon is Unix-only due to Unix domain sockets. Every code path is `#[cfg(unix)]`; on Windows the binary builds but exits 1 with an explanatory message.
 - **Tokio**: aegis-core uses tokio with only the `sync`, `fs`, `io-util`, and `rt` features, and they are optional. Other crates use `features = ["full"]`.
-- **Pattern count**: 633 enabled patterns across 33 categories. `aegis list` reflects enabled rules only; do not quote counts from memory, since the set is actively pruned.
+- **Pattern count**: 670 enabled patterns across 34 categories. `aegis list` reflects enabled rules only; do not quote counts from memory, since the set is actively pruned.
 - **Self-scan**: The repository scans itself in CI at high severity over `secrets,security-hardening,web-security`:
 
   ```bash
