@@ -478,8 +478,6 @@ impl Scanner {
         source: &str,
         ext: Option<&str>,
     ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
-        let start = Instant::now();
-
         // Parse suppressions from content
         let mut suppression_mgr = SuppressionManager::new();
         suppression_mgr.parse_content(content);
@@ -556,7 +554,6 @@ impl Scanner {
             .filter(|finding| seen.insert(finding.fingerprint.clone()))
             .collect();
 
-        let _ = start.elapsed();
         let suppressed_count = suppression_mgr.suppressed_count();
         (findings, ast_inspection, suppressed_count)
     }

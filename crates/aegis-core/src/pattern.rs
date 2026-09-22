@@ -884,11 +884,23 @@ impl PatternRegistry {
         for (category, cat_patterns) in by_category {
             match CategoryScanner::new(&category, cat_patterns.clone()) {
                 Ok(scanner) => scanners.push(scanner),
-                Err(_) => {
+                Err(error) => {
                     // If combined regex fails, fall back to individual pattern batches
+                    tracing::warn!(
+                        category,
+                        error = %error,
+                        "combined category regex failed; falling back to individual patterns"
+                    );
                     for p in cat_patterns.clone() {
-                        if let Ok(single) = CategoryScanner::new(&category, vec![p]) {
+                        if let Ok(single) = CategoryScanner::new(&category, vec![p.clone()]) {
                             scanners.push(single);
+                        } else {
+                            let name = p.name();
+                            tracing::error!(
+                                category,
+                                pattern = name,
+                                "pattern is unscannable (regex failed even in isolation) and is DROPPED from scans"
+                            );
                         }
                     }
                 }

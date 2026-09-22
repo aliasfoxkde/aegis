@@ -79,23 +79,50 @@ async fn handle_client(
             Ok(v) => v,
             Err(e) => {
                 let response = DaemonResponse::error(format!("Parse error: {e}"));
-                let resp_json = serde_json::to_string(&response).unwrap_or_default();
-                wr.write_all(resp_json.as_bytes()).await.ok();
-                wr.write_all(b"\n").await.ok();
-                wr.flush().await.ok();
+                // Serialization of the error envelope is infallible in
+                // practice; a failure still produces a framing-level error
+                // so the client sees something rather than silence.
+                let resp_json = match serde_json::to_string(&response) {
+                    Ok(json) => json,
+                    Err(e) => format!(
+                        "{{\"jsonrpc\":\"2.0\",\"error\":{{\"code\":-32603,\"message\":\"response serialization failed: {e}\"}}}}"
+                    ),
+                };
+                // A dead socket means the client is gone; the connection
+                // ends instead of looping on a broken pipe.
+                write_frame(&mut wr, &resp_json).await?;
                 continue;
             }
         };
 
         // Handle request
         let response = handle_request(&request, &state).await;
-        let resp_json = serde_json::to_string(&response).unwrap_or_default();
+        let resp_json = match serde_json::to_string(&response) {
+            Ok(json) => json,
+            Err(e) => format!(
+                "{{\"jsonrpc\":\"2.0\",\"error\":{{\"code\":-32603,\"message\":\"response serialization failed: {e}\"}}}}"
+            ),
+        };
 
-        wr.write_all(resp_json.as_bytes()).await.ok();
-        wr.write_all(b"\n").await.ok();
-        wr.flush().await.ok();
+        write_frame(&mut wr, &resp_json).await?;
     }
 
+    Ok(())
+}
+
+/// Write one newline-terminated frame and flush.
+///
+/// # Errors
+/// Propagates transport failures; the caller drops the connection rather
+/// than continuing to serve a client that can no longer read responses.
+#[cfg(unix)]
+async fn write_frame<W: tokio::io::AsyncWrite + Unpin>(
+    writer: &mut W,
+    frame: &str,
+) -> std::io::Result<()> {
+    writer.write_all(frame.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+    writer.flush().await?;
     Ok(())
 }
 

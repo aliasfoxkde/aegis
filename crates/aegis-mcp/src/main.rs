@@ -472,8 +472,6 @@ fn parse_optional_string_param(params: jsonrpc_core::Params) -> Result<Option<St
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use tokio::io::AsyncWriteExt;
-
     // Route tracing output to stderr so it cannot corrupt the stdout JSON-RPC stream.
     // use try_init: multiple initializations in tests are silent no-ops.
     let _log_init = tracing_subscriber::fmt()
@@ -576,9 +574,11 @@ async fn main() -> anyhow::Result<()> {
                     },
                     "id": Value::Null
                 });
-                writer.write_all(response.to_string().as_bytes()).await.ok();
-                writer.write_all(b"\n").await.ok();
-                writer.flush().await.ok();
+                // A dead stdout means the client is gone; serving on would
+                // spin silently, so the failure terminates the session.
+                write_response(&mut writer, &response.to_string())
+                    .await
+                    .map_err(anyhow::Error::from)?;
                 continue;
             }
         };
@@ -586,12 +586,29 @@ async fn main() -> anyhow::Result<()> {
         // Handle JSON-RPC request
         let response = io.handle_request(line).await;
         if let Some(resp) = response {
-            writer.write_all(resp.as_bytes()).await.ok();
-            writer.write_all(b"\n").await.ok();
-            writer.flush().await.ok();
+            write_response(&mut writer, &resp)
+                .await
+                .map_err(anyhow::Error::from)?;
         }
     }
 
+    Ok(())
+}
+
+/// Write one newline-terminated JSON-RPC frame and flush.
+///
+/// # Errors
+/// Returns an error when the transport write or flush fails (client
+/// disconnected); callers end the session rather than loop on a dead pipe.
+async fn write_response<W: tokio::io::AsyncWrite + Unpin>(
+    writer: &mut W,
+    response: &str,
+) -> std::io::Result<()> {
+    use tokio::io::AsyncWriteExt;
+
+    writer.write_all(response.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+    writer.flush().await?;
     Ok(())
 }
 
