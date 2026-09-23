@@ -89,7 +89,7 @@ Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 796 tests
+cargo test --workspace --locked                         ✅ 812 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
@@ -202,8 +202,12 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
    are pinned silent by `tests/corpus/negative/` fixtures. But most of
    the 670 rules have too few corpus observations to measure at all —
    coverage grows only as fixtures are added.
-5. **`ast` proximity matching and ML/regex hybrid detection** remain
-   unshipped roadmap items (Phase 14).
+5. **ML/regex hybrid detection** and **AST-level API-call verification**
+   remain unshipped roadmap items (Phase 14); near-miss clone detection
+   shipped 2026-09-23 (#139) — `aegis-core::clone` now classifies
+   Type-3 copies with sequence-aware (LCS) scoring, though the detector
+   still has no caller in the workspace, so it is core capability plus
+   tests only.
 
 Resolved 2026-09-22/23 (previously listed here): pattern state not
 persisted (now `pattern-state.json`), `ScanOptions::workers` ignored (now
