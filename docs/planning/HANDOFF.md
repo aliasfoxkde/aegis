@@ -89,7 +89,7 @@ Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 795 tests
+cargo test --workspace --locked                         ✅ 796 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
