@@ -3,16 +3,21 @@
 Aegis ships a JSON-RPC 2.0 server over stdio for integration with AI
 tools and scripts.
 
-**Protocol disclosure:** despite the crate's name, this is **not** a
-Model Context Protocol endpoint. The server implements a custom method
-set — `scan_string`, `scan_file`, `scan_dir`, `scan_env`,
-`list_patterns`, `list_categories`, `update_bundle` — and there is no
-MCP lifecycle or tool-discovery adapter: `initialize`,
-`notifications/initialized`, `tools/list`, and `tools/call` all return
-JSON-RPC error `-32601 Method not found`. Clients that drive it do so
-by speaking raw JSON-RPC over the process's stdio (examples below). An
-MCP client that requires standard discovery needs a translation shim
-in front of this server today.
+**Protocol surface (since 0.6.2):** the server speaks the Model Context
+Protocol lifecycle and discovery methods — `initialize`,
+`notifications/initialized`, `tools/list`, `tools/call`, and `ping` —
+across protocol revisions `2024-11-05`, `2025-03-26`, and `2025-06-18`
+(the client-requested version is echoed when supported, otherwise the
+server answers with `2025-06-18`). Only the `tools` capability is
+advertised: `resources/*` and `prompts/*` remain `-32601 Method not
+found`. The seven scanning tools are also reachable directly through
+their original custom JSON-RPC method names, with positional parameters
+(documented below); both surfaces dispatch to the same implementations.
+
+Wire behaviour is pinned by a conformance suite
+(`crates/aegis-mcp/tests/fixtures/mcp_wire_conformance.json`, replayed
+in CI), so request/response shapes documented here are tested
+contract, not prose.
 
 ## Starting the Server
 
@@ -135,25 +140,55 @@ Update pattern bundle. Takes a two-element array: an optional bundle path
 `scan_file` and `scan_dir` are sandboxed to the server's working
 directory: a path that escapes it is rejected.
 
+## Model Context Protocol Surface
+
+The standard MCP flow, one JSON-RPC frame per line:
+
+```json
+{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0"}},"id":1}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","method":"tools/list","params":{},"id":2}
+{"jsonrpc":"2.0","method":"tools/call","params":{"name":"scan_string","arguments":{"content":"TOKEN = \"...\"","source":"clip"}},"id":3}
+```
+
+`initialize` answers with the negotiated `protocolVersion`,
+`serverInfo` (`aegis-mcp` / crate version), a `tools` capability, and
+`instructions` describing the sandbox. `notifications/initialized`
+produces no response. `tools/call` names a tool and takes an
+`arguments` object matching that tool's schema (`content`/`source`,
+`path`, `category`, `bundlePath`/`force` — the same parameters as the
+positional custom methods). `ping` answers `{}`.
+
 ## Client Integration
 
 ### Claude Desktop / MCP clients
 
-The configuration below will start the process, but the handshake will
-fail: the server does not implement MCP's `initialize`/`tools/list`.
-Until a translation shim exists, integrate by driving the JSON-RPC
-methods directly (see *Available Tools* and *Parameter Shapes*):
+The server passes standard MCP discovery. Point an MCP client at the
+binary:
 
 ```json
 {
   "mcpServers": {
     "aegis": {
       "command": "aegis-mcp",
-      "_note": "will not pass MCP discovery; raw JSON-RPC only"
+      "args": []
     }
   }
 }
 ```
+
+Discovery exposes the seven tools (`scan_string`, `scan_file`,
+`scan_dir`, `scan_env`, `list_patterns`, `list_categories`,
+`update_bundle`) with JSON-Schema `inputSchema` objects. Tool results
+arrive as one text block containing the same JSON payload the custom
+methods return. Tool failures — including sandbox rejections — come
+back as `isError: true` results (so the client can show them to the
+model), while malformed `tools/call` parameters are JSON-RPC `-32602`.
+
+The sandbox rule applies on every surface: `scan_file`, `scan_dir`, and
+`update_bundle` paths must stay under the server process's working
+directory. Configure the client's working directory accordingly, or the
+tools will refuse paths outside it.
 
 ### Scripts and AI IDE terminals
 

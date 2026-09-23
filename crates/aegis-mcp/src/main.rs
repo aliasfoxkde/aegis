@@ -2,6 +2,7 @@
 //!
 //! Model Context Protocol server for Aegis security scanning.
 
+mod protocol;
 mod sandbox;
 
 use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
@@ -544,6 +545,13 @@ async fn main() -> anyhow::Result<()> {
             serialize_result(handler.update_bundle(bundle_path, force).await?)
         }
     });
+
+    // MCP lifecycle and discovery (`initialize`, `tools/list`,
+    // `tools/call`, `ping`) so generic MCP clients can negotiate a
+    // session and find the tools; `tools/call` dispatches to the same
+    // implementations as the custom methods above, so the two surfaces
+    // stay behaviourally identical.
+    protocol::register(&mut io, rpc.clone());
 
     // stdout is the JSON-RPC transport; startup diagnostics must not corrupt
     // the protocol stream consumed by MCP clients.

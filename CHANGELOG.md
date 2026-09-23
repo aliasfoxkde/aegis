@@ -7,6 +7,22 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- `aegis-mcp` now speaks the Model Context Protocol lifecycle:
+  `initialize` (version negotiation across 2024-11-05, 2025-03-26, and
+  2025-06-18), `notifications/initialized`, `tools/list` (all seven
+  scanning tools with JSON-Schema input schemas), `tools/call` (results
+  as text content; tool failures as `isError: true` results), and
+  `ping`. Generic MCP clients such as Claude Desktop can now use the
+  server without a translation shim; the original custom JSON-RPC
+  method set is unchanged and dispatches to the same implementations.
+- A wire-conformance fixture suite
+  (`crates/aegis-mcp/tests/fixtures/mcp_wire_conformance.json`,
+  replayed by `tests/mcp_wire_conformance.rs`) pins the stdio surface —
+  handshake, discovery, sandbox rejection, unknown tool, and parse
+  error semantics — against regressions.
+
 ## [0.6.2] - 2026-09-22
 
 ### Removed
