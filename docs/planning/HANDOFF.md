@@ -67,12 +67,18 @@ the MCP lifecycle (`initialize`, `notifications/initialized`, `tools/list`,
 Both surfaces share one implementation; wire shapes are pinned by the
 conformance fixtures in `crates/aegis-mcp/tests/fixtures/`. See
 `docs/guides/MCP.md`. Scan paths are sandboxed to the server's working
-directory.
+directory, and request frames are capped at 10 MiB (an oversized line
+earns `-32600` and ends the session).
 
 **Daemon transport:** Unix socket only (env: `AEGIS_DAEMON_SOCKET_PATH`,
-`AEGIS_DAEMON_SCAN_ROOT`). There is no HTTP interface and therefore no
-Kubernetes Service; cluster usage is the scan CronJob in
-`kubernetes/cronjob.yaml`.
+`AEGIS_DAEMON_SCAN_ROOT`); JSON-lines in, one serialized `DaemonResponse`
+out per line. Wire shapes are pinned by the fixtures in
+`crates/aegis-daemon/tests/fixtures/` (error semantics, sandbox refusal,
+blank-line framing), and request frames are capped at 10 MiB — an
+oversized frame is answered once with a size error and the connection
+ends. Peer-credential checks happen before the first byte of any request
+is parsed. There is no HTTP interface and therefore no Kubernetes
+Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 
 ---
 

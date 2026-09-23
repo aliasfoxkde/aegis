@@ -19,6 +19,12 @@ Wire behaviour is pinned by a conformance suite
 in CI), so request/response shapes documented here are tested
 contract, not prose.
 
+**Frame size:** one request frame (a JSON line) may be at most
+10 MiB. A longer line is answered with a JSON-RPC `-32600` error
+(`request frame exceeds maximum size`) and the session ends — framing
+cannot resume inside an oversized line. `scan_string` is for snippets;
+use `scan_file`/`scan_dir` for anything on disk.
+
 ## Starting the Server
 
 The server communicates over stdio (standard input/output); diagnostics

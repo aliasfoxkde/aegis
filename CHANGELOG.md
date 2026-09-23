@@ -17,11 +17,22 @@ every release are attached to the matching GitHub release.
   `ping`. Generic MCP clients such as Claude Desktop can now use the
   server without a translation shim; the original custom JSON-RPC
   method set is unchanged and dispatches to the same implementations.
-- A wire-conformance fixture suite
-  (`crates/aegis-mcp/tests/fixtures/mcp_wire_conformance.json`,
-  replayed by `tests/mcp_wire_conformance.rs`) pins the stdio surface —
-  handshake, discovery, sandbox rejection, unknown tool, and parse
-  error semantics — against regressions.
+- Wire-conformance fixture suites replayed against the real binaries
+  pin both integration surfaces: `aegis-mcp`'s stdio handshake,
+  discovery, sandbox rejection, unknown-tool, and parse-error semantics
+  (`crates/aegis-mcp/tests/fixtures/`), and `aegis-daemon`'s
+  Unix-socket JSON-lines protocol — error envelopes, sandbox refusal
+  without content leakage, blank-line framing, and scan receipts
+  (`crates/aegis-daemon/tests/fixtures/`).
+
+### Security
+
+- Both wire servers now cap request frames at 10 MiB. Previously a
+  single authorized peer could exhaust server memory with one
+  arbitrarily long line (`read_line`/`next_line` grow without limit).
+  `aegis-mcp` answers an oversized line with JSON-RPC `-32600` and ends
+  the session; `aegis-daemon` answers once with a size error and drops
+  the connection while continuing to serve other clients.
 
 ## [0.6.2] - 2026-09-22
 
