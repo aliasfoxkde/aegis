@@ -353,20 +353,32 @@ README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
 
 ### Phase 12 — Measured pattern quality — SHIPPED (2026-09-23)
 
-**Platform prerequisite (found during the v0.6.2 release, 2026-09-22):**
-GitForge's deployed trigger path queues only a pipeline's first
-`needs`-empty job and never schedules dependents — the DAG engine in
-`gitforge-ci` exists with tests but is not wired into the deployed
-services, so every historical aegis pipeline run executed exactly one job
-(the v0.6.1 release assets were never actually built by the GitForge
-pipeline). `.gitforce.yml` is therefore a single ordered job until
-GitForge wires the DAG in; a `needs`-based lane split there would silently
-degrade to "first job only". This is a GitForge product fix, tracked on
-the GitForge side. The single-job pipeline itself was validated
-end-to-end on the v0.6.2 tag run (all seven steps green, ten artifacts
-collected and published). One lane-shape rule learned there: test steps
-must not use `--all-targets` — that selector runs bench binaries, and
-criterion rejects the piped `--test-threads` flag.
+**Platform note (corrected 2026-09-23 — an earlier version of this
+paragraph claimed the GitForge DAG engine was not wired; a DB-evidence
+recon disproved that):** GitForge's DAG *is* live in the deployed CI —
+`handle_push_event` builds the job graph via the `DagBuilder`, and the
+completion consumer calls `queue_ready_jobs()` after every job finishes,
+so `needs` dependents enqueue at their parent's completion. A 3-job
+chain was verified end-to-end on the deployed build (2026-09-23). What
+actually happened during v0.6.2 was different: the tag push fired a
+same-commit `push` run alongside the tag run, and the 19-run burst
+saturated the single shared runner; the queued runs were cancelled by
+operator request ~45 minutes in. `.gitforce.yml` remains a single
+ordered job *by choice*, not as a workaround — a run's jobs share one
+workspace on this platform, so fan-out lanes would collide over
+`target/` and `artifacts/`; a `needs`-based lane split here would be an
+anti-pattern. The v0.6.1 assets were never pipeline-built for the
+mundane reason that the pipeline itself was only stood up for v0.6.2
+(the GitForge account/repo re-provisioning wiped the old registration).
+Real GitForge gaps found by the same recon are filed upstream: per-repo
+burst admission (#215), restart-safe DAG state plus a multi-job
+integration test (#216), and the webhook fallback path that builds
+one-job runs for multi-job pipelines (#217). The single-job pipeline
+itself was validated end-to-end on the v0.6.2 tag run (all seven steps
+green, ten artifacts collected and published). One lane-shape rule
+learned there: test steps must not use `--all-targets` — that selector
+runs bench binaries, and criterion rejects the piped `--test-threads`
+flag.
 
 Phase 11 fixed false positives one regex at a time, by hand. Phase 12
 made it measurable — all three items delivered in
