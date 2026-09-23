@@ -498,9 +498,13 @@ shortlist rather than a fresh audit.
   (`cargo llvm-cov --workspace`); the next notch is patch 95%.
 - **MCP/daemon protocol conformance tests** — *delivered 2026-09-23*
   (#131); see Phase 15.
-- **Benchmark trend tracking** — criterion results are produced per run
-  but not compared across runs; a stored baseline (or a performance
-  regression job) would turn measurements into a gate.
+- **Benchmark trend tracking** — *delivered 2026-09-23, deliberately
+  non-gating*: the weekly `Bench trend` workflow (`.github/workflows/
+  bench.yml`) runs the criterion benches against a cached stored baseline
+  (`--baseline prev`, re-saved every run) and publishes the change table
+  to the job summary and an artifact. No regression gate: pooled runners
+  vary by double-digit percentages on regex-heavy workloads, so a hard
+  gate would cry wolf — a human judges the trend line.
 
 ---
 

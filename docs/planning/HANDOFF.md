@@ -98,7 +98,9 @@ Coverage (`cargo llvm-cov --workspace`, local 2026-09-23): 96.86% lines /
 patch — the gate ratchets up with measured reality, never down.
 
 CI also runs: multi-OS test matrix, cargo-audit, cargo-deny, CodeQL, weekly
-cargo-fuzz (4 targets), criterion benchmarks, and the corpus harness
+cargo-fuzz (4 targets), criterion benchmarks, a weekly bench-trend run
+(non-gating: compares against the previous run's stored criterion
+baseline, publishes the change table), and the corpus harness
 (aggregate 0.95/0.95 gates, per-rule precision floor, demote-only
 confidence calibration, and the `negative/` false-positive regression
 pins). All builds and tests use `--locked`.

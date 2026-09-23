@@ -1,0 +1,88 @@
+# Weekly criterion benchmark trend (informational, non-gating).
+#
+# Criterion results used to exist only on developer machines: CI never ran
+# the benches, so nothing was ever compared across runs. This workflow runs
+# the `aegis-core` benches once a week, compares them against the previous
+# run's stored baseline, and publishes the change table to the job summary
+# and a workflow artifact.
+#
+# It deliberately does NOT fail on regressions: pooled GitHub-hosted
+# runners vary by double-digit percentages on regex-heavy workloads, so a
+# hard gate would cry wolf. The trend line is the deliverable; a human
+# decides when a change is real. If a future runner class is stable
+# enough, a noise-threshold gate can be added on top of this data.
+#
+# The baseline rides in the actions/cache under a weekly key with a
+# fallback restore: each run stores its measurements as the criterion
+# baseline named `prev`, so the next run always compares against the most
+# recent successful one.
+name: Bench trend
+
+on:
+  schedule:
+    # Weekly, Monday ~03:23 UTC (off the :00/:30 marks).
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Criterion trend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        with:
+          toolchain: stable
+
+      - name: Restore previous baseline
+        id: baseline
+        uses: actions/cache@v4
+        with:
+          path: target/criterion
+          # One key per ISO week; restore-keys falls back to the most
+          # recent week's baseline when this week's key is fresh.
+          key: criterion-prev-${{ github.run_id }}
+          restore-keys: |
+            criterion-prev-
+
+      - name: Compare against previous baseline
+        # criterion errors out when `--baseline prev` names a baseline that
+        # does not exist (cache miss or first run); in that case this run
+        # only seeds the baseline for the next one.
+        run: |
+          set -o pipefail
+          if find target/criterion -type d -name prev | head -1 | grep -q .; then
+            echo "### Benchmark trend vs previous run" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cargo bench --locked --workspace -- --baseline prev 2>&1 \
+              | tee bench.log \
+              | grep -E "^(\w|time:|change:)" >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No stored baseline (first run or cache miss) — seeding." \
+              >> "$GITHUB_STEP_SUMMARY"
+            cargo bench --locked --workspace -- --save-baseline prev 2>&1 | tee bench.log
+          fi
+
+      - name: Store this run as next week's baseline
+        if: always()
+        run: |
+          # criterion keeps the current run under `new/` and named baselines
+          # under `<name>/`; promote this run's data to `prev` so the next
+          # scheduled run compares against it.
+          find target/criterion -type d -name new | while read -r new; do
+            dir=$(dirname "$new")
+            rm -rf "$dir/prev"
+            cp -r "$new" "$dir/prev"
+          done
+
+      - name: Upload raw bench output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-log-${{ github.run_id }}
+          path: bench.log
+          retention-days: 90
