@@ -291,3 +291,26 @@ fn tools_call_scan_string_reports_findings_as_text_content() {
         "credential assignment must be detected: {text}"
     );
 }
+
+/// The frame cap (`MAX_FRAME_BYTES` in `crates/aegis-mcp/src/main.rs`)
+/// bounds the line reader: a frame one byte past the cap earns a single
+/// `-32600` request error — before any JSON parsing, so filler bytes are
+/// enough — and the session then ends, because framing cannot resume
+/// inside an oversized line. Kept out of the fixture JSON: the payload is
+/// megabytes, not a reproducible golden line.
+#[test]
+fn oversize_frame_is_answered_then_the_session_ends() {
+    const MAX_FRAME_BYTES: usize = 10 * 1024 * 1024;
+    let oversized = "a".repeat(MAX_FRAME_BYTES + 1);
+    let lines = run_session(&[oversized]);
+    assert_eq!(lines.len(), 1, "exactly one rejection frame: {lines:?}");
+
+    let frame: Value = serde_json::from_str(&lines[0]).expect("frame is JSON");
+    assert_eq!(frame["id"], Value::Null, "{frame}");
+    assert_eq!(frame["error"]["code"], -32600, "{frame}");
+    let message = frame["error"]["message"].as_str().expect("error message");
+    assert!(
+        message.contains(&format!("exceeds maximum size ({MAX_FRAME_BYTES} bytes)")),
+        "{frame}"
+    );
+}

@@ -1,0 +1,237 @@
+{
+  "description": "Golden wire fixtures for the aegis-daemon Unix-socket JSON-lines surface. Each case is one connection: 'requests' are the exact frames written in order (a blank string is an empty line, which must produce no response), 'frames' is the expected subset of each serialized DaemonResponse in order. 'match' pins exact field values, 'min_finding_count' pins a floor for scan results, and 'error_contains'/'error_not_contains' pin error-message substrings (used where messages embed run-specific paths). Replayed by tests/daemon_wire_conformance.rs; edit both together. Requests that must trigger a detection live in the Rust test, not here, so this file never embeds credential-shaped strings.",
+  "cases": [
+    {
+      "name": "ping answers a successful empty scan",
+      "requests": [
+        "{\"method\":\"ping\",\"params\":[],\"id\":1}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "finding_count": 0,
+            "risk_level": "none",
+            "risk_score": 0,
+            "error": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "blank lines are skipped without a response",
+      "requests": [
+        "",
+        "   ",
+        "{\"method\":\"ping\",\"params\":[],\"id\":2}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "finding_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "a request without a method is refused",
+      "requests": [
+        "{\"params\":[],\"id\":3}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "finding_count": 0,
+            "risk_level": "unknown",
+            "risk_score": 0,
+            "error": "Missing method"
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unknown method is refused by name",
+      "requests": [
+        "{\"method\":\"teleport\",\"params\":[],\"id\":4}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "finding_count": 0,
+            "risk_level": "unknown",
+            "error": "Unknown method: teleport"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_string requires array params",
+      "requests": [
+        "{\"method\":\"scan_string\",\"params\":\"just a string\",\"id\":5}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "error": "scan_string requires [content, source] params"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_string without content is refused",
+      "requests": [
+        "{\"method\":\"scan_string\",\"params\":[],\"id\":6}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "error": "Missing content param"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_string without a source label is refused",
+      "requests": [
+        "{\"method\":\"scan_string\",\"params\":[\"some content\"],\"id\":7}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "error": "Missing source param"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_file without a path is refused",
+      "requests": [
+        "{\"method\":\"scan_file\",\"params\":null,\"id\":8}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "error": "Missing path param"
+          }
+        }
+      ]
+    },
+    {
+      "name": "scan_file outside the approved root is refused without leaking content",
+      "requests": [
+        "{\"method\":\"scan_file\",\"params\":\"/etc/passwd\",\"id\":9}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "finding_count": 0
+          },
+          "error_contains": "outside approved root",
+          "error_not_contains": ["root:x:0:0"]
+        }
+      ]
+    },
+    {
+      "name": "scan_file traversal outside the approved root is refused",
+      "requests": [
+        "{\"method\":\"scan_file\",\"params\":\"../outside.txt\",\"id\":10}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "finding_count": 0
+          },
+          "error_contains": "outside approved root"
+        }
+      ]
+    },
+    {
+      "name": "scan_file inside the root scans the planted file",
+      "requests": [
+        "{\"method\":\"scan_file\",\"params\":\"leak.txt\",\"id\":11}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "error": null
+          },
+          "min_finding_count": 1
+        }
+      ]
+    },
+    {
+      "name": "scan_dir inside the root scans recursively",
+      "requests": [
+        "{\"method\":\"scan_dir\",\"params\":\".\",\"id\":12}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "error": null
+          },
+          "min_finding_count": 1
+        }
+      ]
+    },
+    {
+      "name": "scan_string with benign content answers a clean scan",
+      "requests": [
+        "{\"method\":\"scan_string\",\"params\":[\"fn main() { println!(\\\"hello\\\"); }\",\"clean.rs\"],\"id\":13}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "finding_count": 0,
+            "risk_level": "none",
+            "risk_score": 0,
+            "error": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "list_patterns reports the registry size",
+      "requests": [
+        "{\"method\":\"list_patterns\",\"params\":null,\"id\":14}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "risk_level": "none",
+            "error": null
+          },
+          "min_finding_count": 600
+        }
+      ]
+    },
+    {
+      "name": "malformed JSON earns a parse error",
+      "requests": [
+        "{not json"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": false,
+            "finding_count": 0,
+            "risk_level": "unknown"
+          },
+          "error_contains": "Parse error"
+        }
+      ]
+    }
+  ]
+}
