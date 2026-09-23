@@ -93,8 +93,8 @@ cargo test --workspace --locked                         ✅ 795 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
-Coverage (`cargo llvm-cov --workspace`, local 2026-09-22): 96.93% lines /
-93.89% functions / 97.51% regions. CI's Codecov gate is 90% project / 85%
+Coverage (`cargo llvm-cov --workspace`, local 2026-09-23): 96.86% lines /
+93.71% functions / 97.49% regions. CI's Codecov gate is 95% project / 90%
 patch — the gate ratchets up with measured reality, never down.
 
 CI also runs: multi-OS test matrix, cargo-audit, cargo-deny, CodeQL, weekly

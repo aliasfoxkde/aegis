@@ -1,20 +1,21 @@
 # Codecov configuration.
 #
 # Targets are pinned to measured reality, not aspirations: the workspace
-# line coverage measured by `cargo llvm-cov --workspace` is ~97.2% (94.5%
+# line coverage measured by `cargo llvm-cov --workspace` is ~96.9% (97.5%
 # regions), with the gaps concentrated in the wasm crate (requires a wasm
 # runtime) and the thin binary shims. Both are ignored below so the gate
 # reflects the library and CLI code that the thresholds are meant to
-# protect.
+# protect. Gates ratchet up toward measured reality (95% project / 90%
+# patch as of 2026-09-23) and never move down to make a regression pass.
 coverage:
   status:
     project:
       default:
-        target: 90%
+        target: 95%
         threshold: 1%
     patch:
       default:
-        target: 85%
+        target: 90%
 
 ignore:
   - "crates/aegis-wasm"
