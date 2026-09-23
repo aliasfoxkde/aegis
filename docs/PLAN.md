@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 795 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 795 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (95% project / 90% patch; measured 96.86% lines locally, 2026-09-23), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -493,8 +493,9 @@ shortlist rather than a fresh audit.
 
 - **crates.io publishing** — *decided 2026-09-23: not publishing*; see
   Phase 13 for the name-squatting and provenance evidence.
-- **Coverage ratchet** — the codecov gate sits at the measured 97.24%;
-  raising the patch threshold gradually walks toward the 99% target.
+- **Coverage ratchet** — *ratcheted 2026-09-23*: project 90% → 95%,
+  patch 85% → 90% against the measured 96.86% lines / 97.49% regions
+  (`cargo llvm-cov --workspace`); the next notch is patch 95%.
 - **MCP/daemon protocol conformance tests** — *delivered 2026-09-23*
   (#131); see Phase 15.
 - **Benchmark trend tracking** — criterion results are produced per run
