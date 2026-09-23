@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 796 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (95% project / 90% patch; measured 96.86% lines locally, 2026-09-23), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 812 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (95% project / 90% patch; measured 96.86% lines locally, 2026-09-23), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -449,9 +449,19 @@ crates are expected and recorded here rather than discovered fresh.
 
 ### Phase 14 — Scanner capability roadmap (carried from the original roadmap)
 
-- **AST proximity matching** — `aegis-core::clone` finds exact token-level
-  clones; extend to near-miss detection (renamed identifiers, reordered
-  statements) for copy-paste-with-modification vulnerability patterns.
+- **AST proximity matching — DELIVERED (2026-09-23, #139).**
+  `aegis-core::clone` now detects Type-3 near-miss clones instead of
+  only labelling them: similarity is an LCS matching ratio over
+  role-normalized token sequences, scored on the best position-aligned
+  window phase, so renamed identifiers, reordered statements, and
+  inserted statements classify correctly. The rewrite also fixed the
+  detector's three silent lies — unrelated same-shape functions rated
+  Type-1 at 1.0, reported spans always `lines 1-1`, and an unbounded
+  O(B²) pairing — now: sequence-aware scoring with sound bounds and a
+  thinned `MAX_BLOCKS` grid (worst case constant), real line numbers
+  from a line-start index, and a measured pathological worst case of
+  ~3.5 s in a debug build (was ~47 s). 15 new tests (31 in the module);
+  behavior changes disclosed in the module docs and CHANGELOG.
 - **ML/regex hybrid detection** — the regex+entropy pipeline is the work
   horse; an optional statistical ranker over candidate findings (still
   explainable: feature weights published per rule) could cut residual
@@ -559,7 +569,7 @@ is a straight weighted sum (`aegis-core::risk`).
 - Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
   (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
   gate rises with measured reality, never above it (see Phase 6)
-- 796 tests: unit tests per crate; integration tests per surface; property
+- 812 tests: unit tests per crate; integration tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
   benchmarks; labelled corpus with aggregate + per-rule precision gates,
   confidence calibration, and negative-corpus silence pins; wire
