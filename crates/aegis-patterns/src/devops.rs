@@ -111,8 +111,12 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "env-file-in-git".to_string(),
             category: "devops".to_string(),
-            // Trailing \b stops ".env" from matching inside ".environment".
-            match_pattern: r"\.env(\.\w+)?\b".to_string(),
+            // `.env` must start a path segment: content start, a line
+            // boundary, or a non-identifier character before it. This keeps
+            // `import.meta.env` / `process.env` variable reads from reading
+            // as a committed env file; the trailing \b stops matches inside
+            // ".environment".
+            match_pattern: r"(^|[^A-Za-z0-9_.])\.env(\.\w+)?\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),

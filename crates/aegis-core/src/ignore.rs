@@ -120,10 +120,23 @@ impl IgnoreManager {
             }
         }
 
+        // Prefer the path relative to the scan root so rules written as
+        // repo-relative anchored globs ("docs/files/js/") match no matter
+        // how the root was expressed — an absolute workspace path yields
+        // absolute walker paths, where anchored rules can never match.
+        // Ignore-rule syntax always uses `/`, so normalize the host
+        // separators (`strip_prefix` yields `\` components on Windows).
+        let raw = self
+            .root
+            .read()
+            .clone()
+            .and_then(|root| path.strip_prefix(&root).ok().map(Path::to_path_buf))
+            .unwrap_or_else(|| path.to_path_buf())
+            .to_string_lossy()
+            .replace('\\', "/");
         // Walkers rooted at "." yield "./"-prefixed paths; strip it so
         // ignore rules written as "docs/**" match "docs/**" paths.
-        let raw = path.to_string_lossy();
-        let rel = raw.strip_prefix("./").unwrap_or(&raw);
+        let rel = raw.strip_prefix("./").unwrap_or(raw.as_str());
         let basename = rel.rsplit('/').next().unwrap_or(rel);
 
         let mut ignored = false;
@@ -339,6 +352,51 @@ mod tests {
         // *.log should be ignored, and the later bare line is not a
         // re-include (it has no `!`), so important.log is also ignored.
         assert!(manager.should_ignore(Path::new("debug.log")));
+    }
+
+    #[test]
+    fn test_anchored_directory_rule_matches_under_absolute_root() {
+        // Regression (2026-09-23, Control Center pipeline gate): with an
+        // absolute scan root the walker yields absolute paths, and anchored
+        // rules ("docs/files/js/") only tried the path-root prefix, so they
+        // silently never matched. Rules must be matched relative to the
+        // configured root.
+        let temp_dir = TempDir::new().unwrap();
+        let nested = temp_dir.path().join("docs/files/js");
+        std::fs::create_dir_all(&nested).unwrap();
+        let ignore_file = temp_dir.path().join(".aegisignore");
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"docs/files/js/\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        manager.set_root(temp_dir.path()).unwrap();
+        let deep = nested.join("mock.js");
+        assert!(manager.should_ignore(&deep));
+        assert!(manager.should_ignore(Path::new("docs/files/js/mock.js")));
+        assert!(!manager.should_ignore(&temp_dir.path().join("keep.js")));
+    }
+
+    #[test]
+    fn test_host_backslash_separators_match_forward_slash_rules() {
+        // Regression (2026-09-23): on Windows, `strip_prefix` yields
+        // backslash-separated relatives ("docs\\files\\js\\mock.js"), which
+        // never matched forward-slash rules. Exercise that byte shape on
+        // every platform — a lone `\`-component path is one component on
+        // Unix, so this fails without the separator normalization.
+        let temp_dir = TempDir::new().unwrap();
+        let ignore_file = temp_dir.path().join(".aegisignore");
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"docs/files/js/\n*.log\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        manager.set_root(temp_dir.path()).unwrap();
+        assert!(manager.should_ignore(Path::new("docs\\files\\js\\mock.js")));
+        // Unanchored basename rules keep working through the same path.
+        assert!(manager.should_ignore(Path::new("sub\\dir\\debug.log")));
     }
 
     #[test]
