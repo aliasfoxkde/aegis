@@ -7,15 +7,15 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-22, phases 0–11 of the improvement plan merged; v0.6.2 released)
+## Current state (2026-09-23, phases 0–13 and 15 of the improvement plan closed; v0.6.2 released)
 
 | Dimension | State |
 | --- | --- |
-| Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit |
+| Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 764 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus precision/recall harness (0.95 gate) |
-| Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (custom JSON-RPC method set, not MCP-discoverable), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 795 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (90%/85%; measured 96.93% lines locally, 2026-09-22), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
@@ -351,7 +351,7 @@ README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
 
 ---
 
-### Phase 12 — Measured pattern quality (next up)
+### Phase 12 — Measured pattern quality — SHIPPED (2026-09-23)
 
 **Platform prerequisite (found during the v0.6.2 release, 2026-09-22):**
 GitForge's deployed trigger path queues only a pipeline's first
@@ -368,19 +368,38 @@ collected and published). One lane-shape rule learned there: test steps
 must not use `--all-targets` — that selector runs bench binaries, and
 criterion rejects the piped `--test-threads` flag.
 
-Phase 11 fixed false positives one regex at a time, by hand. Make it
-data-driven:
+Phase 11 fixed false positives one regex at a time, by hand. Phase 12
+made it measurable — all three items delivered in
+`crates/aegis-core/tests/corpus_precision_recall.rs` (second test) plus a
+new `tests/corpus/negative/` section, contract documented in
+`tests/corpus/README.md`:
 
-1. **Per-rule FP/FP-rate harness** — extend the labelled corpus harness
-   (today: aggregate precision/recall 0.95) to report per-rule precision,
-   and gate on it: any rule below its band fails CI with the offending
-   corpus files listed.
-2. **Confidence calibration** — `confidence` is currently hand-assigned
-   prose ("high"/"medium"/"low"); recalibrate each rule's confidence from
-   measured precision and record the mapping in the pattern docs.
-3. **Negative corpus growth** — every FP fixed in an audit becomes a
-   permanent regression corpus entry so the same regex mistake cannot
-   ship twice.
+1. **Per-rule FP/precision harness — done.** The harness keeps the
+   aggregate 0.95/0.95 gates and adds a per-rule accounting: a finding is
+   a TP when it lands on *any* labelled line (generic rules legitimately
+   share lines labelled for a specific rule) and an FP otherwise. Any
+   rule with ≥ 2 observations must hold precision ≥ 0.80 on its own
+   slice, with the offending `file:line` list in the failure message.
+   Measured baseline (2026-09-23): every rule with observations on the
+   positive corpus sits at 1.000.
+2. **Confidence calibration, demote-only — done.** Once a rule has ≥ 3
+   observations, its hand-assigned `confidence` label must be supported
+   by measured precision (`high` ≥ 0.95, `medium` ≥ 0.80; `low` never
+   gated). Failures read "fix the regex or demote the label" — the gate
+   never demands promotion, so calibration can only ratchet honesty, not
+   inflate labels.
+3. **Negative corpus — done.** `tests/corpus/negative/` carries one
+   regression fixture per audited rule (hipaa-phi, mesa-optimization,
+   k8s-run-as-non-root, code-injection-request, executable-file-upload),
+   each with a file-scoped `aegis:expect-none <rule>` directive. Named
+   rules must be silent in their file, exempting only the directive line
+   itself (rule names self-match their own regexes); other rules'
+   findings are ignored there and excluded from the aggregate gates.
+   Each fixture preserves the shape that made the *old* regex fire, so a
+   regex regression re-fires and fails `negative_corpus_pins_rule_silence`
+   (mutation-tested: a planted standalone `phi` line fails with the
+   exact `file:line`). Corpus floors: ≥ 3 negative files, ≥ 5 pinned
+   rules.
 
 ### Phase 13 — Distribution decision: crates.io — DECIDED: do not publish (2026-09-23)
 
@@ -429,21 +448,41 @@ crates are expected and recorded here rather than discovered fresh.
   argument semantics for the top frameworks (OAuth flows, crypto API
   misuse) via the AST module.
 
-### Phase 15 — Protocol conformance suites
+### Phase 15 — Protocol conformance suites — DELIVERED (2026-09-23, #131)
 
-MCP and daemon are smoke-tested e2e but have no documented wire fixtures.
-Record golden request/response pairs (including malformed input, oversize
-lines, sandbox-escape attempts) and replay them in CI so the wire format
-is pinned. Unblocks Phase 16.
+Both integration surfaces are pinned by fixture suites replayed against
+the real binaries in CI:
 
-### Phase 16 — Control Center gate promotion
+- **`aegis-mcp`** (`crates/aegis-mcp/tests/fixtures/` +
+  `mcp_wire_conformance.rs`): stdio handshake, MCP discovery
+  (`initialize` negotiation, `tools/list`), sandbox rejection, unknown
+  tool, parse-error semantics, and oversize-frame handling (a 10 MiB+1
+  line earns exactly one `-32600` frame, then the session ends).
+- **`aegis-daemon`** (`crates/aegis-daemon/tests/fixtures/` +
+  `daemon_wire_conformance.rs`): JSON-lines error envelopes, sandbox
+  refusal without content leakage (the error is asserted not to contain
+  the refused file's contents), blank-line framing, scan receipts with
+  risk aggregation, oversize-frame rejection, and server survival across
+  a dropped client.
+
+During the work, both servers' unbounded request-frame reads
+(`read_line`/`next_line`) were replaced with a capped fill/consume loop
+(10 MiB), closing a memory-exhaustion path for an authorized peer —
+CHANGELOG "Security".
+
+This unblocks Phase 16 (its prereq — fixtures for the daemon/MCP surface
+Control Center consumes — is now met).
+
+### Phase 16 — Control Center gate promotion (open, outside repo boundary)
 
 Outside this repo's boundary but tracked here because Aegis is the
 enforcement engine: the Control Center pre-pipeline adapter is an enforced
 candidate (receipt persisted, 202-proof path works); promotion requires
 the full failure matrix (clean/finding/malformed/unavailable-scanner),
 owner-scoped receipt API/UI, and one clean completed pipeline. Prereq:
-Phase 15 fixtures for the daemon/MCP surface Control Center consumes.
+Phase 15 fixtures for the daemon/MCP surface Control Center consumes —
+**met as of 2026-09-23**; the remaining work is Control-Center-side
+(verify against `/nas/Temp/repos/Platform-Architecture/docs/planning/`).
 
 ---
 
@@ -452,15 +491,12 @@ Phase 15 fixtures for the daemon/MCP surface Control Center consumes.
 Not committed to; recorded so the next phase starts from a written
 shortlist rather than a fresh audit.
 
-- **crates.io publishing** — the release workflow builds and attaches
-  binaries but does not `cargo publish` the seven workspace crates; a
-  publish job (or a deliberate decision not to publish) would close the
-  distribution gap.
+- **crates.io publishing** — *decided 2026-09-23: not publishing*; see
+  Phase 13 for the name-squatting and provenance evidence.
 - **Coverage ratchet** — the codecov gate sits at the measured 97.24%;
   raising the patch threshold gradually walks toward the 99% target.
-- **MCP/daemon protocol conformance tests** — the surfaces are e2e
-  smoke-tested; a conformance fixture suite (documented request/response
-  pairs replayed in CI) would pin the wire format against regressions.
+- **MCP/daemon protocol conformance tests** — *delivered 2026-09-23*
+  (#131); see Phase 15.
 - **Benchmark trend tracking** — criterion results are produced per run
   but not compared across runs; a stored baseline (or a performance
   regression job) would turn measurements into a gate.
@@ -506,9 +542,11 @@ is a straight weighted sum (`aegis-core::risk`).
 - Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
   (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
   gate rises with measured reality, never above it (see Phase 6)
-- 764 tests: unit tests per crate; integration tests per surface; property
+- 795 tests: unit tests per crate; integration tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
-  benchmarks; labelled corpus with precision/recall gates
+  benchmarks; labelled corpus with aggregate + per-rule precision gates,
+  confidence calibration, and negative-corpus silence pins; wire
+  conformance fixture suites for MCP and the daemon
 
 ### Security considerations
 

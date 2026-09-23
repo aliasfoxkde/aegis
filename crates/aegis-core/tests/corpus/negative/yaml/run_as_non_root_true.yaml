@@ -1,0 +1,30 @@
+# Negative corpus: Kubernetes root-container false-positive regression.
+#
+# Regression entry for the 2026-09-22 false-positive audit (commit
+# e0abd61): the rule used to match either pod-security setting with
+# either value, so the CORRECT hardening below (explicit true) was
+# flagged as a root-container violation right next to the actual
+# opt-out it guards against. The corrected rule only flags the explicit
+# opt-out value; every line below fired under the old regex and must
+# stay silent under the current one.
+
+# aegis:expect-none k8s-run-as-non-root
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-agent
+  labels:
+    app: sample-agent
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: sample-agent
+    spec:
+      securityContext:
+        # The hardening setting itself: refuse to run as the root user.
+        runAsNonRoot: true
+      containers:
+        - name: agent
+          image: registry.internal.example.com/sample-agent:1.4.2

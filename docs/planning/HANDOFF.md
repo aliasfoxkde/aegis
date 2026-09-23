@@ -1,12 +1,14 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-09-22
+**Last Updated:** 2026-09-23
 **Status:** 🔄 Active — v0.6.2 released (first release whose assets were
 actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
 checksums verified at publish); full gate set green (`--locked` fmt /
 clippy `-D warnings` / tests); repository self-scan clean (0 findings at
 `--severity-threshold high`); releases run GitForge-first with GitHub as the
-sync mirror
+sync mirror; measurement round complete — MCP discovery lifecycle, wire
+conformance fixtures + 10 MiB frame caps, per-rule corpus gates, and the
+crates.io decision are closed out (see Known Issues)
 **Location:** `/nas/Temp/repos/aegis`
 **MSRV:** 1.88 (pinned by locked deps `time 0.3.55` / `ignore 0.4.33`; CI and
 the release builder image both use `rust:1.88`)
@@ -40,7 +42,7 @@ aegis-core/       — scanning engine (regex+entropy pipeline, AST module,
 aegis-cli/        — the `aegis` binary: scan/list/enable/disable/update/
                     benchmark subcommands
 aegis-mcp/        — `aegis-mcp` binary: JSON-RPC 2.0 over stdio
-                    (custom method set — NOT MCP-discoverable; see below)
+                    (MCP lifecycle discovery + custom method set)
 aegis-daemon/     — `aegis-daemon` binary: long-running server on a local
                     Unix socket with peer-credential allowlisting (no HTTP)
 aegis-bundler/    — packs YAML pattern sets into SHA-256-verified bundles
@@ -87,7 +89,7 @@ Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 764 tests
+cargo test --workspace --locked                         ✅ 795 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
@@ -96,8 +98,10 @@ Coverage (`cargo llvm-cov --workspace`, local 2026-09-22): 96.93% lines /
 patch — the gate ratchets up with measured reality, never down.
 
 CI also runs: multi-OS test matrix, cargo-audit, cargo-deny, CodeQL, weekly
-cargo-fuzz (4 targets), criterion benchmarks, and the corpus
-precision/recall harness (0.95 gate). All builds and tests use `--locked`.
+cargo-fuzz (4 targets), criterion benchmarks, and the corpus harness
+(aggregate 0.95/0.95 gates, per-rule precision floor, demote-only
+confidence calibration, and the `negative/` false-positive regression
+pins). All builds and tests use `--locked`.
 
 ---
 
@@ -173,17 +177,23 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
    lanes → release build). Until GitForge wires in its DAG engine, a
    multi-job pipeline here would silently skip everything after the first
    job.
-2. **MCP integration tests are the slow slice** — each spawns a real
-   server process (and a successful `tools/call` pays the one-time
-   pattern compilation).
+2. **MCP integration tests are the slow and occasionally flaky slice** —
+   each spawns a real server process (and a successful `tools/call` pays
+   the one-time pattern compilation), and under a fully parallel
+   workspace run they can time out in bursts (observed 2026-09-23: 5
+   spurious failures, all passing on rerun and on repeated package-level
+   runs). A lone red `mcp_integration` under load is rerun-first, not
+   fix-first.
 3. **Performance targets are targets** — the 10GB/min throughput and
    <100MB memory figures in `docs/PLAN.md` are aspirational; only startup
    latency is criterion-measured.
-4. **Pattern false-positive tuning is regex-heuristic, not data-driven** —
-   the 2026-09-22 audit fixed five false-positive-prone rules by hand
-   (hipaa-phi, code-injection-request, mesa-optimization,
-   executable-file-upload, k8s-run-as-non-root); there is no measured
-   FP-rate harness over a labelled corpus per rule yet.
+4. **Per-rule precision data is corpus-bounded** — the corpus harness now
+   gates per-rule precision (≥ 0.80 at ≥ 2 observations) and calibrates
+   `confidence` labels demote-only (`high` ≥ 0.95, `medium` ≥ 0.80 at
+   ≥ 3 observations), and the five rules fixed by the 2026-09-22 audit
+   are pinned silent by `tests/corpus/negative/` fixtures. But most of
+   the 670 rules have too few corpus observations to measure at all —
+   coverage grows only as fixtures are added.
 5. **`ast` proximity matching and ML/regex hybrid detection** remain
    unshipped roadmap items (Phase 14).
 
@@ -195,8 +205,11 @@ the non-building Docker image (rebuilt on `rust:1.88-slim` and verified
 end-to-end), `aegis-mcp` not speaking MCP discovery (the lifecycle and
 `tools/*` are implemented and conformance-tested), unbounded request
 frames on both wire servers (now capped at 10 MiB with fixture coverage),
-and the crates.io question (decided: not publishing — evidence and
-reasons recorded in `docs/PLAN.md` Phase 13).
+the crates.io question (decided: not publishing — evidence and reasons
+recorded in `docs/PLAN.md` Phase 13), and the missing per-rule FP harness
+(per-rule precision gate, demote-only confidence calibration, and the
+`negative/` regression corpus now live in `tests/corpus_precision_recall.rs`
+— `docs/PLAN.md` Phase 12).
 
 ---
 
