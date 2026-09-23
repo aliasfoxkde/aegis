@@ -35,6 +35,19 @@ every release are attached to the matching GitHub release.
   k8s-run-as-non-root, code-injection-request, executable-file-upload)
   keeps a regression fixture where it must stay silent, preserving the
   shape that made the old regex fire.
+- `aegis-core::clone` now detects Type-3 (near-miss) clones —
+  copy-paste with reordered or inserted statements — instead of only
+  labelling them. Similarity is a longest-common-subsequence ratio over
+  the two blocks' token sequences (identifiers and literals compared by
+  role), scored on the best-aligned of a block stride's window phases,
+  so order and multiplicity count; the previous bag-of-tokens score
+  ignored both and rated unrelated same-shape functions as Type-1 at
+  1.0. Blocks grew from 20 to 40 tokens because a near-miss claim
+  cannot rest on a statement and a half of role-normalized code, so
+  regions shorter than 40 tokens are no longer compared, overlapping
+  windows are no longer compared with each other, a file yielding more
+  than 256 windows is sampled rather than paired in full, and reported
+  clone locations carry real line numbers (they were always line 1).
 
 ### Security
 
