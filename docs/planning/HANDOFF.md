@@ -89,7 +89,7 @@ Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 795 tests
+cargo test --workspace --locked                         ✅ 796 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
@@ -173,12 +173,18 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
 
 ## Known Issues (honest, current)
 
-1. **GitForge pipelines run one job** — the deployed trigger path queues
-   only the first `needs`-empty job and never schedules dependents, so
-   `.gitforce.yml` is a single ordered job (format → clippy → four test
-   lanes → release build). Until GitForge wires in its DAG engine, a
-   multi-job pipeline here would silently skip everything after the first
-   job.
+1. **GitForge pipelines run one job — by choice, not by defect.** A
+   DB-evidence recon (2026-09-23) disproved the earlier "DAG engine not
+   wired" claim: `needs` dependents do enqueue at parent completion
+   (verified with a 3-job chain on the deployed build). The pipeline
+   stays a single ordered job (format → clippy → four test lanes →
+   release build) because a run's jobs share one workspace — fan-out
+   lanes would collide over `target/` and `artifacts/`. The real
+   GitForge gaps are upstream: no per-repo burst admission (the v0.6.2
+   tag push fired a 19-run burst that saturated the single runner),
+   DAG state is memory-only so a CI restart truncates running chains,
+   and the webhook fallback path builds one-job runs for multi-job
+   pipelines (GitForge issues #215/#216/#217).
 2. **MCP integration tests are the slow and occasionally flaky slice** —
    each spawns a real server process (and a successful `tools/call` pays
    the one-time pattern compilation), and under a fully parallel

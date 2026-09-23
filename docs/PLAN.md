@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 795 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (95% project / 90% patch; measured 96.86% lines locally, 2026-09-23), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, `-D warnings`), fmt, 796 tests, `--locked` everywhere, multi-OS test matrix, codecov gate (95% project / 90% patch; measured 96.86% lines locally, 2026-09-23), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -353,20 +353,32 @@ README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
 
 ### Phase 12 — Measured pattern quality — SHIPPED (2026-09-23)
 
-**Platform prerequisite (found during the v0.6.2 release, 2026-09-22):**
-GitForge's deployed trigger path queues only a pipeline's first
-`needs`-empty job and never schedules dependents — the DAG engine in
-`gitforge-ci` exists with tests but is not wired into the deployed
-services, so every historical aegis pipeline run executed exactly one job
-(the v0.6.1 release assets were never actually built by the GitForge
-pipeline). `.gitforce.yml` is therefore a single ordered job until
-GitForge wires the DAG in; a `needs`-based lane split there would silently
-degrade to "first job only". This is a GitForge product fix, tracked on
-the GitForge side. The single-job pipeline itself was validated
-end-to-end on the v0.6.2 tag run (all seven steps green, ten artifacts
-collected and published). One lane-shape rule learned there: test steps
-must not use `--all-targets` — that selector runs bench binaries, and
-criterion rejects the piped `--test-threads` flag.
+**Platform note (corrected 2026-09-23 — an earlier version of this
+paragraph claimed the GitForge DAG engine was not wired; a DB-evidence
+recon disproved that):** GitForge's DAG *is* live in the deployed CI —
+`handle_push_event` builds the job graph via the `DagBuilder`, and the
+completion consumer calls `queue_ready_jobs()` after every job finishes,
+so `needs` dependents enqueue at their parent's completion. A 3-job
+chain was verified end-to-end on the deployed build (2026-09-23). What
+actually happened during v0.6.2 was different: the tag push fired a
+same-commit `push` run alongside the tag run, and the 19-run burst
+saturated the single shared runner; the queued runs were cancelled by
+operator request ~45 minutes in. `.gitforce.yml` remains a single
+ordered job *by choice*, not as a workaround — a run's jobs share one
+workspace on this platform, so fan-out lanes would collide over
+`target/` and `artifacts/`; a `needs`-based lane split here would be an
+anti-pattern. The v0.6.1 assets were never pipeline-built for the
+mundane reason that the pipeline itself was only stood up for v0.6.2
+(the GitForge account/repo re-provisioning wiped the old registration).
+Real GitForge gaps found by the same recon are filed upstream: per-repo
+burst admission (#215), restart-safe DAG state plus a multi-job
+integration test (#216), and the webhook fallback path that builds
+one-job runs for multi-job pipelines (#217). The single-job pipeline
+itself was validated end-to-end on the v0.6.2 tag run (all seven steps
+green, ten artifacts collected and published). One lane-shape rule
+learned there: test steps must not use `--all-targets` — that selector
+runs bench binaries, and criterion rejects the piped `--test-threads`
+flag.
 
 Phase 11 fixed false positives one regex at a time, by hand. Phase 12
 made it measurable — all three items delivered in
@@ -547,7 +559,7 @@ is a straight weighted sum (`aegis-core::risk`).
 - Coverage measured with `cargo llvm-cov --workspace` and gated by Codecov
   (90% project / 85% patch); measured 97.24% lines / 94.60% regions — the
   gate rises with measured reality, never above it (see Phase 6)
-- 795 tests: unit tests per crate; integration tests per surface; property
+- 796 tests: unit tests per crate; integration tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
   benchmarks; labelled corpus with aggregate + per-rule precision gates,
   confidence calibration, and negative-corpus silence pins; wire
