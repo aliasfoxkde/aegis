@@ -45,6 +45,16 @@ every release are attached to the matching GitHub release.
   the session; `aegis-daemon` answers once with a size error and drops
   the connection while continuing to serve other clients.
 
+### Fixed
+
+- Anchored ignore rules (`.aegisignore` / `.gitignore`) now match when
+  the scan root is absolute: rules are evaluated against the path
+  relative to the configured root, so `"docs/files/js/"` fires on
+  walker paths like `/workspace/docs/files/js/mock.js` where it
+  previously silently never matched. Path separators are normalized to
+  `/` before matching, which also makes these rules work on Windows
+  (`strip_prefix` yields backslash relatives there).
+
 ## [0.6.2] - 2026-09-22
 
 ### Removed
