@@ -351,7 +351,7 @@ README, wiki, BUILDING, AGENTS; stale `lazy_static` superseded by
 
 ---
 
-### Phase 12 — Measured pattern quality (next up)
+### Phase 12 — Measured pattern quality — SHIPPED (2026-09-23)
 
 **Platform prerequisite (found during the v0.6.2 release, 2026-09-22):**
 GitForge's deployed trigger path queues only a pipeline's first
@@ -368,19 +368,38 @@ collected and published). One lane-shape rule learned there: test steps
 must not use `--all-targets` — that selector runs bench binaries, and
 criterion rejects the piped `--test-threads` flag.
 
-Phase 11 fixed false positives one regex at a time, by hand. Make it
-data-driven:
+Phase 11 fixed false positives one regex at a time, by hand. Phase 12
+made it measurable — all three items delivered in
+`crates/aegis-core/tests/corpus_precision_recall.rs` (second test) plus a
+new `tests/corpus/negative/` section, contract documented in
+`tests/corpus/README.md`:
 
-1. **Per-rule FP/FP-rate harness** — extend the labelled corpus harness
-   (today: aggregate precision/recall 0.95) to report per-rule precision,
-   and gate on it: any rule below its band fails CI with the offending
-   corpus files listed.
-2. **Confidence calibration** — `confidence` is currently hand-assigned
-   prose ("high"/"medium"/"low"); recalibrate each rule's confidence from
-   measured precision and record the mapping in the pattern docs.
-3. **Negative corpus growth** — every FP fixed in an audit becomes a
-   permanent regression corpus entry so the same regex mistake cannot
-   ship twice.
+1. **Per-rule FP/precision harness — done.** The harness keeps the
+   aggregate 0.95/0.95 gates and adds a per-rule accounting: a finding is
+   a TP when it lands on *any* labelled line (generic rules legitimately
+   share lines labelled for a specific rule) and an FP otherwise. Any
+   rule with ≥ 2 observations must hold precision ≥ 0.80 on its own
+   slice, with the offending `file:line` list in the failure message.
+   Measured baseline (2026-09-23): every rule with observations on the
+   positive corpus sits at 1.000.
+2. **Confidence calibration, demote-only — done.** Once a rule has ≥ 3
+   observations, its hand-assigned `confidence` label must be supported
+   by measured precision (`high` ≥ 0.95, `medium` ≥ 0.80; `low` never
+   gated). Failures read "fix the regex or demote the label" — the gate
+   never demands promotion, so calibration can only ratchet honesty, not
+   inflate labels.
+3. **Negative corpus — done.** `tests/corpus/negative/` carries one
+   regression fixture per audited rule (hipaa-phi, mesa-optimization,
+   k8s-run-as-non-root, code-injection-request, executable-file-upload),
+   each with a file-scoped `aegis:expect-none <rule>` directive. Named
+   rules must be silent in their file, exempting only the directive line
+   itself (rule names self-match their own regexes); other rules'
+   findings are ignored there and excluded from the aggregate gates.
+   Each fixture preserves the shape that made the *old* regex fire, so a
+   regex regression re-fires and fails `negative_corpus_pins_rule_silence`
+   (mutation-tested: a planted standalone `phi` line fails with the
+   exact `file:line`). Corpus floors: ≥ 3 negative files, ≥ 5 pinned
+   rules.
 
 ### Phase 13 — Distribution decision: crates.io — DECIDED: do not publish (2026-09-23)
 

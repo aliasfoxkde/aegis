@@ -24,6 +24,17 @@ every release are attached to the matching GitHub release.
   Unix-socket JSON-lines protocol — error envelopes, sandbox refusal
   without content leakage, blank-line framing, and scan receipts
   (`crates/aegis-daemon/tests/fixtures/`).
+- The corpus harness now measures per rule, not just in aggregate: any
+  rule with enough corpus observations must hold a per-rule precision
+  floor (0.80 at ≥ 2 observations), and hand-assigned `confidence`
+  labels are calibrated against measured precision demote-only
+  (`high` ≥ 0.95, `medium` ≥ 0.80 at ≥ 3 observations — the gate can
+  force a label down or a regex fix, never a promotion). A new
+  `tests/corpus/negative/` section pins the 2026-09-22 false-positive
+  audit: each fixed rule (hipaa-phi, mesa-optimization,
+  k8s-run-as-non-root, code-injection-request, executable-file-upload)
+  keeps a regression fixture where it must stay silent, preserving the
+  shape that made the old regex fire.
 
 ### Security
 
