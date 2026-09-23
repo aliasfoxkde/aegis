@@ -199,7 +199,7 @@ Dockerignore file reference detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-\.env(\.\w+)?\b
+(^|[^A-Za-z0-9_.])\.env(\.\w+)?\b
 ```
 
 **Input that fires** (verified by the liveness test):
