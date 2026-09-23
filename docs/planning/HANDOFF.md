@@ -1,12 +1,14 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-09-22
+**Last Updated:** 2026-09-23
 **Status:** 🔄 Active — v0.6.2 released (first release whose assets were
 actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
 checksums verified at publish); full gate set green (`--locked` fmt /
 clippy `-D warnings` / tests); repository self-scan clean (0 findings at
 `--severity-threshold high`); releases run GitForge-first with GitHub as the
-sync mirror
+sync mirror; measurement round complete — MCP discovery lifecycle, wire
+conformance fixtures + 10 MiB frame caps, per-rule corpus gates, and the
+crates.io decision are closed out (see Known Issues)
 **Location:** `/nas/Temp/repos/aegis`
 **MSRV:** 1.88 (pinned by locked deps `time 0.3.55` / `ignore 0.4.33`; CI and
 the release builder image both use `rust:1.88`)
@@ -40,7 +42,7 @@ aegis-core/       — scanning engine (regex+entropy pipeline, AST module,
 aegis-cli/        — the `aegis` binary: scan/list/enable/disable/update/
                     benchmark subcommands
 aegis-mcp/        — `aegis-mcp` binary: JSON-RPC 2.0 over stdio
-                    (custom method set — NOT MCP-discoverable; see below)
+                    (MCP lifecycle discovery + custom method set)
 aegis-daemon/     — `aegis-daemon` binary: long-running server on a local
                     Unix socket with peer-credential allowlisting (no HTTP)
 aegis-bundler/    — packs YAML pattern sets into SHA-256-verified bundles
