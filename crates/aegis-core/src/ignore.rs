@@ -124,6 +124,8 @@ impl IgnoreManager {
         // repo-relative anchored globs ("docs/files/js/") match no matter
         // how the root was expressed — an absolute workspace path yields
         // absolute walker paths, where anchored rules can never match.
+        // Ignore-rule syntax always uses `/`, so normalize the host
+        // separators (`strip_prefix` yields `\` components on Windows).
         let raw = self
             .root
             .read()
@@ -131,7 +133,7 @@ impl IgnoreManager {
             .and_then(|root| path.strip_prefix(&root).ok().map(Path::to_path_buf))
             .unwrap_or_else(|| path.to_path_buf())
             .to_string_lossy()
-            .into_owned();
+            .replace('\\', "/");
         // Walkers rooted at "." yield "./"-prefixed paths; strip it so
         // ignore rules written as "docs/**" match "docs/**" paths.
         let rel = raw.strip_prefix("./").unwrap_or(raw.as_str());
@@ -374,6 +376,27 @@ mod tests {
         assert!(manager.should_ignore(&deep));
         assert!(manager.should_ignore(Path::new("docs/files/js/mock.js")));
         assert!(!manager.should_ignore(&temp_dir.path().join("keep.js")));
+    }
+
+    #[test]
+    fn test_host_backslash_separators_match_forward_slash_rules() {
+        // Regression (2026-09-23): on Windows, `strip_prefix` yields
+        // backslash-separated relatives ("docs\\files\\js\\mock.js"), which
+        // never matched forward-slash rules. Exercise that byte shape on
+        // every platform — a lone `\`-component path is one component on
+        // Unix, so this fails without the separator normalization.
+        let temp_dir = TempDir::new().unwrap();
+        let ignore_file = temp_dir.path().join(".aegisignore");
+        File::create(&ignore_file)
+            .unwrap()
+            .write_all(b"docs/files/js/\n*.log\n")
+            .unwrap();
+
+        let manager = IgnoreManager::new();
+        manager.set_root(temp_dir.path()).unwrap();
+        assert!(manager.should_ignore(Path::new("docs\\files\\js\\mock.js")));
+        // Unanchored basename rules keep working through the same path.
+        assert!(manager.should_ignore(Path::new("sub\\dir\\debug.log")));
     }
 
     #[test]
