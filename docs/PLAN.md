@@ -382,13 +382,39 @@ data-driven:
    permanent regression corpus entry so the same regex mistake cannot
    ship twice.
 
-### Phase 13 — Distribution decision: crates.io
+### Phase 13 — Distribution decision: crates.io — DECIDED: do not publish (2026-09-23)
 
-Seven workspace crates, zero of them published. Either (a) add a
-`cargo publish` stage to the GitForge tag pipeline in dependency order
-with `--allow-dirty` forbidden and dry-run verification, or (b) record the
-decision not to publish with reasons in this file. Both close the gap; the
-current state (binaries only, silent on crates.io) does not.
+Seven workspace crates, zero of them published. Both options evaluated
+with a packaging dry-run; recording the decision and its evidence here.
+
+**Decision: not publishing to crates.io.** Reasons, in order of weight:
+
+1. **Four of the seven crate names are already taken on crates.io by
+   unrelated projects**: `aegis-core` 0.1.1 (a WASM sandbox runtime),
+   `aegis-cli` 1.3.121 (a TOTP CLI for the Aegis vault app), `aegis-mcp`
+   1.0.7 (an MCP client for Aegis), and `aegis-wasm` 0.1.1. Publishing
+   under the current names is impossible; renaming the crates would churn
+   every `use aegis_core::…` import, the docs, and CI purely to open a
+   distribution channel with no consumers on the other side.
+2. **No external consumers exist.** The product surface is the binaries:
+   platform release tarballs (SHA-256-verified, published with a release
+   attestation manifest) and the container image. Those carry stronger
+   provenance than a crates.io tarball would.
+3. **Publishing is irreversible** (versions can only be yanked, never
+   removed) while the seven crates are lockstep-coupled at one workspace
+   version; a transient failure partway through a pipeline publish would
+   strand inconsistent versions on the registry.
+4. **A `cargo publish` stage needs a crates.io token in the pipeline's
+   secret store**, which the deployed GitForge trigger path does not have
+   yet (GitForge-side work, outside this repository's boundary).
+
+Dry-run evidence (2026-09-23, `cargo package --locked -p <crate>
+--no-verify`): `aegis-core` and `aegis-bundler` package cleanly; the
+five crates with sibling-crate dependencies fail manifest verification
+because internal path dependencies carry no `version` requirement. A
+future revisit of option (a) starts with that mechanical fix plus the
+name question above; until then, `cargo package` failures for those five
+crates are expected and recorded here rather than discovered fresh.
 
 ### Phase 14 — Scanner capability roadmap (carried from the original roadmap)
 

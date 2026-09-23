@@ -11,6 +11,10 @@
 //! Requests that must trigger a detection are kept in this file (not the
 //! fixture JSON) so the fixture never embeds credential-shaped strings.
 
+// The daemon is a stub on non-Unix platforms (the protocol is a Unix
+// socket), so this suite only compiles where the protocol exists.
+#![cfg(unix)]
+
 use serde::Deserialize;
 use serde_json::Value;
 use std::path::PathBuf;
