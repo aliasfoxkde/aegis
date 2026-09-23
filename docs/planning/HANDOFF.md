@@ -177,9 +177,13 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
    lanes → release build). Until GitForge wires in its DAG engine, a
    multi-job pipeline here would silently skip everything after the first
    job.
-2. **MCP integration tests are the slow slice** — each spawns a real
-   server process (and a successful `tools/call` pays the one-time
-   pattern compilation).
+2. **MCP integration tests are the slow and occasionally flaky slice** —
+   each spawns a real server process (and a successful `tools/call` pays
+   the one-time pattern compilation), and under a fully parallel
+   workspace run they can time out in bursts (observed 2026-09-23: 5
+   spurious failures, all passing on rerun and on repeated package-level
+   runs). A lone red `mcp_integration` under load is rerun-first, not
+   fix-first.
 3. **Performance targets are targets** — the 10GB/min throughput and
    <100MB memory figures in `docs/PLAN.md` are aspirational; only startup
    latency is criterion-measured.
