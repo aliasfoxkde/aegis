@@ -8,6 +8,9 @@ use aegis_core::{InspectionStatus, ScanOptions, Scanner};
 use tempfile::TempDir;
 
 /// Build a scanner over the full bundled pattern set.
+// Test-only helpers, but not `#[test]` functions, so clippy.toml's
+// test exemptions do not reach them.
+#[allow(clippy::unwrap_used)]
 fn bundled_scanner() -> Scanner {
     let definitions = aegis_patterns::all_patterns()
         .into_iter()
@@ -177,6 +180,7 @@ fn narrated_file() -> String {
 }
 
 /// Ten quiet files plus one heavily narrated outlier.
+#[allow(clippy::unwrap_used)] // test fixture builder, not a `#[test]` fn
 fn anomaly_fixture() -> TempDir {
     let temp = TempDir::new().unwrap();
     let src = temp.path().join("src");

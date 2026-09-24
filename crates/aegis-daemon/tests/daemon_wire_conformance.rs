@@ -14,6 +14,10 @@
 // The daemon is a stub on non-Unix platforms (the protocol is a Unix
 // socket), so this suite only compiles where the protocol exists.
 #![cfg(unix)]
+// Test binary: panicking on failure *is* the assertion mechanism, and the
+// unwraps/expects here sit in `tokio::spawn` helpers that clippy's
+// "only called from `#[test]` functions" analysis cannot see through.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use serde::Deserialize;
 use serde_json::Value;

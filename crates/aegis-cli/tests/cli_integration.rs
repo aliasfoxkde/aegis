@@ -11,6 +11,9 @@ use std::process::Command;
 /// the duration of the test.
 struct ConfigGuard(tempfile::TempDir);
 
+// Test-only helper, but not a `#[test]` function, so clippy.toml's
+// allow-expect-in-tests exemption does not reach it.
+#[allow(clippy::expect_used)]
 fn isolated_config() -> ConfigGuard {
     ConfigGuard(tempfile::TempDir::new().expect("create isolated config dir"))
 }

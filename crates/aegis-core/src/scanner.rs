@@ -2,12 +2,12 @@
 //!
 //! Handles scanning files, directories, and strings for patterns.
 
+use parking_lot::{Mutex, RwLock};
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::Instant;
 use walkdir::WalkDir;
 
@@ -174,7 +174,7 @@ pub struct Scanner {
     /// `.aegis.yml` files already merged into the registry, keyed by
     /// canonical path so repeated scans of a root (long-lived MCP server)
     /// do not re-register the same rules
-    loaded_user_pattern_files: std::sync::Mutex<HashSet<PathBuf>>,
+    loaded_user_pattern_files: Mutex<HashSet<PathBuf>>,
     /// Baseline fingerprints loaded once when options are set. `Some(Err)`
     /// records a load failure so it can be reported instead of silently
     /// scanning unfiltered.
@@ -265,7 +265,7 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
+            loaded_user_pattern_files: Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
             scan_pool: std::sync::OnceLock::new(),
@@ -287,7 +287,7 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
+            loaded_user_pattern_files: Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
             scan_pool: std::sync::OnceLock::new(),
@@ -311,7 +311,7 @@ impl Scanner {
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
-            loaded_user_pattern_files: std::sync::Mutex::new(HashSet::new()),
+            loaded_user_pattern_files: Mutex::new(HashSet::new()),
             baseline_cache: std::sync::OnceLock::new(),
             metrics_sink: Arc::new(RwLock::new(Vec::new())),
             scan_pool: std::sync::OnceLock::new(),
@@ -374,7 +374,7 @@ impl Scanner {
         // (extension scanner caches are always cleared below).
         self.last_include_disabled
             .store(options.include_disabled, Ordering::SeqCst);
-        self.extension_scanners.write().unwrap().clear();
+        self.extension_scanners.write().clear();
         let baseline = options.baseline.clone();
         self.options = options;
         if let Some(path) = baseline {
@@ -405,7 +405,7 @@ impl Scanner {
     ) -> Vec<crate::pattern::CategoryScanner> {
         let key = ext.unwrap_or("").trim_start_matches('.').to_lowercase();
 
-        if let Some(scanners) = self.extension_scanners.read().unwrap().get(&key) {
+        if let Some(scanners) = self.extension_scanners.read().get(&key) {
             return scanners.clone();
         }
 
@@ -425,7 +425,6 @@ impl Scanner {
 
         self.extension_scanners
             .write()
-            .unwrap()
             .insert(key, scanners.clone());
 
         scanners
@@ -864,7 +863,7 @@ impl Scanner {
         // skips collection outright.
         if self.anomaly_layer_enabled() {
             if let Some(metrics) = anomalies::compute_metrics(&source, &content) {
-                self.metrics_sink.write().unwrap().push(metrics);
+                self.metrics_sink.write().push(metrics);
             }
         }
 
@@ -952,7 +951,7 @@ impl Scanner {
             return Ok(());
         };
         let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
-        let mut loaded = self.loaded_user_pattern_files.lock().unwrap();
+        let mut loaded = self.loaded_user_pattern_files.lock();
         if loaded.contains(&canonical) {
             return Ok(());
         }
@@ -969,7 +968,7 @@ impl Scanner {
 
         // The registry changed: cached extension scanners no longer include
         // the user patterns and must be rebuilt for this and later scans.
-        self.extension_scanners.write().unwrap().clear();
+        self.extension_scanners.write().clear();
 
         tracing::debug!("Loaded custom patterns from {}", path.display());
         Ok(())
@@ -1034,7 +1033,7 @@ impl Scanner {
         let mut merged_stats = ScanStats::default();
         // Drop metrics left over from earlier single-file scans so this
         // walk's statistics describe only the files it analyzed.
-        self.metrics_sink.write().unwrap().clear();
+        self.metrics_sink.write().clear();
         for (index, result) in walker.into_iter().enumerate() {
             match result {
                 Ok(entry) if entry.file_type().is_file() => {
@@ -1116,7 +1115,7 @@ impl Scanner {
         // metrics sink; analyze it against the repository's own baseline and
         // append the observations. They pass through the same category,
         // severity-threshold, and baseline filters as every other finding.
-        let metrics: Vec<FileMetrics> = std::mem::take(&mut *self.metrics_sink.write().unwrap());
+        let metrics: Vec<FileMetrics> = std::mem::take(&mut *self.metrics_sink.write());
         let mut anomaly_findings =
             Self::anomaly_findings(&metrics, self.options.anomaly_detectors.as_deref());
         anomaly_findings.retain(|finding| self.passes_post_filters(finding));
@@ -2419,7 +2418,7 @@ mod tests {
         // Second scan exercises the cached per-extension scanners
         assert_eq!(scanner.scan_string("needle", "b.rs").len(), 1);
         assert_eq!(
-            scanner.extension_scanners.read().unwrap().len(),
+            scanner.extension_scanners.read().len(),
             1,
             "same extension across files must reuse one cache entry"
         );

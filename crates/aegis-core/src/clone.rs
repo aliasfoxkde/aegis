@@ -7,12 +7,12 @@
 //!
 //! # Algorithm
 //!
-//! 1. [`CloneDetector::tokenize`] splits the source into tokens.
-//! 2. [`CloneDetector::create_blocks`] slices the token stream into
-//!    [`BLOCK_SIZE`]-token windows whose starts advance [`BLOCK_STRIDE`]
+//! 1. `CloneDetector::tokenize` splits the source into tokens.
+//! 2. `CloneDetector::create_blocks` slices the token stream into
+//!    `BLOCK_SIZE`-token windows whose starts advance `BLOCK_STRIDE`
 //!    tokens at a time.
-//! 3. [`CloneDetector::find_clones`] scores every block pair and reports the
-//!    pairs whose similarity reaches [`CloneDetector::min_similarity`].
+//! 3. `CloneDetector::find_clones` scores every block pair and reports the
+//!    pairs whose similarity reaches `CloneDetector::min_similarity`.
 //!
 //! Similarity is **sequence aware**: it is the longest-common-subsequence
 //! (LCS) ratio `2 * matched / (len_a + len_b)` over the two blocks' token
@@ -25,17 +25,17 @@
 //!
 //! # Known limits
 //!
-//! * A file (or a region) shorter than [`BLOCK_SIZE`] tokens produces no
+//! * A file (or a region) shorter than `BLOCK_SIZE` tokens produces no
 //!   blocks and is never reported. That is a deliberate trade: at the
 //!   previous 20-token span, one and a half statements of role-normalized
 //!   code agreed with almost any other window in the file.
 //! * A block is never compared with a block it overlaps, so a tandem repeat
-//!   shorter than [`BLOCK_SIZE`] tokens is not reported.
-//! * A file yielding more than [`MAX_BLOCKS`] windows has its grid thinned
+//!   shorter than `BLOCK_SIZE` tokens is not reported.
+//! * A file yielding more than `MAX_BLOCKS` windows has its grid thinned
 //!   evenly, so very large files are sampled rather than paired in full.
-//! * Blocks cover the stream up to the last full [`BLOCK_SIZE`]-token window;
+//! * Blocks cover the stream up to the last full `BLOCK_SIZE`-token window;
 //!   a trailing partial window is not compared.
-//! * Of the [`BLOCK_STRIDE`] window alignments a pair admits, only the one
+//! * Of the `BLOCK_STRIDE` window alignments a pair admits, only the one
 //!   with the most exactly aligned tokens is scored, and a pair with no
 //!   exactly aligned token at any phase is not scored at all. A copy whose
 //!   only resemblance is a shifted subsequence is therefore missed rather
@@ -50,7 +50,7 @@
 //! count, the same shape the detector had before near-miss detection, at an
 //! `O(BLOCK_STRIDE * BLOCK_SIZE)` alignment search and a `BLOCK_SIZE^2`
 //! constant per comparison. Because the grid is thinned past
-//! [`MAX_BLOCKS`], `B` is capped and the worst case is a constant, not a
+//! `MAX_BLOCKS`, `B` is capped and the worst case is a constant, not a
 //! function of file size. Sound bounds cut that constant in
 //! `CloneDetector::pair_similarity` and `CloneDetector::range_similarity`: a
 //! length bound and a label-multiset bound that reject a pair without
@@ -77,7 +77,7 @@ const TYPE2_SIMILARITY: f64 = 0.85;
 /// Similarity at or above which a pair is reported as a Type-3 clone.
 ///
 /// This is the near-miss floor and the default value of
-/// [`CloneDetector::min_similarity`], so by default a reported pair is never
+/// `CloneDetector::min_similarity`, so by default a reported pair is never
 /// worse than a near-miss. Below it, a pair only reaches the output when the
 /// caller lowers `min_similarity`, and is then labelled Type-4.
 const TYPE3_SIMILARITY: f64 = 0.75;
@@ -117,7 +117,7 @@ const MAX_BLOCKS: usize = 256;
 /// every surviving window pair can clear the similarity floor, so collecting
 /// without a cap would let one file flood the report and pay for the full
 /// `O(B²)` pairing behind it. Pairing stops at this cap: the work and the
-/// output stay bounded at the same [`MAX_BLOCKS`]-scale constant, and the
+/// output stay bounded at the same `MAX_BLOCKS`-scale constant, and the
 /// bound is deterministic because pairs are collected in grid order. A file
 /// that reaches the cap is, at minimum, not meant to be read by hand.
 const MAX_REPORTED_CLONES: usize = 256;
@@ -291,8 +291,8 @@ impl CloneDetector {
 
     /// Set minimum token count
     ///
-    /// Blocks are exactly [`BLOCK_SIZE`] tokens, so a floor at or below
-    /// [`BLOCK_SIZE`] makes no difference to the block grid and a floor above
+    /// Blocks are exactly `BLOCK_SIZE` tokens, so a floor at or below
+    /// `BLOCK_SIZE` makes no difference to the block grid and a floor above
     /// it suppresses detection entirely. The knob is a coarse switch, not a
     /// graduated one.
     #[must_use]
@@ -479,22 +479,22 @@ impl CloneDetector {
 
     /// Create code blocks from tokens
     ///
-    /// Blocks are [`BLOCK_SIZE`]-token windows whose starts advance
-    /// [`BLOCK_STRIDE`] tokens at a time, so a duplicated region of any length
+    /// Blocks are `BLOCK_SIZE`-token windows whose starts advance
+    /// `BLOCK_STRIDE` tokens at a time, so a duplicated region of any length
     /// is covered by a run of overlapping windows. Overlapping windows are
     /// never compared with each other — [`Self::pair_similarity`] skips a pair
     /// whose ranges intersect — so a duplicated region is reported against the
     /// region it was copied from, not against its own next window. Blocks
     /// shorter than `min_tokens` are dropped, and the stream is covered up to
-    /// its last full [`BLOCK_SIZE`]-token window.
+    /// its last full `BLOCK_SIZE`-token window.
     ///
-    /// A grid larger than [`MAX_BLOCKS`] is thinned by keeping every `step`-th
+    /// A grid larger than `MAX_BLOCKS` is thinned by keeping every `step`-th
     /// window, so the pairing cost below is bounded no matter how large the
     /// file is.
     ///
     /// Cost: `O(tokens / BLOCK_STRIDE)` candidates, each resolving its line
     /// span with a binary search over the line-start index; at most
-    /// [`MAX_BLOCKS`] of them survive.
+    /// `MAX_BLOCKS` of them survive.
     fn create_blocks(&self, tokens: &[Token], line_starts: &[usize]) -> Vec<CodeBlock> {
         let last_start = tokens.len().saturating_sub(BLOCK_SIZE);
         let candidates = last_start.div_ceil(BLOCK_STRIDE);
@@ -555,7 +555,7 @@ impl CloneDetector {
     /// pairing shape the detector has always had; no cross-file or
     /// all-against-all pass beyond it is introduced.
     ///
-    /// Collection stops at [`MAX_REPORTED_CLONES`], so a file where nearly
+    /// Collection stops at `MAX_REPORTED_CLONES`, so a file where nearly
     /// every pair qualifies neither floods the report nor pays for the rest
     /// of the quadratic pass.
     fn find_clones(&self, tokens: &[Token], blocks: &[CodeBlock], source: &str) -> Vec<CodeClone> {
@@ -614,15 +614,15 @@ impl CloneDetector {
     /// Similarity for one block pair, or `None` when the pair is never
     /// compared or cannot reach [`Self::min_similarity`].
     ///
-    /// Block starts advance [`BLOCK_STRIDE`] tokens at a time, so two copied
+    /// Block starts advance `BLOCK_STRIDE` tokens at a time, so two copied
     /// regions are only compared by phase-aligned windows when their
-    /// separation happens to be a multiple of [`BLOCK_STRIDE`]. One phase
+    /// separation happens to be a multiple of `BLOCK_STRIDE`. One phase
     /// inside the stride is therefore picked first — the one that aligns the
     /// most tokens exactly — and only that alignment is scored by the LCS.
     /// Picking by position is what keeps the per-pair cost at a single LCS
     /// run, and it hands the scorer the alignment a reader would pick for a
     /// real copy, so a verbatim copy whose offset is not a multiple of
-    /// [`BLOCK_STRIDE`] is still reported as a Type-1 clone rather than as a
+    /// `BLOCK_STRIDE` is still reported as a Type-1 clone rather than as a
     /// near miss.
     ///
     /// A window is never compared against a window it overlaps — that pair
@@ -858,7 +858,7 @@ struct CodeBlock {
 
 /// Rolling-row scratch space for the longest-common-subsequence length.
 ///
-/// [`CloneDetector::find_clones`] holds a single instance for the whole
+/// `CloneDetector::find_clones` holds a single instance for the whole
 /// pairing loop, so comparing a block pair allocates nothing.
 #[derive(Debug)]
 struct LcsRows {
@@ -925,7 +925,7 @@ impl LcsRows {
 /// Scratch space for one detection run: comparison labels, the multiset
 /// counters they index, and the rolling LCS rows.
 ///
-/// [`CloneDetector::find_clones`] builds it once, so comparing a block pair
+/// `CloneDetector::find_clones` builds it once, so comparing a block pair
 /// allocates nothing.
 #[derive(Debug)]
 struct PairingScratch<'a> {

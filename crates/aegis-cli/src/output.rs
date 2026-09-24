@@ -340,7 +340,8 @@ pub(crate) fn truncate_string(s: &str, max_len: usize) -> String {
 
 /// Format patterns for listing (testable)
 ///
-/// Enabled/disabled status comes from the persisted [`PatternState`]: a
+/// Enabled/disabled status comes from the persisted
+/// [`PatternState`](crate::PatternState): a
 /// pattern the user disabled with `aegis disable` is marked `[ ]` and
 /// excluded by `--enabled`, while `--disabled` lists exactly the persisted
 /// set (intersected with patterns this build ships).

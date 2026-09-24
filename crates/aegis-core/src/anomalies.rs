@@ -15,7 +15,7 @@
 //! whole repository. Comment conventions differ too much between languages
 //! for a mixed baseline to mean anything: a narrated Python file judged
 //! against terse Rust siblings is a false outlier, not a finding. A group
-//! smaller than [`MIN_FILES`] supports no z-score, so minority-language files
+//! smaller than `MIN_FILES` supports no z-score, so minority-language files
 //! are simply not judged rather than judged against someone else's norm. The
 //! Pareto detector is the exception: comment concentration is a property of
 //! the repository total by definition.
@@ -82,6 +82,10 @@ pub fn validate_detector_names(names: &[String]) -> Result<(), String> {
 // Line-based identifier tokens; length ≥ 2 so ubiquitous single-character
 // loop counters do not dominate the count.
 static IDENTIFIER_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
+    // Invariant: the pattern above is a compile-time constant and is
+    // exercised by unit tests; a parse failure is a programmer error, so
+    // failing loudly on first use is the correct behavior.
+    #[allow(clippy::expect_used)]
     Regex::new(r"[A-Za-z_][A-Za-z0-9_]{1,}").expect("static regex compiles")
 });
 
@@ -187,7 +191,7 @@ fn is_comment_like(trimmed: &str) -> bool {
 /// Measure one file's content.
 ///
 /// Returns [`None`] for prose and generated files, which never take part in
-/// the statistics (see [`is_metrics_eligible`]).
+/// the statistics (see `is_metrics_eligible`).
 #[must_use]
 pub fn compute_metrics(path: &str, content: &str) -> Option<FileMetrics> {
     if !is_metrics_eligible(path) {
@@ -246,7 +250,7 @@ fn mean_and_stddev(values: &[f64]) -> Option<(f64, f64)> {
 /// The language-group key for a path: its extension, or the empty string for
 /// extensionless sources (Makefile, Dockerfile), which are judged as one
 /// group of their own. Matched case-sensitively, consistent with the
-/// extension checks in [`is_metrics_eligible`].
+/// extension checks in `is_metrics_eligible`.
 fn language_key(path: &str) -> &str {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
     match name.rfind('.') {

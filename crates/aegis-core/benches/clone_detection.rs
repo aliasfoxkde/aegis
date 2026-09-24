@@ -9,6 +9,10 @@
 //!
 //! Run with `cargo bench -p aegis-core --bench clone_detection`.
 
+// Benchmark binary: panicking on a broken fixture is the harness's
+// failure mechanism, and bench targets do not get clippy.toml's
+// test exemptions (they are not `#[test]` code).
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 use aegis_core::clone::CloneDetector;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;

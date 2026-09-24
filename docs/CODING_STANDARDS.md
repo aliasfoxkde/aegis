@@ -31,10 +31,23 @@ clippy with `-D warnings`, so the `[workspace.lints]` table in the root
 - `rust`: `unsafe_code` deny, `let_underscore_drop` deny,
   `future_incompatible` deny, `rust_2018_idioms` warn,
   `unused_qualifications` warn, `missing_docs` warn
-- `clippy`: `all` warn, `pedantic` warn, with documented allowances for
-  `cast_precision_loss`, `doc_markdown`, and `too_many_lines`
+- `rustdoc`: `broken_intra_doc_links` deny, `private_intra_doc_links`
+  deny (enforced by the `Rustdoc` CI job, which also builds docs with
+  `RUSTDOCFLAGS=-D warnings`)
+- `clippy`: `all` warn, `pedantic` warn, `unwrap_used`/`expect_used`/
+  `panic` **deny** — errors must be values in production code. Test code
+  is exempt via `clippy.toml`'s `allow-…-in-tests` flags; the few
+  deliberate production exceptions carry an inline `#[allow]` with the
+  invariant it protects (static regexes, epoch arithmetic, documented
+  panicking convenience constructors). Note that clippy's test exemption
+  only reaches code inside `#[test]` functions — a helper called from
+  tests (or a `tokio::spawn` closure inside one) still needs an explicit
+  `#[allow]` with a justification comment
+- Remaining clippy allowances, each documented at the lint site:
+  `cast_precision_loss`, `doc_markdown`, `too_many_lines`
 
 - `cargo clippy --workspace --all-targets -- -D warnings` must pass
+- `cargo doc --workspace --no-deps` (with `-D warnings`) must pass
 - `cargo fmt --all` must pass
 - No clippy warnings allowed
 
@@ -43,6 +56,7 @@ clippy with `-D warnings`, so the `[workspace.lints]` table in the root
 
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo doc --workspace --no-deps` with `RUSTDOCFLAGS=-D warnings`
 - `cargo test --workspace` on ubuntu, macOS, and Windows
 - `cargo build --workspace --release`
 - Coverage via `cargo-llvm-cov` + Codecov

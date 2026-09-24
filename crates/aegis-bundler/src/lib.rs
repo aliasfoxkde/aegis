@@ -135,15 +135,17 @@ pub fn read_patterns_from_dir(input_dir: &Path) -> Result<Vec<Pattern>> {
 /// timestamp cannot be computed.
 #[must_use]
 pub fn create_bundle(patterns: Vec<Pattern>) -> Bundle {
+    // Invariant: a conforming system clock is never before the Unix epoch,
+    // and a bundle must not silently carry a fabricated timestamp, so the
+    // error path stays loud.
+    #[allow(clippy::unwrap_used)]
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     Bundle {
         schema_version: 2,
-        created_at: format!(
-            "{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        ),
+        created_at: format!("{seconds}"),
         patterns,
     }
 }

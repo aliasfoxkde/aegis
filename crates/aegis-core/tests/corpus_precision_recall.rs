@@ -55,6 +55,9 @@ const MEDIUM_CONFIDENCE_PRECISION: f64 = 0.80;
 const DIRECTIVE_PREFIX: &str = "aegis:expect";
 const NEGATIVE_PREFIX: &str = "aegis:expect-none";
 
+// Test-only helper, but not a `#[test]` function, so clippy.toml's
+// allow-expect-in-tests exemption does not reach it.
+#[allow(clippy::expect_used)]
 fn bundled_scanner() -> Scanner {
     let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
@@ -104,6 +107,10 @@ fn collect_sources(dir: &Path) -> Vec<(String, String)> {
     entries
         .into_iter()
         .filter_map(|path| {
+            // Invariant: `walk` only yields paths under `dir`, so the
+            // strip_prefix cannot fail; a silent default would mislabel
+            // the corpus entry, so keep the loud failure.
+            #[allow(clippy::expect_used)]
             let relative = path
                 .strip_prefix(dir)
                 .expect("collected paths live under the corpus dir")

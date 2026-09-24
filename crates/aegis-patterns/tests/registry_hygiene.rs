@@ -11,6 +11,7 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
 /// Kebab-case identifier: lowercase words separated by single hyphens.
+#[allow(clippy::unwrap_used)] // invariant: the static pattern is a compile-time constant
 fn is_kebab_case(s: &str) -> bool {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| Regex::new(r"^[a-z0-9]+(-[a-z0-9]+)*$").unwrap())
@@ -19,6 +20,7 @@ fn is_kebab_case(s: &str) -> bool {
 
 /// Tags additionally allow dotted segments so WCAG success-criterion tags
 /// (`wcag-2.4.1`) stay well-formed.
+#[allow(clippy::unwrap_used)] // invariant: the static pattern is a compile-time constant
 fn is_well_formed_tag(s: &str) -> bool {
     static RE: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| Regex::new(r"^[a-z0-9]+([.-][a-z0-9]+)*$").unwrap())

@@ -14,11 +14,14 @@ All of these were verified to pass from the repository root on the current worki
 # Build
 cargo build --workspace --release
 
-# Test (829 tests across 25 test binaries, all green — measured 2026-09-24)
+# Test (830 tests across 25 test binaries, all green — measured 2026-09-24)
 cargo test --workspace
 
 # Lint (enforced: clean, zero warnings)
 cargo clippy --workspace --all-targets -- -D warnings
+
+# Docs (enforced: rustdoc lints deny broken intra-doc links)
+cargo doc --workspace --no-deps
 
 # Format (CI checks; add -- --check to match CI exactly)
 cargo fmt --all
@@ -27,7 +30,7 @@ cargo fmt --all
 cargo llvm-cov --workspace
 ```
 
-`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code = deny`) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Fix the code; do not add an allow.
+`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code`/`unwrap_used`/`expect_used`/`panic` denied) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Unwinding panics are denied in production code — errors must be values; test code is exempt via `clippy.toml`. Fix the code; do not add an allow (the few deliberate exceptions carry an inline `#[allow]` with the invariant it protects). A `Rustdoc` CI job runs `cargo doc` with `-D warnings`, enforcing the `[lints.rustdoc]` table.
 
 ## Architecture
 

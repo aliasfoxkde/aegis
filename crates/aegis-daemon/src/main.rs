@@ -587,6 +587,10 @@ mod tests {
     /// Drive `read_bounded_line` over both halves of an in-memory duplex;
     /// the tiny buffer capacity forces `fill_buf` to hand back partial
     /// chunks, exercising the no-newline-yet accumulation path.
+    //
+    // Test-only helper, but the expects live inside a `tokio::spawn`
+    // closure, which clippy's test-function analysis cannot see into.
+    #[allow(clippy::expect_used)]
     async fn read_line_over_duplex(input: &[u8], cap: usize) -> std::io::Result<FrameRead> {
         let (mut client, server) = tokio::io::duplex(64);
         let mut reader = BufReader::new(server);
