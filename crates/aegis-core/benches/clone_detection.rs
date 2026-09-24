@@ -14,11 +14,13 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 
 /// One ~45-token region: long enough to clear the detector's 40-token
-/// block size, ordinary enough to read like real code.
-fn loop_region(name: &str, salt: usize) -> String {
+/// block size, ordinary enough to read like real code. `seed` only varies
+/// the fixture's arithmetic; `salt` as a name would trip CodeQL's
+/// hard-coded-cryptographic-value heuristic (it did, alert 6860).
+fn loop_region(name: &str, seed: usize) -> String {
     format!(
         "fn {name}(input: i64) -> i64 {{\n\
-         \x20   let mut total = {salt};\n\
+         \x20   let mut total = {seed};\n\
          \x20   for step in 0..input {{\n\
          \x20       total += step * 3;\n\
          \x20       total -= step / 7;\n\
