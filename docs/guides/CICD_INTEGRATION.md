@@ -202,7 +202,7 @@ Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
    of `releases/latest` so a new release can never change your gate
    semantics mid-stream:
    ```bash
-   curl -LO https://github.com/aliasfoxkde/aegis/releases/download/v0.6.2/aegis-linux-x86_64.tar.gz
+   curl -LO https://github.com/aliasfoxkde/aegis/releases/download/v0.6.3/aegis-linux-x86_64.tar.gz
    ```
 
 ## SARIF Output
