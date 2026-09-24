@@ -62,9 +62,26 @@ counted=0
 in_record=0
 skip_record=0
 CURRENT_PATH=""
+
+# Tally one finished record. Called on end_of_record, on the next SF:
+# (lcov truncates a record's end_of_record when a run dies mid-report),
+# and once after the loop for a trailing unterminated record.
+close_record() {
+    if ((in_record)); then
+        if ((skip_record)); then
+            skipped=$((skipped + 1))
+        else
+            counted=$((counted + 1))
+        fi
+    fi
+    in_record=0
+    skip_record=0
+}
+
 while IFS= read -r line; do
     case "$line" in
         SF:*)
+            close_record
             in_record=1
             CURRENT_PATH="${line#SF:}"
             if is_ignored "$line"; then skip_record=1; fi
@@ -84,18 +101,11 @@ while IFS= read -r line; do
             fi
             ;;
         end_of_record)
-            if ((in_record)); then
-                if ((skip_record)); then
-                    skipped=$((skipped + 1))
-                else
-                    counted=$((counted + 1))
-                fi
-            fi
-            in_record=0
-            skip_record=0
+            close_record
             ;;
     esac
 done <"$LCOV"
+close_record
 
 if ((total == 0)); then
     echo "coverage-floor: no line records found in $LCOV (wrong format?)" >&2
