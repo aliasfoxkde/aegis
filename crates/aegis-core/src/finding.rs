@@ -13,7 +13,9 @@ pub struct Location {
     pub file: String,
     /// Line number (1-indexed)
     pub line: usize,
-    /// Column number (0-indexed)
+    /// Column number (1-indexed, counted from the start of the match's own
+    /// line — pattern findings fill this with the byte offset within the
+    /// line, not within the file)
     pub column: usize,
     /// Line content
     ///
