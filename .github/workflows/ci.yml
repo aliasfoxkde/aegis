@@ -130,6 +130,13 @@ jobs:
           tool: cargo-llvm-cov
       - name: Generate coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+      # The enforcing gate: Codecov uploads currently fail (no
+      # CODECOV_TOKEN secret), so the codecov.yml targets are never
+      # evaluated there. This step fails the build below the floor
+      # instead. Keep the floor in sync with codecov.yml and ratchet
+      # both up as measured coverage rises.
+      - name: Enforce coverage floor
+        run: scripts/coverage-floor.sh lcov.info 89.0
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

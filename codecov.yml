@@ -1,17 +1,22 @@
 # Codecov configuration.
 #
-# Targets are pinned to measured reality, not aspirations: the workspace
-# line coverage measured by `cargo llvm-cov --workspace` is ~96.9% (97.5%
-# regions), with the gaps concentrated in the wasm crate (requires a wasm
-# runtime) and the thin binary shims. Both are ignored below so the gate
-# reflects the library and CLI code that the thresholds are meant to
-# protect. Gates ratchet up toward measured reality (95% project / 90%
-# patch as of 2026-09-23) and never move down to make a regression pass.
+# Honest state (2026-09-24): uploads from CI fail with "Token required -
+# not valid tokenless upload" because no CODECOV_TOKEN secret is set, so
+# Codecov has never actually evaluated these targets. The gate that runs
+# on every CI build is scripts/coverage-floor.sh, executed in the
+# Coverage workflow against the same lcov report this file would see.
+# Keep the two numbers in sync.
+#
+# The enforcing floor is pinned just below what the CI pipeline itself
+# measures (`cargo llvm-cov --workspace --lcov`, 89.96% lines on
+# 2026-09-24; the earlier ~97% figure came from `--all-targets`, which
+# also counts the test sources executing themselves). Ratchet both up as
+# measured coverage rises; never lower them to make a regression pass.
 coverage:
   status:
     project:
       default:
-        target: 95%
+        target: 89%
         threshold: 1%
     patch:
       default:
