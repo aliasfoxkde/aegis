@@ -166,16 +166,17 @@ enum Commands {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize logging
-    if cli.verbose {
-        tracing_subscriber::fmt()
-            .with_env_filter("aegis=debug")
-            .init();
+    // Initialize logging. `RUST_LOG` wins when set (the container images
+    // set it); otherwise `-v` selects the debug level over the default
+    // info level.
+    let default_filter = if cli.verbose {
+        "aegis=debug"
     } else {
-        tracing_subscriber::fmt()
-            .with_env_filter("aegis=info")
-            .init();
-    }
+        "aegis=info"
+    };
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_filter));
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     match cli.command {
         Commands::Scan {

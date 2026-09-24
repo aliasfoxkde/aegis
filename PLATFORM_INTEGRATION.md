@@ -21,7 +21,7 @@ The platform orchestration layer owns task dispatch, provider/model selection, r
 /nas/Temp/repos/aegis
 ```
 
-Canonical upstream: `https://github.com/aliasfoxkde/aegis.git`
+Canonical upstream: `http://localhost:42782/bigdata-ci/aegis.git` (GitForge, primary — CI/CD and releases run there). `https://github.com/aliasfoxkde/aegis.git` is the public mirror; every push goes to GitForge first.
 
 ## Startup Commands
 
@@ -57,7 +57,7 @@ The second command returns a JSON document with at least one finding and exit co
 
 For transport health, start `aegis-mcp` from the configured allowed root and send line-delimited JSON-RPC 2.0 requests. Diagnostic logging is written to stderr; stdout must contain only JSON responses.
 
-**Protocol boundary:** the server implements a custom JSON-RPC method set — `scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`. These are not a superset of MCP and there is currently **no** MCP lifecycle or tool-discovery adapter: `initialize`, `notifications/initialized`, `tools/list`, and `tools/call` all return JSON-RPC error `-32601 Method not found`. A client that requires standard MCP discovery cannot talk to Aegis today without a translation shim. All registered methods share the same sandboxed scanner functions.
+**Protocol boundary:** the server implements the standard MCP lifecycle — `initialize`, `notifications/initialized`, `tools/list`, `tools/call`, and `ping` — plus a `tools/list` catalog of seven tools: `scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`. Standard MCP discovery works out of the box; a client negotiates the handshake, lists tools, and invokes them through `tools/call`. All tools share the same sandboxed scanner functions.
 
 `update_bundle` installs either the embedded rule set (670 patterns) or a bundle loaded from a sandboxed path, and reports the installed `pattern_count`.
 
@@ -73,14 +73,15 @@ For transport health, start `aegis-mcp` from the configured allowed root and sen
 | CLI | `aegis scan --staged` | Scan the git index for pre-commit checks |
 | CLI | `aegis scan --baseline <file>` | Suppress previously recorded findings; exit code reflects new findings only; the baseline file itself is excluded from the scan |
 | CLI | `aegis list` / `enable` / `disable` | Inspect and toggle bundled detection patterns |
-| CLI | `aegis update` | Reinstall the pattern bundle |
+| CLI | `aegis update` | Report the compiled-in pattern set (no download) |
 | CLI | `aegis benchmark` | Measure scan throughput against a path |
-| MCP stdio | `scan_string` | Scan in-memory content; params `[content, source]` |
-| MCP stdio | `scan_file` | Scan one file inside the sandbox |
-| MCP stdio | `scan_dir` | Scan a directory inside the sandbox |
-| MCP stdio | `scan_env` | Scan environment variables |
-| MCP stdio | `list_patterns` / `list_categories` | Introspect the rule set |
-| MCP stdio | `update_bundle` | Swap the serving rule set |
+| MCP stdio | `tools/call` name `scan_string` | Scan in-memory content; args `content`, optional `source` |
+| MCP stdio | `tools/call` name `scan_file` | Scan one file inside the sandbox |
+| MCP stdio | `tools/call` name `scan_dir` | Scan a directory inside the sandbox |
+| MCP stdio | `tools/call` name `scan_env` | Scan environment variables |
+| MCP stdio | `tools/call` names `list_patterns` / `list_categories` | Introspect the rule set |
+| MCP stdio | `tools/call` name `update_bundle` | Swap the serving rule set |
+| MCP stdio | `initialize`, `tools/list`, `ping` | Standard MCP handshake, discovery, and liveness |
 | Unix daemon | line-delimited JSON over `AEGIS_DAEMON_SOCKET_PATH` | Long-lived scan requests; Unix-only |
 
 The MCP and daemon sandboxes differ. MCP confines paths to the server process's working directory and rejects anything else with JSON-RPC `-32602`. The daemon canonicalizes every request against its approved scan root and refuses paths — including symlink escapes — that resolve outside it.
@@ -118,7 +119,7 @@ The CLI is fail-closed about receipts: it removes any existing `AEGIS_RECEIPT_FI
 
 ## Depends On
 
-- Rust toolchain compatible with the workspace MSRV (`rust-version = "1.75"` in the root `Cargo.toml`). Note that CI builds and tests with `stable`; the MSRV is declared but not currently exercised by a dedicated CI job.
+- Rust toolchain compatible with the workspace MSRV (`rust-version = "1.88"` in the root `Cargo.toml`). Note that CI builds and tests with `stable`; the MSRV is declared but not currently exercised by a dedicated CI job.
 - Bundled Aegis pattern definitions (compiled into the binary; no download step)
 - Optional configuration/profile files (`.aegisignore`, `.aegis.yml`)
 - Unix socket support for the daemon crate (Linux, macOS); unsupported on Windows
@@ -127,7 +128,7 @@ The CLI is fail-closed about receipts: it removes any existing `AEGIS_RECEIPT_FI
 
 - GitForge CI/CD security gates
 - Control Center pre-pipeline and scan-status adapters
-- MCP clients and agent harnesses (custom JSON-RPC only; see the protocol boundary note above)
+- MCP clients and agent harnesses (standard MCP lifecycle + tools; see the protocol boundary note above)
 - Local developer pre-commit or pre-push checks
 - Release validation workflows
 
@@ -167,7 +168,7 @@ cargo build --target wasm32-unknown-unknown --package aegis-wasm
 
 All of these were verified to pass from the repository root on the current working tree, including clippy with `-D warnings`.
 
-The repository measures 97.2% line coverage and 94.5% region coverage against a 90% project / 85% patch gate. The wasm crate and the workspace root's placeholder binary are excluded from the gate because they need a wasm runtime or are trivial. Coverage tooling:
+The repository measures ~96.9% line coverage and ~97.5% region coverage against a 95% project / 90% patch gate (`codecov.yml`). The wasm crate and the workspace root's placeholder binary are excluded from the gate because they need a wasm runtime or are trivial. Coverage tooling:
 
 ```bash
 cargo llvm-cov --workspace
@@ -189,8 +190,7 @@ A platform promotion may claim Aegis integration only when all of the following 
 
 ## Current Gaps
 
-- [ ] No MCP lifecycle adapter exists (`initialize`, `tools/list`, `tools/call` are unimplemented and return `-32601`). Standard MCP clients need a translation shim, or the adapter needs building, before Aegis can be registered in an MCP client's native tool list.
-- [ ] Validate each custom JSON-RPC tool operation through the platform's actual MCP runner.
+- [ ] Validate each MCP tool operation through the platform's actual MCP runner.
 - [ ] Validate the GitForge runner's fail-closed handling for `SAFE`, `FINDINGS`, and `BLOCKED` outcomes, given that findings and scan errors share exit code 1.
 - [ ] Resolve the divergent `platform-handoff/aegis-w2-03` branch: it holds 23 commits not in `main`, and `main` has moved 43 commits past their merge base. Confirm whether anything unique there still needs promoting.
 - [ ] Run the WASM gate on the Fedora builder and retain its artifact receipt.

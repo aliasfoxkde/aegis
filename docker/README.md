@@ -20,8 +20,9 @@ server — plus the shipped configuration profiles under
 docker run --rm -v "$(pwd)":/workspace aegis scan /workspace
 ```
 
-Exit codes follow the CLI contract: `1` when findings are reported, `0`
-on a clean scan. To fail a CI step on findings, just run the container.
+Exit codes follow the CLI contract: `1` when findings are reported (or
+when the scan itself fails), `0` on a clean scan, `2` on a usage error.
+To fail a CI step on findings, just run the container.
 
 ## Using Docker Compose
 
@@ -48,10 +49,12 @@ docker run --rm -v "$(pwd)":/workspace aegis \
 
 ## Environment variables
 
-`RUST_LOG` is the only behavior-affecting variable (default `info`).
-There are no `AEGIS_FORMAT`/`AEGIS_EXIT_ON_FINDINGS`-style switches —
-format and thresholds are CLI flags, and the findings exit code is
-built into the binary.
+`RUST_LOG` controls log verbosity and wins when set (the image defaults
+it to `info`); without it, `-v/--verbose` selects the debug level over
+the default info level. There are no
+`AEGIS_FORMAT`/`AEGIS_EXIT_ON_FINDINGS`-style switches — format and
+thresholds are CLI flags, and the findings exit code is built into the
+binary.
 
 The daemon does take `AEGIS_DAEMON_SOCKET_PATH` and
 `AEGIS_DAEMON_SCAN_ROOT`, but it listens on a **Unix socket**; it is a

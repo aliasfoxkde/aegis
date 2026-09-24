@@ -16,13 +16,15 @@ built-ins in sync with the JSON copies that ship in
 [`config/profiles/`](../../config/profiles/) (`development.json`,
 `pipeline.json`, `production.json`, `mcp-integration.json`).
 
-A profile supplies defaults for the current run — `enabled_categories`
-become the category allowlist, `output_format` the render, and
-`severity_threshold` the threshold — for any flag you did not set
-explicitly. Flags given on the command line always win over profile
-values. The remaining profile fields (`strict_mode`,
-`performance_mode`, `max_file_size_mb`, `timeout_seconds`,
-`exit_on_findings`) are recorded profile metadata and are not yet
+A profile supplies defaults for the current run for any flag you did
+not set explicitly. Four fields are applied: `enabled_categories`
+become the category allowlist, `output_format` the render,
+`severity_threshold` the threshold, and `anomaly_detectors` the
+statistical-anomaly allowlist. Flags given on the command line always
+win over profile values. The remaining fields (`strict_mode`,
+`performance_mode`, `exit_on_findings`, `max_file_size_mb`,
+`binary_file_detection`, `gitignore_respect`, `aegisignore_respect`,
+`timeout_seconds`) are recorded profile metadata and are not yet
 applied to the scan itself.
 
 ## Profile Fields
@@ -42,7 +44,7 @@ A profile is a single JSON object with these keys:
 | `aegisignore_respect` | bool | Honour `.aegisignore` (default `true`) |
 | `output_format` | string | `human`, `json`, or `sarif` |
 | `timeout_seconds` | integer | Scan timeout; `0` means no timeout |
-| `severity_threshold` | string or `null` | Minimum severity to report |
+| `severity_threshold` | string or `null` | Minimum severity to report: `critical`, `high`, `medium`, or `low`; anything else fails the scan (`info` observations sit below every threshold) |
 | `anomaly_detectors` | array or `null` | Statistical anomaly detectors to run; `null` runs all four, `[]` disables the layer, and a list runs exactly the named detectors (`comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`) |
 
 Unknown keys are ignored; omitted keys fall back to their default.
@@ -187,6 +189,7 @@ Aegis reads only these variables; there is no general `AEGIS_CONFIG` or
 
 | Variable | Description |
 |----------|-------------|
+| `RUST_LOG` | `tracing` log filter; when set it overrides the built-in level (`aegis=info`, or `aegis=debug` with `-v`) |
 | `AEGIS_RECEIPT_FILE` | Path a scan writes its receipt to; the file is removed again before a subsequent scan so a failed scan never leaves a stale receipt behind |
 | `AEGIS_DAEMON_SOCKET_PATH` | Socket the daemon listens on |
 | `AEGIS_DAEMON_SCAN_ROOT` | Root directory the daemon restricts scans to |

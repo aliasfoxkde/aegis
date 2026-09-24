@@ -57,8 +57,17 @@ aegis list --category secrets
 # List only disabled patterns
 aegis list --disabled
 
-# Update pattern bundle
+# Report the compiled-in pattern set (patterns ship in the binary;
+# this never downloads anything)
 aegis update
+```
+
+### Code Clone Detection
+
+```bash
+# Also surface copy-paste code clones (Type 1-3). Clones are reported
+# separately and never affect the exit code.
+aegis scan . --detect-clones
 ```
 
 ## Configuration
@@ -120,10 +129,11 @@ A `!` prefix re-includes a path; later rules override earlier ones.
 ```yaml
 security_scan:
   script:
-    - aegis --format json scan . --severity-threshold medium
+    - aegis --format json scan . --severity-threshold medium --output-file aegis-results.json
   artifacts:
-    reports:
-      sast: aegis-results.json
+    paths:
+      - aegis-results.json
+    when: always
 ```
 
 ## Next Steps

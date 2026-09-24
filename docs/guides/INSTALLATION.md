@@ -71,8 +71,10 @@ The binary lands at `target/release/aegis`. See
 
 ## Requirements
 
-- **No runtime dependencies** - Binary releases are self-contained
-- **Linux/macOS/Windows** - Supported on x86_64 and ARM64
+- **Linux** x86_64 / ARM64 — binaries are glibc-linked (cross-linked
+  with cargo-zigbuild against an older-glibc baseline), so the host
+  needs a compatible glibc but nothing else
+- **macOS** x86_64 / Apple Silicon, **Windows** x86_64 — self-contained
 
 ## Directory Installation
 

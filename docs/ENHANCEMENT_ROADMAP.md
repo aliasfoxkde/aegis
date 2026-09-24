@@ -1,5 +1,11 @@
 # Aegis Enhancement Roadmap
 
+> **Archived (2026-09-23).** This is a historical research document; its
+> items have been superseded, implemented, or folded into the live
+> roadmap in [`PLAN.md`](PLAN.md). Do not treat status claims here
+> (e.g. crates.io publication, pattern counts) as current — the binary
+> and `PLAN.md` are the sources of truth.
+
 This document outlines research findings and recommendations for enhancing Aegis security scanning capabilities.
 
 ## Research Summary

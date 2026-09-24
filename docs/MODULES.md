@@ -32,28 +32,32 @@ pub use bundle::{Bundle, BundleMetadata};
 
 // Suppression, user rules, receipts
 pub use suppression::Suppression;
-pub use receipt::{ScanReceipt, ReceiptFinding, ReceiptLocation};
+pub use receipt::{ScanReceipt, ReceiptFinding, ReceiptLocation, SCAN_RECEIPT_SCHEMA_VERSION};
 // user pattern types live in the module: aegis_core::user_patterns::{UserPattern, UserPatternFile}
-
-// Output pipeline
-#[cfg(feature = "output-pipeline")]
-pub use output::{OutputPipeline, FileOutput, WebhookOutput, DatabaseOutput, SyncOutputHandler};
 
 // Risk & Remediation
 pub use risk::{RiskLevel, RiskScore, RiskClassification};
-pub use remediation::{RemediationAdvisor, RemediationReport, ...};
+pub use remediation::{
+    FixDifficulty, FixPattern, FixType, Remediation, RemediationAdvisor, RemediationReport,
+    RemediationRoi,
+};
 
 // Configuration
 pub use config::Config;
 
 // SBOM
-pub use sbom::{SbomGenerator, SbomFormat, ...};
+pub use sbom::{Sbom, SbomComponent, SbomDependency, SbomFormat, SbomGenerator};
 
 // AST Analysis
-pub use ast::{AstAnalyzer, AstAnalysis, AstFinding, Language};
+pub use ast::{AstAnalysis, AstAnalyzer, AstFinding, AstInspection, AstInspectionStatus, Language};
 
 // Control Center / GitForge adapter
-pub use control_center_adapter::{ControlCenterAdapter, WorkRequest, ScanResult, EvidenceRecord};
+pub use control_center_adapter::{
+    AdapterError, ControlCenterAdapter, EvidenceRecord, ScanResult, WorkRequest,
+};
+
+// Benchmarks
+pub use benchmark::{format_benchmark_json, BenchmarkConfig, ScanBenchmark};
 ```
 
 ### Module Hierarchy
@@ -66,18 +70,11 @@ aegis_core
 ├── cfg.rs            # Control flow graph analysis
 ├── clone.rs          # Code clone detection
 ├── config/           # Configuration management
-│   ├── mod.rs       # Config types and error types
-│   └── preset.rs    # Preset configurations
+│   └── mod.rs       # Config types and error types
 ├── control_center_adapter.rs  # Control Center / GitForge integration
 ├── entropy.rs        # Entropy-based secret detection
 ├── finding.rs        # Finding, location, and inspection-ledger types
 ├── ignore.rs         # Ignore pattern management (.aegisignore, gitignore)
-├── output/           # Multi-output pipeline (feature-gated)
-│   ├── mod.rs       # Pipeline trait and OutputFormat
-│   ├── file.rs      # File output (JSON/CSV/SARIF)
-│   ├── webhook.rs   # Webhook output (HTTP/Discord/Slack/Teams)
-│   └── database.rs  # Database output (SQLite implemented;
-│                    # PostgreSQL/MySQL handlers are placeholders)
 ├── pattern.rs        # Pattern registry, definitions, category scanners
 ├── receipt.rs        # Redacted scan receipts
 ├── remediation.rs    # Guided remediation advisor
@@ -105,10 +102,9 @@ aegis_core
 ### 2. Feature Gates
 
 Key features are feature-gated:
-- `output-pipeline`: Multi-output system (file, webhook, database)
-- `tree-sitter`: Enhanced AST analysis with tree-sitter parsers
-- `tokio`: Async runtime support
-- `jsonschema`: JSON schema validation
+- `tree-sitter`: Enhanced AST analysis with tree-sitter parsers (off by
+  default)
+- `tokio`: Async runtime support (on by default)
 
 ### 3. Error Handling
 
@@ -168,11 +164,8 @@ Remediation Advisor (ROI-based prioritization)
 
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
-| `default` | Tokio + JSON Schema | tokio, jsonschema |
-| `output-pipeline` | Multi-output system | reqwest, rusqlite |
+| `default` | Tokio async runtime | tokio |
 | `tree-sitter` | Deep AST analysis | tree-sitter-* crates |
-| `tokio` | Async runtime | tokio |
-| `jsonschema` | Schema validation | jsonschema |
 
 ## Performance Considerations
 
@@ -182,9 +175,10 @@ Remediation Advisor (ROI-based prioritization)
    are then cached, so startup and `scan_string` pay only for what they use
 3. **Combined-regex pre-filter**: a file that does not match a category's
    alternation never runs that category's individual patterns
-4. **Worker pools**: rayon's global pool (one thread per core).
-   `ScanOptions::workers` records an explicit choice but is not yet wired
-   to the pool
+4. **Worker pools**: rayon's global pool, sized from
+   `ScanOptions::workers` (which defaults to
+   `available_parallelism()`; falls back to 4 when the OS does not
+   report it)
 
 ## Testing Strategy
 

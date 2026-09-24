@@ -14,7 +14,7 @@ All of these were verified to pass from the repository root on the current worki
 # Build
 cargo build --workspace --release
 
-# Test (~763 tests across 30 test binaries, all green)
+# Test (829 tests across 25 test binaries, all green — measured 2026-09-24)
 cargo test --workspace
 
 # Lint (enforced: clean, zero warnings)
@@ -23,11 +23,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 # Format (CI checks; add -- --check to match CI exactly)
 cargo fmt --all
 
-# Coverage (97.2% lines / 94.5% regions measured; requires cargo-llvm-cov)
+# Coverage (measured ~96.9% lines / ~97.5% regions; requires cargo-llvm-cov)
 cargo llvm-cov --workspace
 ```
 
-`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job, runs again in the release workflow's test job, and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code = deny`) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Fix the code; do not add an allow.
+`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code = deny`) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Fix the code; do not add an allow.
 
 ## Architecture
 
@@ -62,15 +62,16 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
 
 - `main` is **PR-only**: squash merges, and every merge must be green on the full gate set (fmt, clippy, 3-OS test matrix, build, coverage, cargo-audit, cargo-deny, CodeQL). Direct pushes are not the workflow.
 - Commit subjects follow **Conventional Commits** (`feat(core): ...`, `fix(mcp): ...`), and PR squashes carry the PR number.
-- CI and the release workflow both run on `main` and on `pull_request` targeting `main`.
+- CI runs on pushes to `main` and on `pull_request` targeting `main`. The release workflow is **not** tag-triggered: it is a `workflow_dispatch` job that takes the tag as an input and runs `scripts/release/build.sh` then `scripts/release/publish.sh` — the same scripts GitForge's pipeline runs, so either path produces the same asset set.
 
 ## Release Process
 
+Releases are **GitForge-first**: the GitForge pipeline (see `docs/guides/RELEASES.md`) runs `scripts/release/build.sh` and `scripts/release/publish.sh` against the tag and mirrors the assets to the GitHub release. The `release.yml` workflow on GitHub is the equivalent dispatch path — same scripts, same asset set — triggered via `workflow_dispatch` with the tag as its input.
+
 1. Bump the single workspace version in the root `Cargo.toml` and refresh `Cargo.lock` plus `fuzz/Cargo.lock`, then land that as its own PR.
 2. Create a tag on that bumped commit: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
-3. Push tag: `git push origin vX.Y.Z`
-4. GitHub Actions builds on tag push, uploads assets to a **draft** release, verifies all 9 expected assets are present, and only then publishes it. Assets are uploaded while the release is still mutable because GitHub rejects uploads to a published release.
-5. Release workflow builds: Linux (x86_64 + ARM64), macOS (x86_64 + ARM64), Windows, WASM, plus source archives and checksums.
+3. Push the tag and run the release (GitForge pipeline first; the GitHub workflow takes the same tag as a `workflow_dispatch` input).
+4. `publish.sh` uploads the **10 expected assets** — 5 platform archives (Linux x86_64/ARM64, macOS x86_64/ARM64, Windows x86_64), `aegis-wasm.wasm`, `source.tar.gz`, `source.zip`, `checksums.txt`, `attestation.json` — verifies all of them are visible on the release, and only then flips it from draft to published.
 
 Note: a tag that was already published once cannot be reused — deleting and re-pushing an immutable tag will not re-run asset upload. Cut a new tag instead.
 
@@ -83,5 +84,5 @@ Apache-2.0 (NOT MIT OR Apache-2.0)
 - All tests must pass (`cargo test --workspace`)
 - Clippy must be clean (`-D warnings`) — enforced by CI
 - Format must be clean (`cargo fmt --all -- --check`)
-- Coverage target is 90% project / 85% patch per `codecov.yml`; `cargo llvm-cov --workspace --summary-only` measures 97.2% lines and 94.5% regions, with the wasm crate and the root placeholder binary excluded from the gate
+- Coverage gate is 95% project / 90% patch per `codecov.yml` (ratcheted to just below measured reality; never lowered to make a regression pass); `cargo llvm-cov --workspace --summary-only` measures ~96.9% lines and ~97.5% regions, with the wasm crate and the root placeholder binary excluded from the gate
 - `cargo deny check` and `cargo audit` must pass

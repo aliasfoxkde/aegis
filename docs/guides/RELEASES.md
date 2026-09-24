@@ -93,5 +93,7 @@ attestation; the attestation covers every asset *including*
 - **`checksums.txt` is over the published archives**, in `sha256sum -c`
   format (since 0.6.0). Per-platform checksum files hashed unpacked
   binaries and were removed.
-- **`fuzz/Cargo.lock` pins `aegis-core`** and is not exercised by CI; the
-  version-bump PR must update it by hand.
+- **`fuzz/Cargo.lock` pins `aegis-core`** and is not verified by CI — the
+  weekly fuzz jobs run `cargo fuzz run` without `--locked`, so a drifted
+  lock would silently resolve fresh. The version-bump PR must update it
+  by hand (`cd fuzz && cargo update -p aegis-core`).

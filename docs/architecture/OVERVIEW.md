@@ -39,36 +39,43 @@ Input (file/dir/string/env)
        │
        ▼
 ┌─────────────────┐
-│ Pre-processing  │ ← .aegisignore, gitignore
+│ Pre-processing   │ ← .aegisignore, .gitignore, size/binary limits
 └────────┬────────┘
          │
          ▼
-┌─────────────────┐
-│ Pattern Filter   │ ← Category/severity filters
-└────────┬────────┘
+┌──────────────────┐
+│ Category Filter   │ ← --categories / profile allowlist
+└────────┬─────────┘
          │
          ▼
-┌─────────────────┐
-│ Entropy Check   │ ← Skip low-entropy matches
-└────────┬────────┘
+┌──────────────────┐
+│ Category          │ ← Combined alternation regex pre-filter
+│ Pre-filter        │
+└────────┬─────────┘
          │
          ▼
-┌─────────────────┐
-│ Regex Match      │ ← RE2-compatible regex
-└────────┬────────┘
+┌──────────────────┐
+│ Regex Match       │ ← Rust `regex` crate (RE2-style, linear time)
+└────────┬─────────┘
          │
          ▼
-┌─────────────────┐
-│ AST Analysis     │ ← Code structure analysis
-└────────┬────────┘
+┌──────────────────┐
+│ Post Filters      │ ← exclude regex, entropy gate, inline
+│                   │   suppression, baseline
+└────────┬─────────┘
          │
          ▼
-┌─────────────────┐
-│ Risk Scoring    │
-└────────┬────────┘
+┌──────────────────┐
+│ Risk Scoring      │
+└────────┬─────────┘
          │
          ▼
     Output (findings)
+
+Parallel analysis layers (separate from the finding pipeline):
+- AST analysis (injection sinks, dangerous calls)
+- Statistical anomaly layer (Severity::Info observations)
+- Clone detection (opt-in, reported outside the finding list)
 ```
 
 ### Risk Scoring
@@ -79,7 +86,10 @@ category weight`, summed per category and for the scan:
 - Pattern severity weight (critical 40, high 25, medium 10, low 3, info 0)
 - Confidence multiplier (high 1.0, medium 0.7, low 0.4)
 - Category risk weight (`secrets` 1.5, `security-hardening` 1.4,
-  `supply-chain` 1.4, `code-quality` 0.8, … configurable via `Config`)
+  `supply-chain` 1.4, `code-quality` 0.8, …; a category missing from the
+  default table weighs 1.0). The weight tables are parameters of
+  `RiskScore::new`, not user configuration — the CLI and MCP server
+  always use the defaults.
 
 Finding density and scan context are not modelled.
 
@@ -178,7 +188,7 @@ needs a caller-level pass that does not exist yet.
 Bundle v2:
 {
   "schema_version": 2,
-  "created_at": "2024-01-01T00:00:00Z",
+  "created_at": "1735689600",
   "patterns": [
     {
       "name": "pattern-name",
@@ -207,8 +217,8 @@ aegis scan <path>            # Scan directory (also --file, --env, --stdin,
                              # --staged, --diff, --baseline)
 aegis list                   # List all patterns
 aegis list --enabled         # List enabled only
-aegis enable <pattern>       # Informational: pattern state is not persisted yet
-aegis disable <pattern>      # Informational: pattern state is not persisted yet
+aegis enable <pattern>       # Persists to <config dir>/aegis/pattern-state.json
+aegis disable <pattern>      # Persists to <config dir>/aegis/pattern-state.json
 aegis update                 # Re-reads the in-binary pattern set (no download)
 aegis benchmark <path>       # Warmup/runs timing, optional --compare
 ```
@@ -289,8 +299,6 @@ Design decision (Phase 5 audit, 2026-09):
 - **JSON** - Structured JSON output (the shape a `--baseline` file takes)
 - **SARIF** - Static Analysis Results Interchange Format, carrying the
   inspection ledger as run properties
-- **CSV** - Through the feature-gated `output` module (`FileOutput`
-  supports JSON, CSV, and SARIF)
 - **SBOM** - `aegis-core::sbom` builds a component inventory and emits
   SPDX (JSON), SPDX tag-value, and CycloneDX
 
@@ -358,8 +366,7 @@ aegis/
 │   │   │   ├── ast/         # AST analysis (ast/mod.rs)
 │   │   │   ├── clone.rs     # Clone detection
 │   │   │   ├── cfg.rs       # Control flow
-│   │   │   ├── config/      # Config types and presets (mod.rs, preset.rs)
-│   │   │   ├── output/      # Output pipeline (feature-gated)
+│   │   │   ├── config/      # Config profile types (mod.rs)
 │   │   │   └── internal/    # Private helpers shared by analyzers
 │   │   └── tests/           # Integration tests
 │   ├── aegis-cli/          # CLI tool (binary: aegis)

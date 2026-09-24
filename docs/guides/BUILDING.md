@@ -21,13 +21,13 @@ cd aegis
 ### Build All Crates
 
 ```bash
-cargo build --workspace
+cargo build --workspace --locked
 ```
 
 ### Build Release Version
 
 ```bash
-cargo build --workspace --release
+cargo build --workspace --release --locked
 ```
 
 ### Build Specific Crate
@@ -45,27 +45,33 @@ also defines an `aegis-bootstrap` binary from `src/main.rs`.
 
 ### Optional Features
 
-`aegis-cli` exposes an `output-pipeline` feature (which enables
-`aegis-core/output-pipeline`, pulling in `reqwest` and `rusqlite`):
+`aegis-core` has one optional feature, `tree-sitter` (off by default),
+which enables the tree-sitter-based AST analysis and pulls in the Go,
+Rust, Python, JavaScript, and TypeScript grammars:
 
 ```bash
-cargo build -p aegis-cli --features output-pipeline
+cargo build -p aegis-core --features tree-sitter --locked
 ```
 
-`aegis-core` also has a `tree-sitter` feature for AST-based rules, plus
-`tokio` and `jsonschema`, both on by default.
+The default feature set is just `tokio`.
 
 ## Running Tests
 
 ```bash
 # Run all tests
-cargo test --workspace
+cargo test --workspace --locked
 
-# Run with coverage
-cargo test --workspace -- --include-ignored
+# Run also the ignored (slow, corpus- and liveness-heavy) tests
+cargo test --workspace --locked -- --include-ignored
 
 # Run specific test
 cargo test -p aegis-core test_scanner
+```
+
+Coverage uses `cargo-llvm-cov`:
+
+```bash
+cargo llvm-cov --workspace --html
 ```
 
 ## Code Quality
@@ -85,9 +91,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 ### All Checks (CI Equivalent)
 
 ```bash
-cargo fmt --all
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo build --workspace --release --locked
+cargo build -p aegis-wasm --target wasm32-unknown-unknown --locked
 ```
 
 ## Development Workflow
@@ -112,7 +120,7 @@ cargo test --workspace
 
 ```bash
 cargo fmt --all
-cargo clippy --workspace -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
 ### 5. Commit
@@ -150,6 +158,7 @@ aegis/
 │   ├── aegis-mcp/         # MCP server
 │   ├── aegis-daemon/      # Daemon mode (Unix sockets)
 │   ├── aegis-bundler/     # Pattern bundler
+│   ├── aegis-wasm/        # WebAssembly binding
 │   └── aegis-patterns/    # 670 pattern definitions
 │       └── src/
 │           ├── secrets.rs
@@ -186,13 +195,14 @@ perf report
 ### Compilation Errors
 
 ```bash
-# Update dependencies
-cargo update
-
 # Clean and rebuild
 cargo clean
-cargo build --workspace
+cargo build --workspace --locked
 ```
+
+CI builds with `--locked`, so a changed `Cargo.lock` fails there. If you
+deliberately bumped a dependency, run `cargo update -p <crate>` (or
+`cargo update`) and commit the updated `Cargo.lock` with your change.
 
 ### Clippy Warnings
 

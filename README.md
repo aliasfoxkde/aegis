@@ -8,7 +8,7 @@
 ## Features
 
 - **[670 Detection Patterns](docs/patterns/README.md)** across 34 categories
-- **High Performance** - Built in Rust with category-based regex pre-filtering (12x faster than comparable tools)
+- **High Performance** - Built in Rust with category-based regex pre-filtering
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
 - **Risk Scoring** - Intelligent risk assessment and prioritization
@@ -62,8 +62,8 @@ For full installation instructions, see [Installation Guide](docs/guides/INSTALL
 # Scan a directory
 aegis scan .
 
-# Scan with JSON output (--format is a global flag, so it precedes the
-# subcommand)
+# Scan with JSON output (--format is a top-level flag, so it precedes
+# the subcommand)
 aegis --format json scan .
 
 # Scan environment variables
@@ -76,7 +76,8 @@ aegis scan . --detect-clones
 # List all patterns
 aegis list
 
-# Update pattern bundle
+# Report the compiled-in pattern set (patterns ship in the binary;
+# this never downloads anything)
 aegis update
 ```
 
@@ -105,6 +106,7 @@ from source; see the full catalog for every rule):
 | [llm-guardrails](docs/patterns/README.md#llm-guardrails) | 25 | LLM input/output guardrails |
 | [performance](docs/patterns/README.md#performance) | 20 | Performance anti-patterns |
 | [shift-left](docs/patterns/README.md#shift-left) | 20 | Early-lifecycle security practices |
+| [healthcare](docs/patterns/README.md#healthcare) | 17 | Clinical identifiers and PHI-handling hazards |
 | [code-quality](docs/patterns/README.md#code-quality) | 15 | Language anti-patterns |
 | [devops](docs/patterns/README.md#devops) | 15 | CI/CD pipeline checks |
 | [finance](docs/patterns/README.md#finance) | 13 | Financial identifiers and money-correctness |
@@ -114,7 +116,6 @@ from source; see the full catalog for every rule):
 | [cryptography](docs/patterns/README.md#cryptography) | 10 | Cryptographic primitive misuse |
 | [api-integration](docs/patterns/README.md#api-integration) | 9 | HTTP client, webhook mistakes |
 | [terraform](docs/patterns/README.md#terraform) | 7 | HashiCorp Terraform |
-| [healthcare](docs/patterns/README.md#healthcare) | 17 | Clinical identifiers and PHI-handling hazards |
 | [data-visualization](docs/patterns/README.md#data-visualization) | 5 | Charting pitfalls |
 | [pwa](docs/patterns/README.md#pwa) | 5 | Progressive web app checks |
 | [container](docs/patterns/README.md#container) | 4 | Container hardening |
@@ -162,10 +163,11 @@ Browse all [670 detection patterns](docs/patterns/README.md).
 ```yaml
 security_scan:
   script:
-    - aegis --format json scan . --severity-threshold medium
+    - aegis --format json scan . --severity-threshold medium --output-file aegis-results.json
   artifacts:
-    reports:
-      sast: aegis-results.json
+    paths:
+      - aegis-results.json
+    when: always
 ```
 
 ### GitHub Actions (Manual)
@@ -212,6 +214,7 @@ aegis/
 │   ├── aegis-mcp/        # MCP server
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
+│   ├── aegis-wasm/       # WebAssembly binding
 │   └── aegis-patterns/    # 670 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation

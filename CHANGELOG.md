@@ -102,6 +102,11 @@ every release are attached to the matching GitHub release.
   previously silently never matched. Path separators are normalized to
   `/` before matching, which also makes these rules work on Windows
   (`strip_prefix` yields backslash relatives there).
+- The CLI now honors `RUST_LOG`. The container images set
+  `RUST_LOG=info` and documented it as the log-level control, but the
+  binary never read it — it hard-coded `aegis=info` (`aegis=debug`
+  under `-v`). `RUST_LOG` now wins when set; `-v` remains the
+  verbosity switch otherwise.
 
 ## [0.6.2] - 2026-09-22
 
