@@ -8,15 +8,19 @@
 # Keep the two numbers in sync.
 #
 # The enforcing floor is pinned just below what the CI pipeline itself
-# measures (`cargo llvm-cov --workspace --lcov`, 89.96% lines on
-# 2026-09-24; the earlier ~97% figure came from `--all-targets`, which
-# also counts the test sources executing themselves). Ratchet both up as
-# measured coverage rises; never lower them to make a regression pass.
+# measures: 97.61% lines over the counted set (`cargo llvm-cov
+# --workspace --lcov`, Coverage job, 2026-09-24). Only the CI-generated
+# report is authoritative for the floor — a locally generated report of
+# the same command maps identical executed code to a different number
+# of instrumented lines (aegis-core alone: 11,053 lines on CI vs
+# 13,504 locally, with matching hit counts), so local numbers are not
+# comparable to the gate. Ratchet both up as measured coverage rises;
+# never lower them to make a regression pass.
 coverage:
   status:
     project:
       default:
-        target: 89%
+        target: 97%
         threshold: 1%
     patch:
       default:

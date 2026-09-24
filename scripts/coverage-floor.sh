@@ -21,19 +21,21 @@ if [[ ! -f "$LCOV" ]]; then
     exit 2
 fi
 
-# Mirrors codecov.yml `ignore`.
-readarray -t IGNORED <<'EOF'
-^SF:crates/aegis-wasm/
-^SF:src/main.rs
-EOF
-
+# Mirrors codecov.yml `ignore` (aegis-wasm, root src/main.rs). SF paths
+# arrive absolute (GitHub runners) or workspace-relative (local runs), so
+# match on path shape, not on a prefix anchor: an anchored `^SF:crates/…`
+# silently matches nothing on a runner, which is exactly what the first
+# CI run of this script did ("ignored 0"). `src/main.rs` is also the
+# suffix of every crate's binary entry point, so the root aggregator is
+# identified as a src/main.rs with no crates/ segment.
 is_ignored() {
-    local path="$1" pattern
-    for pattern in "${IGNORED[@]}"; do
-        if [[ "$path" =~ $pattern ]]; then
-            return 0
-        fi
-    done
+    local path="$1"
+    if [[ "$path" == *crates/aegis-wasm/* ]]; then
+        return 0
+    fi
+    if [[ "$path" == *src/main.rs && "$path" != *crates/* ]]; then
+        return 0
+    fi
     return 1
 }
 

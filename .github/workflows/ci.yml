@@ -133,10 +133,12 @@ jobs:
       # The enforcing gate: Codecov uploads currently fail (no
       # CODECOV_TOKEN secret), so the codecov.yml targets are never
       # evaluated there. This step fails the build below the floor
-      # instead. Keep the floor in sync with codecov.yml and ratchet
-      # both up as measured coverage rises.
+      # instead. The floor tracks the CI-generated report (measured
+      # 97.61% lines over the counted set on 2026-09-24); keep it in
+      # sync with codecov.yml and ratchet both up as measured coverage
+      # rises — never down to make a regression pass.
       - name: Enforce coverage floor
-        run: scripts/coverage-floor.sh lcov.info 89.0
+        run: scripts/coverage-floor.sh lcov.info 97.0
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

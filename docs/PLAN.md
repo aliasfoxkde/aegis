@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 89.0% lines enforced in CI from the lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -536,17 +536,21 @@ Exit criteria: an MSRV regression fails CI before release. ☐
 **C. Coverage gate that actually gates — HIGH, delivered 2026-09-24.**
 Codecov uploads have been failing on every run ("Token required - not
 valid tokenless upload") with `fail_ci_if_error: false` hiding it, so the
-95%/90% targets in `codecov.yml` were never evaluated by anything — and
-they were pinned above what the CI pipeline itself measures (89.96% lines
-by `cargo llvm-cov --workspace --lcov`; the earlier ~97% figure came from
-`--all-targets`, which also counts test sources executing themselves).
+95%/90% targets in `codecov.yml` were never evaluated by anything.
 Delivered: `scripts/coverage-floor.sh` (native floor computed from the
 same lcov report, ignoring the same two paths as codecov.yml) wired into
-the Coverage job at 89.0% — measured minus one — with the Codecov target
-synced to 89% and the discrepancy documented in both files. Ratchet both
-up as measured coverage rises; operator follow-up (outside repo): set a
-CODECOV_TOKEN secret so PR annotations resume, then re-validate the
-patch target, which has never had data. ✅
+the Coverage job, with the Codecov target synced. The first CI run of the
+gate corrected its own calibration: the path-shaped ignore rules never
+matched the runner's absolute `SF:` paths ("ignored 0"), and the floor
+had been pinned from a locally generated report whose instrumented-line
+counts do not match CI's (aegis-core: 13,504 lines locally vs 11,053 on
+CI with matching hit counts — the toolchains disagree on line mapping,
+not on what ran). The enforcing floor now tracks the CI-generated report:
+97.61% lines over the counted set on 2026-09-24, floor 97.0, Codecov
+target synced to 97%. Ratchet both up as measured coverage rises;
+operator follow-up (outside repo): set a CODECOV_TOKEN secret so PR
+annotations resume, then re-validate the patch target, which has never
+had data. ✅
 
 **D. Link checking — MEDIUM, open.** The Rustdoc gate exists (deny
 intra-doc lints + `Rustdoc` CI job, 2026-09-24); markdown links are
@@ -599,11 +603,13 @@ shortlist rather than a fresh audit.
 - **crates.io publishing** — *decided 2026-09-23: not publishing*; see
   Phase 13 for the name-squatting and provenance evidence.
 - **Coverage ratchet** — *corrected 2026-09-24*: the 2026-09-23 ratchet
-  (project 95%, patch 90%) pinned Codecov targets above what the CI
-  pipeline actually measures, and uploads were silently failing anyway,
-  so no gate ever evaluated them. The enforcing floor is now
-  `scripts/coverage-floor.sh` at 89.0% lines (measured 89.96% minus
-  one), with `codecov.yml` synced; see Phase 17C.
+  (project 95%, patch 90%) pinned Codecov targets above what anything
+  measured, and uploads were silently failing anyway, so no gate ever
+  evaluated them. The enforcing floor is now `scripts/coverage-floor.sh`
+  at 97.0% lines against the CI-generated report (measured 97.61% over
+  the counted set on 2026-09-24), with `codecov.yml` synced; only the
+  CI report is authoritative, since locally generated reports map the
+  same executed code to different line counts. See Phase 17C.
 - **MCP/daemon protocol conformance tests** — *delivered 2026-09-23*
   (#131); see Phase 15.
 - **Benchmark trend tracking** — *delivered 2026-09-23, deliberately
@@ -654,9 +660,12 @@ is a straight weighted sum (`aegis-core::risk`).
 
 - Coverage measured with `cargo llvm-cov --workspace --lcov` (the same
   report CI uploads); the enforcing gate is `scripts/coverage-floor.sh`,
-  which fails the build below 89.0% lines — measured 89.96% on
-  2026-09-24, so the floor sits at measured minus one and ratchets up
-  only as reality rises (see Phase 17C for the Codecov upload state)
+  which fails the build below 97.0% lines of the CI-generated report —
+  measured 97.61% over the counted set on 2026-09-24, so the floor sits
+  below measured and ratchets up only as reality rises (only the
+  CI-generated report counts: locally generated reports map identical
+  executed code to different instrumented-line counts; see Phase 17C
+  for the Codecov upload state)
 - 818 tests across 25 test binaries: unit tests per crate; integration
   tests per surface; property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion

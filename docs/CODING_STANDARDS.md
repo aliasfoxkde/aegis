@@ -20,12 +20,15 @@
 - Property-based tests with `proptest`
 - Coverage is measured in CI with `cargo llvm-cov --workspace --lcov`.
   The enforcing gate is `scripts/coverage-floor.sh`, run in the Coverage
-  job against that report: below 89.0% lines fails the build.
+  job against that report: below 97.0% lines fails the build.
   `crates/aegis-wasm` and the root shim binary are excluded (mirroring
-  `codecov.yml`). The pipeline measures 89.96% lines (2026-09-24); the
-  floor sits at measured minus one and ratchets up, never down. Codecov
-  itself currently cannot evaluate its targets: uploads fail for lack of
-  a CODECOV_TOKEN secret (Phase 17C in `docs/PLAN.md`)
+  `codecov.yml`). The pipeline measured 97.61% lines over the counted
+  set (2026-09-24); the floor sits below measured and ratchets up,
+  never down. Only the CI-generated report counts: a locally generated
+  report maps identical executed code to a different number of
+  instrumented lines, so local percentages are not comparable to the
+  gate. Codecov itself currently cannot evaluate its targets: uploads
+  fail for lack of a CODECOV_TOKEN secret (Phase 17C in `docs/PLAN.md`)
 
 ### Linting
 Every member crate opts in with `[lints] workspace = true`, and CI runs
