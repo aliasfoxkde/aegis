@@ -104,6 +104,15 @@ every release are attached to the matching GitHub release.
   explicit error instead of silently scanning a decoy empty string;
   real stdin content flows through the async entry point, which is
   unchanged.
+- A coverage floor now actually gates: the Codecov upload has been
+  failing on every run for lack of a token, so `codecov.yml`'s targets
+  were never evaluated. The Coverage job computes a native floor from
+  the lcov report with `scripts/coverage-floor.sh` — 97.0% lines
+  against the CI-measured 97.61% over the counted set (2026-09-24),
+  ignoring `crates/aegis-wasm` and the root shim binary exactly like
+  `codecov.yml`, whose project target is synced. The gate logs a
+  per-crate breakdown of what it counted; the floor ratchets up, never
+  down to pass.
 
 ### Removed
 
