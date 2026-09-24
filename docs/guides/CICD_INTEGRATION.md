@@ -54,11 +54,10 @@ security_scan:
   script:
     - curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
     - tar -xzf aegis-linux-x86_64.tar.gz
-    - ./aegis update
     - ./aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json
   artifacts:
-    reports:
-      sast: aegis-results.json
+    paths:
+      - aegis-results.json
     when: always
   rules:
     - if: $CI_MERGE_REQUEST_IID
@@ -76,7 +75,6 @@ pipeline {
                 sh '''
                     curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
                     tar -xzf aegis-linux-x86_64.tar.gz
-                    ./aegis update
                 '''
             }
         }
@@ -111,7 +109,6 @@ steps:
       script: |
         curl -LO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
         tar -xzf aegis-linux-x86_64.tar.gz
-        ./aegis update
         ./aegis --format json scan . --severity-threshold=medium --output-file aegis-results.json
       cwd: '$(System.DefaultWorkingDirectory)'
 
@@ -194,14 +191,18 @@ Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
    ```
 
 5. **Exit Codes**: Use for pipeline failure
-   - 0: no findings
+   - 0: no findings at or above the threshold (`info` observations never
+     trip the exit code)
    - 1: findings present (with `--baseline`, only findings that are new
-     relative to the baseline)
+     relative to the baseline); also used when a scan itself fails
    - 2: usage error (unknown flag or subcommand)
 
-6. **Cache Bundles**: Don't download on every run
+6. **Pin the Version**: Patterns ship inside the binary, so pinning the
+   release pins the detection set. Use a versioned download URL instead
+   of `releases/latest` so a new release can never change your gate
+   semantics mid-stream:
    ```bash
-   aegis update  # weekly or on-demand
+   curl -LO https://github.com/aliasfoxkde/aegis/releases/download/v0.6.2/aegis-linux-x86_64.tar.gz
    ```
 
 ## SARIF Output
@@ -219,36 +220,15 @@ Upload SARIF to GitHub Security tab:
 
 ## Configuration Profiles
 
-### Pipeline Profile (config/profiles/pipeline.json)
+For CI, the built-in `pipeline` and `production` profiles are the usual
+starting points:
 
-```json
-{
-  "name": "pipeline",
-  "enabled_categories": ["secrets", "pii", "security-hardening", "web-security", "code-quality", "devops"],
-  "strict_mode": "standard",
-  "performance_mode": "optimized",
-  "exit_on_findings": true,
-  "max_file_size_mb": 10,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "json",
-  "timeout_seconds": 300
-}
+```bash
+aegis --config pipeline scan .
 ```
 
-### Production Profile
-
-```json
-{
-  "name": "production",
-  "enabled_categories": ["secrets", "pii", "security-hardening", "web-security"],
-  "strict_mode": "strict",
-  "performance_mode": "optimized",
-  "exit_on_findings": true,
-  "max_file_size_mb": 5,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "sarif",
-  "timeout_seconds": 60
-}
-```
+The canonical JSON lives in
+[`config/profiles/`](../../config/profiles/) and is kept in sync with
+the built-ins by a test; see
+[Configuration](CONFIGURATION.md#profiles) for the full field
+reference and the shipped presets.

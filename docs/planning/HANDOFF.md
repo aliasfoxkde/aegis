@@ -135,7 +135,10 @@ cargo test --workspace --locked
 
 CLI details: `--format` must precede the subcommand (top-level short `-f`
 would collide with `scan --file`); `-c/--config`, `-q`, `-v` are global.
-`RUST_LOG` is the only behavior-affecting environment variable.
+The CLI honors `RUST_LOG` for log verbosity (falling back to
+`aegis=info`, or `aegis=debug` with `-v`) and `AEGIS_RECEIPT_FILE` /
+`AEGIS_SOURCE_REVISION` for receipts; scan behavior itself is
+flag-driven.
 
 ---
 
@@ -147,7 +150,7 @@ would collide with `scan --file`); `-c/--config`, `-q`, `-v` are global.
    `origin`/GitHub mirror).
 4. The GitForge `.gitforce.yml` pipeline builds all release assets in the
    builder image (`rust:1.88` + cross targets + rustfmt/clippy — see
-   `docker/release-builder/Dockerfile`) and runs the quality gates.
+   `scripts/release/Dockerfile`) and runs the quality gates.
 5. `scripts/release/publish.sh` (manual dispatch or local run) verifies the
    tag, collects artifacts from the GitForge pipeline, and mirrors the
    release to GitHub.

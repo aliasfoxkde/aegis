@@ -52,8 +52,10 @@ to retry away.
   `pipeline.json` (broader categories, JSON output defaults) or mount
   your own profile and change the `-c` argument.
 - **Schedule**: edit `spec.schedule` (default `0 2 * * *`).
-- **Logging**: `RUST_LOG` (`info` default in the image, `warn` in the
-  CronJob). This is the only behavior-affecting environment variable.
+- **Logging**: `RUST_LOG` wins when set (`info` by default in the
+  image, `warn` in this CronJob); without it, `-v/--verbose` selects
+  the debug level. This is the only behavior-affecting environment
+  variable.
 
 ## Security posture
 

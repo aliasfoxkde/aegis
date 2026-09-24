@@ -19,9 +19,9 @@
 - Integration tests in `tests/` directory
 - Property-based tests with `proptest`
 - Coverage is measured in CI with `cargo llvm-cov --workspace` and uploaded
-  to Codecov, which gates at 90% project / 85% patch (`codecov.yml`);
+  to Codecov, which gates at 95% project / 90% patch (`codecov.yml`);
   `crates/aegis-wasm` and the root shim binary are excluded from the gate.
-  The workspace currently measures ~97% lines and ~95% regions
+  The workspace currently measures ~96.9% lines and ~97.5% regions
 
 ### Linting
 Every member crate opts in with `[lints] workspace = true`, and CI runs
@@ -166,15 +166,18 @@ mod tests {
 ```
 
 ### Property-Based Testing
+
+`proptest` is a dev-dependency of `aegis-core`:
+
 ```rust
 #[cfg(test)]
-use proptest::prelude::*;
+use aegis_core::entropy::shannon_entropy;
 
 proptest! {
     #[test]
-    fn test_entropy_calculation(entropy in 0.0f64..8.0) {
-        let result = calculate_entropy(&entropy);
-        prop_assert!(result >= 0.0 && result <= 8.0);
+    fn test_shannon_entropy_bounds(content in "[a-z ]{0,4096}") {
+        let result = shannon_entropy(&content);
+        prop_assert!((0.0..=8.0).contains(&result));
     }
 }
 ```
@@ -183,8 +186,8 @@ proptest! {
 
 Benchmarks use `criterion` and live in a crate's `benches/` directory
 (`crates/aegis-core/benches/pattern_matching.rs`,
-`benches/scanner_init.rs`), declared in `Cargo.toml` with
-`harness = false`:
+`benches/scanner_init.rs`, `benches/clone_detection.rs`), declared in
+`Cargo.toml` with `harness = false`:
 
 ```rust
 use aegis_core::Scanner;
@@ -215,7 +218,7 @@ Run with `cargo bench -p aegis-core`.
 <body>
 ```
 
-Types: feat, fix, docs, style, refactor, test, chore
+Types: `feat` | `fix` | `docs` | `test` | `refactor` | `chore` | `ci` | `build` | `perf`
 
 Subject: max 50 chars, imperative mood
 Body: wrap at 72 chars

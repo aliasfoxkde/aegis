@@ -145,7 +145,7 @@ chore: bump clap to 4.6.6
 ## PR & Branch Workflow
 
 1. Branch from `main` → PR to `main`
-2. Use feature branches: `feature/`, `fix/`, `docs/`, `test/`, `refactor/`
+2. Use feature branches: `feat/`, `fix/`, `docs/`, `test/`, `refactor/`
 3. All CI checks must pass before merge
 4. PRs require 1 code owner approval
 5. Merges are **squash-only** with `--delete-branch`

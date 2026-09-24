@@ -243,7 +243,9 @@ Responses are JSON-RPC 2.0. Scan results carry `finding_count`,
 
 `list_patterns` returns `{"patterns": [...], "total": N}`;
 `list_categories` returns a plain array of category names;
-`update_bundle` returns `{"success": true, "message": "...", "pattern_count": 0}`.
+`update_bundle` returns `{"success": true, "message": "...", "pattern_count": N}`
+where `N` is the number of rules in the installed bundle (670 for the
+default embedded set).
 
 ## Error Responses
 

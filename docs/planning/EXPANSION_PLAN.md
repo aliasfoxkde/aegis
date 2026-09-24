@@ -1,5 +1,9 @@
 # Aegis Expansion Plan
 
+> **Archived (2026-09-23).** The audit program recorded here is
+> complete; the live roadmap lives in [`../PLAN.md`](../PLAN.md). Kept
+> as a historical record of the 2026-09-05 audit and its fixes.
+
 This plan expands the audit of 2026-09-05 into a phased, actionable program. It records
 what was found, what was fixed, what is being added, and what remains. Planning-level
 designs and example code live here; shipped behavior lives in the crates and the

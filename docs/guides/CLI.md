@@ -30,17 +30,18 @@ aegis scan [path] [options]
 | `--no-anomalies` | Disable the statistical anomaly layer entirely (conflicts with `--anomaly-detectors`) | `false` |
 | `--detect-clones` | Also detect copy-paste code clones (Type 1–3) within each scanned file. Pairs render in a `Code clones` section (human) and under `stats.clones` (JSON) with kind, description, similarity, token count, and line ranges. Pairing stops at 256 pairs per file, so pathological minified or generated files stay bounded. SARIF omits them; they never affect findings or the exit code | `false` |
 
-**Global flags:** `-f, --format <human|json|sarif>` and `-c, --config
-<profile>` are top-level options, so they must come **before** the
-subcommand (`aegis --format json scan .`). `-q, --quiet` and
-`-v, --verbose` are marked global and work anywhere.
+**Global flags:** `-f, --format <human|json|sarif>` is a top-level
+option, so it must come **before** the subcommand
+(`aegis --format json scan .`). `-c, --config <profile>`, `-q, --quiet`,
+and `-v, --verbose` are marked global in clap and may appear anywhere.
 
 `--config` resolves a built-in preset name (`production`, `pipeline`,
 `development`, `mcp-integration`) or a path to a JSON profile file, and
 supplies defaults for anything you did not set explicitly: the profile's
 `enabled_categories` become the `--categories` allowlist, its
-`output_format` becomes the render, and its `severity_threshold` the
-threshold. Flags given on the command line always win over profile
+`output_format` becomes the render, its `severity_threshold` the
+threshold, and its `anomaly_detectors` the anomaly-detector allowlist.
+Flags given on the command line always win over profile
 values. See [Configuration](CONFIGURATION.md) for the profile schema.
 
 **Examples:**
@@ -110,20 +111,24 @@ aegis list --disabled
 
 ### aegis enable / aegis disable
 
-Report a pattern as enabled or disabled by id.
+Enable or disable a pattern by id. The choice persists to
+`<config dir>/aegis/pattern-state.json` and is honored by every later
+scan and by `aegis list`.
 
 ```bash
 aegis enable <pattern-id>
 aegis disable <pattern-id>
 ```
 
-Pattern state is not persisted, so these only print the requested change;
-they do not alter what a later scan loads. Use `scan --all` to include
-disabled patterns in a scan.
+Use `scan --all` to include disabled patterns in a single scan without
+changing stored state. Unknown pattern names fail with the valid-name
+hint.
 
 ### aegis update
 
-Update the pattern bundle to the latest version.
+Report the state of the compiled-in pattern set. Patterns ship inside
+the binary — there is no bundle download, so this never fetches
+anything:
 
 ```bash
 aegis update [options]
@@ -133,7 +138,7 @@ aegis update [options]
 
 | Flag | Description |
 |------|-------------|
-| `--force` | Force update even if cached |
+| `--force` | Accepted for compatibility; has no effect |
 
 ### aegis benchmark
 
@@ -163,7 +168,7 @@ descriptive error rather than silently skipping a rule.
 patterns:
   - name: internal-token
     category: secrets          # optional, default: custom
-    severity: high             # required: critical | high | medium | low | info
+    severity: high             # required: critical | high | medium | low
     match: 'INTT_[A-Za-z0-9]{24,}'
     exclude: 'INTT_EXAMPLE'    # optional: suppress matching spans
     description: Internal service token committed to source
@@ -177,7 +182,7 @@ patterns:
 | Field | Required | Notes |
 |-------|----------|-------|
 | `name` | yes | Unique; the rule id shown in findings, suppressions, and baselines |
-| `severity` | yes | `critical`, `high`, `medium`, `low`, or `info` |
+| `severity` | yes | `critical`, `high`, `medium`, or `low` (`info` is a bundled-rule severity only; custom patterns must be actionable) |
 | `match` | yes | Regex (Rust `regex` crate syntax) |
 | `description` | yes | Shown with every finding |
 | `category` | no | Defaults to `custom`; unknown categories use a neutral risk weight |
@@ -206,8 +211,12 @@ code.
 
 ## Configuration
 
-There is no global configuration file that Aegis reads automatically.
-A run's settings come from CLI flags, plus optional JSON profile
-documents selected with the top-level `-c/--config` flag. See
+There is no global configuration *settings* file that Aegis reads
+automatically — a run's settings come from CLI flags, plus optional JSON
+profile documents selected with the top-level `-c/--config` flag. The
+one auto-read state file is `<config dir>/aegis/pattern-state.json`,
+written by `aegis enable`/`aegis disable` and applied to every scan and
+`aegis list`. The config directory follows the XDG convention: it is
+`$XDG_CONFIG_HOME` when set, otherwise `~/.config`. See
 [Configuration](CONFIGURATION.md) for the profile schema and the
 presets shipped in `config/profiles/`.
