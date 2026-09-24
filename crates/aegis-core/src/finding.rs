@@ -360,6 +360,13 @@ pub struct ScanStats {
     /// Inspection completeness ledger
     #[serde(default)]
     pub inspection_ledger: InspectionLedger,
+    /// Clone pairs detected during the scan, populated only when clone
+    /// detection is enabled ([`crate::scanner::ScanOptions::detect_clones`]).
+    /// Clones are a separate output channel, not findings: they never affect
+    /// the finding list, risk score, exit code, or SARIF output. Absent from
+    /// serialized JSON when empty so default scans round-trip unchanged.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clones: Vec<crate::clone::CloneReport>,
 }
 
 impl ScanStats {
@@ -430,6 +437,7 @@ impl ScanStats {
         }
 
         self.inspection_ledger.merge(&other.inspection_ledger);
+        self.clones.extend(other.clones.iter().cloned());
     }
 
     /// Calculate files per second

@@ -58,6 +58,7 @@
 //! once the threshold can no longer be reached. Line numbers are resolved
 //! from a precomputed line-start index, `O(log lines)` per block.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -163,6 +164,81 @@ impl CloneType {
             CloneType::Type2 => "Identical with renamed variables",
             CloneType::Type3 => "Similar with minor modifications",
             CloneType::Type4 => "Semantic clones (different syntax)",
+        }
+    }
+
+    /// Stable wire name for this clone kind (`"type-1"` through `"type-4"`),
+    /// as used by [`CloneReport::kind`] in JSON output.
+    #[must_use]
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            CloneType::Type1 => "type-1",
+            CloneType::Type2 => "type-2",
+            CloneType::Type3 => "type-3",
+            CloneType::Type4 => "type-4",
+        }
+    }
+}
+
+/// One of the two occurrences in a [`CloneReport`]: the wire/report form of
+/// a [`CloneLocation`], carrying only what survives serialization.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloneLocationReport {
+    /// Source label, verbatim from the `source` argument of the detection
+    /// call (the file path when scanning from disk).
+    pub file: String,
+    /// First line of the cloned block, 1-indexed and inclusive.
+    pub start_line: usize,
+    /// Last line of the cloned block, 1-indexed and inclusive.
+    pub end_line: usize,
+}
+
+impl CloneLocationReport {
+    fn from_location(location: &CloneLocation) -> Self {
+        Self {
+            file: location.file.clone(),
+            start_line: location.start_line,
+            end_line: location.end_line,
+        }
+    }
+}
+
+/// A clone pair in the wire/report format that travels in
+/// [`crate::finding::ScanStats::clones`] and lands in `--format json`
+/// output.
+///
+/// The detector's native [`CodeClone`] keeps the typed [`CloneType`] and the
+/// exact `f64` similarity; this shape fixes the report contract instead —
+/// the kind as its stable [`CloneType::kind_name`] string, and similarity
+/// rounded to four decimal places so output does not drift across platforms
+/// and runs.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CloneReport {
+    /// Clone kind: `"type-1"` through `"type-4"`.
+    pub kind: String,
+    /// Human-readable description of the clone kind.
+    pub description: String,
+    /// Similarity score (0.0 - 1.0), rounded to four decimal places.
+    pub similarity: f64,
+    /// Number of tokens in each compared block.
+    pub token_count: usize,
+    /// The two occurrences, in detector order. Always exactly two entries.
+    pub locations: Vec<CloneLocationReport>,
+}
+
+impl CloneReport {
+    /// Convert a detector result into the wire/report shape.
+    #[must_use]
+    pub fn from_code_clone(clone: &CodeClone) -> Self {
+        Self {
+            kind: clone.clone_type.kind_name().to_string(),
+            description: clone.clone_type.description().to_string(),
+            similarity: (clone.similarity * 10_000.0).round() / 10_000.0,
+            token_count: clone.token_count,
+            locations: vec![
+                CloneLocationReport::from_location(&clone.location1),
+                CloneLocationReport::from_location(&clone.location2),
+            ],
         }
     }
 }
@@ -1052,6 +1128,78 @@ fn bar() {
         for t in types {
             assert!(!t.description().is_empty());
         }
+    }
+
+    #[test]
+    fn test_clone_type_kind_names() {
+        assert_eq!(CloneType::Type1.kind_name(), "type-1");
+        assert_eq!(CloneType::Type2.kind_name(), "type-2");
+        assert_eq!(CloneType::Type3.kind_name(), "type-3");
+        assert_eq!(CloneType::Type4.kind_name(), "type-4");
+    }
+
+    #[test]
+    fn test_clone_report_from_code_clone() {
+        let clone = CodeClone {
+            clone_type: CloneType::Type3,
+            location1: CloneLocation {
+                file: "a.rs".to_string(),
+                start_line: 2,
+                end_line: 12,
+                function: None,
+            },
+            location2: CloneLocation {
+                file: "a.rs".to_string(),
+                start_line: 20,
+                end_line: 31,
+                function: None,
+            },
+            similarity: 0.857_491_2,
+            token_count: 40,
+        };
+
+        let report = CloneReport::from_code_clone(&clone);
+        assert_eq!(report.kind, "type-3");
+        assert_eq!(report.description, CloneType::Type3.description());
+        assert!((report.similarity - 0.8575).abs() < 1e-9);
+        assert_eq!(report.token_count, 40);
+        assert_eq!(report.locations.len(), 2);
+        assert_eq!(report.locations[0].file, "a.rs");
+        assert_eq!(report.locations[0].start_line, 2);
+        assert_eq!(report.locations[0].end_line, 12);
+        assert_eq!(report.locations[1].start_line, 20);
+        assert_eq!(report.locations[1].end_line, 31);
+    }
+
+    #[test]
+    fn test_clone_report_serialization_shape() {
+        let clone = CodeClone {
+            clone_type: CloneType::Type1,
+            location1: CloneLocation {
+                file: "x.rs".to_string(),
+                start_line: 1,
+                end_line: 5,
+                function: None,
+            },
+            location2: CloneLocation {
+                file: "x.rs".to_string(),
+                start_line: 10,
+                end_line: 14,
+                function: None,
+            },
+            similarity: 1.0,
+            token_count: 40,
+        };
+
+        let json = serde_json::to_value(CloneReport::from_code_clone(&clone)).unwrap();
+        assert_eq!(json["kind"], "type-1");
+        assert_eq!(json["similarity"], 1.0);
+        assert_eq!(json["token_count"], 40);
+        assert_eq!(json["locations"][0]["file"], "x.rs");
+        assert_eq!(json["locations"][0]["start_line"], 1);
+        assert_eq!(json["locations"][1]["end_line"], 14);
+        // The wire shape carries location lines only — no function field.
+        assert!(json["locations"][0].get("function").is_none());
     }
 
     #[test]

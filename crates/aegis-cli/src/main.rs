@@ -101,6 +101,11 @@ enum Commands {
         /// Disable the statistical anomaly layer entirely
         #[arg(long)]
         no_anomalies: bool,
+
+        /// Detect copy-paste code clones and report them in the scan output
+        /// (does not affect the exit code)
+        #[arg(long)]
+        detect_clones: bool,
     },
 
     /// List patterns
@@ -188,6 +193,7 @@ async fn main() -> Result<()> {
             staged,
             anomaly_detectors,
             no_anomalies,
+            detect_clones,
         } => {
             // A `-c/--config` profile supplies defaults for flags the
             // operator did not set; explicit flags always win.
@@ -245,6 +251,7 @@ async fn main() -> Result<()> {
                 diff,
                 staged,
                 anomaly_detectors,
+                detect_clones,
                 format,
                 quiet: cli.quiet,
             })

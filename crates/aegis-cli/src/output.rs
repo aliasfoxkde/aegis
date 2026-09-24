@@ -66,35 +66,73 @@ impl Output {
             writeln!(self)?;
         }
 
-        if findings.is_empty() {
+        if findings.is_empty() && stats.clones.is_empty() {
             if !self.quiet {
                 writeln!(self, "No findings detected.")?;
             }
             return Ok(());
         }
 
-        for finding in findings {
-            let severity_color = match finding.severity.as_str() {
-                "critical" => "\x1b[31m", // Red
-                "high" => "\x1b[33m",     // Yellow
-                "medium" => "\x1b[35m",   // Magenta
-                "low" => "\x1b[36m",      // Cyan
-                _ => "\x1b[0m",           // Reset
-            };
-            let reset = "\x1b[0m";
+        if findings.is_empty() {
+            if !self.quiet {
+                writeln!(self, "No findings detected.")?;
+            }
+        } else {
+            for finding in findings {
+                let severity_color = match finding.severity.as_str() {
+                    "critical" => "\x1b[31m", // Red
+                    "high" => "\x1b[33m",     // Yellow
+                    "medium" => "\x1b[35m",   // Magenta
+                    "low" => "\x1b[36m",      // Cyan
+                    _ => "\x1b[0m",           // Reset
+                };
+                let reset = "\x1b[0m";
 
-            writeln!(
-                self,
-                "{}[{}]{} {} at {}:{}:{}",
-                severity_color,
-                finding.severity.to_uppercase(),
-                reset,
-                finding.pattern,
-                finding.location.file,
-                finding.location.line,
-                finding.location.column
-            )?;
-            writeln!(self, "  {}", finding.description)?;
+                writeln!(
+                    self,
+                    "{}[{}]{} {} at {}:{}:{}",
+                    severity_color,
+                    finding.severity.to_uppercase(),
+                    reset,
+                    finding.pattern,
+                    finding.location.file,
+                    finding.location.line,
+                    finding.location.column
+                )?;
+                writeln!(self, "  {}", finding.description)?;
+            }
+        }
+
+        // Clone pairs are a separate output channel, not findings: they are
+        // reported after them and never influence the exit code. Like the
+        // finding lines, they survive `--quiet` (which drops only the header
+        // and stats blocks).
+        if !stats.clones.is_empty() {
+            writeln!(self)?;
+            writeln!(self, "Code clones ({}):", stats.clones.len())?;
+            for clone in &stats.clones {
+                let pair = match (clone.locations.first(), clone.locations.get(1)) {
+                    (Some(first), Some(second)) => format!(
+                        "{}:{}-{} <-> {}:{}-{}",
+                        first.file,
+                        first.start_line,
+                        first.end_line,
+                        second.file,
+                        second.start_line,
+                        second.end_line
+                    ),
+                    // Unreachable from the detector, which always emits
+                    // exactly two locations; rendered defensively rather
+                    // than trusted.
+                    _ => "incomplete clone pair".to_string(),
+                };
+                writeln!(
+                    self,
+                    "[{}] Code clone at {} (similarity {:.2}, {} tokens)",
+                    clone.kind, pair, clone.similarity, clone.token_count
+                )?;
+                writeln!(self, "  {}", clone.description)?;
+            }
         }
 
         if !self.quiet {
@@ -524,6 +562,106 @@ mod tests {
         let result = output.write_findings(&[], &stats, &risk);
         assert!(result.is_ok());
         assert!(output.buffer.contains("No findings detected"));
+    }
+
+    fn make_test_clone() -> aegis_core::clone::CloneReport {
+        aegis_core::clone::CloneReport {
+            kind: "type-1".to_string(),
+            description: "Identical code (whitespace differences only)".to_string(),
+            similarity: 1.0,
+            token_count: 40,
+            locations: vec![
+                aegis_core::clone::CloneLocationReport {
+                    file: "src/a.rs".to_string(),
+                    start_line: 12,
+                    end_line: 40,
+                },
+                aegis_core::clone::CloneLocationReport {
+                    file: "src/a.rs".to_string(),
+                    start_line: 88,
+                    end_line: 116,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn test_output_human_renders_clones() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let finding = make_test_finding();
+        let mut stats = make_test_stats();
+        stats.clones.push(make_test_clone());
+        let risk = make_test_risk();
+
+        output.write_findings(&[finding], &stats, &risk).unwrap();
+        assert!(output.buffer.contains("Code clones (1):"));
+        assert!(output.buffer.contains(
+            "[type-1] Code clone at src/a.rs:12-40 <-> src/a.rs:88-116 (similarity 1.00, 40 tokens)"
+        ));
+        assert!(output
+            .buffer
+            .contains("Identical code (whitespace differences only)"));
+    }
+
+    #[test]
+    fn test_output_human_clones_reported_without_findings() {
+        let mut output = Output::new(OutputFormat::Human, false);
+        let mut stats = make_test_stats();
+        stats.clones.push(make_test_clone());
+        let risk = make_test_risk();
+
+        output.write_findings(&[], &stats, &risk).unwrap();
+        // Zero pattern findings must not swallow the clone section, and the
+        // clone section must not turn the scan into "findings".
+        assert!(output.buffer.contains("No findings detected"));
+        assert!(output.buffer.contains("Code clones (1):"));
+    }
+
+    #[test]
+    fn test_output_json_carries_clones_and_omits_when_empty() {
+        let finding = make_test_finding();
+        let risk = make_test_risk();
+
+        let mut stats = make_test_stats();
+        stats.clones.push(make_test_clone());
+        let mut output = Output::new(OutputFormat::Json, false);
+        output
+            .write_findings(std::slice::from_ref(&finding), &stats, &risk)
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&output.buffer).unwrap();
+        assert_eq!(document["stats"]["clones"][0]["kind"], "type-1");
+        assert_eq!(document["stats"]["clones"][0]["similarity"], 1.0);
+        assert_eq!(
+            document["stats"]["clones"][0]["locations"][1]["start_line"],
+            88
+        );
+        assert_eq!(
+            document["stats"]["clones"][0]["locations"]
+                .as_array()
+                .map(Vec::len),
+            Some(2)
+        );
+
+        let empty_stats = make_test_stats();
+        let mut output = Output::new(OutputFormat::Json, false);
+        output
+            .write_findings(&[finding], &empty_stats, &risk)
+            .unwrap();
+        let document: serde_json::Value = serde_json::from_str(&output.buffer).unwrap();
+        // Default scans keep the previous JSON shape: no `clones` key at all.
+        assert!(document["stats"].get("clones").is_none());
+    }
+
+    #[test]
+    fn test_output_sarif_never_carries_clones() {
+        let finding = make_test_finding();
+        let mut stats = make_test_stats();
+        stats.clones.push(make_test_clone());
+        let risk = make_test_risk();
+
+        let mut output = Output::new(OutputFormat::Sarif, false);
+        output.write_findings(&[finding], &stats, &risk).unwrap();
+        assert!(!output.buffer.contains("clones"));
     }
 
     #[test]

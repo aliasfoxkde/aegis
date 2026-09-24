@@ -69,6 +69,10 @@ aegis --format json scan .
 # Scan environment variables
 aegis scan --env
 
+# Also report copy-paste code clones (separate output channel; never
+# affects the exit code)
+aegis scan . --detect-clones
+
 # List all patterns
 aegis list
 

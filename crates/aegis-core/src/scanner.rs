@@ -12,6 +12,7 @@ use std::time::Instant;
 use walkdir::WalkDir;
 
 use crate::anomalies::{self, FileMetrics};
+use crate::clone::{CloneDetector, CloneReport};
 use crate::entropy::shannon_entropy;
 use crate::suppression::SuppressionManager;
 
@@ -91,6 +92,12 @@ pub struct ScanOptions {
     /// non-empty list runs exactly the named detectors (see
     /// [`crate::anomalies::DETECTOR_NAMES`]).
     pub anomaly_detectors: Option<Vec<String>>,
+    /// Detect copy-paste code clones in every analyzed file. When enabled,
+    /// intra-file clone pairs are appended to
+    /// [`ScanStats::clones`]; findings, risk scoring, exit codes, and SARIF
+    /// output are unaffected. Off by default: detection is a full second
+    /// token-and-LCS pass over each file.
+    pub detect_clones: bool,
 }
 
 impl Default for ScanOptions {
@@ -108,6 +115,7 @@ impl Default for ScanOptions {
             include_disabled: false,
             diff_file: None,
             anomaly_detectors: None,
+            detect_clones: false,
         }
     }
 }
@@ -825,6 +833,19 @@ impl Scanner {
         let (findings, ast_inspection, suppressed_count) =
             self.scan_string_with_inspection(&content, &source);
 
+        // Clone detection runs inside the measured scan window so its cost
+        // is visible in `scan_time_ms`. A detector failure is reported, not
+        // swallowed: a silently absent clone list would read as "no clones".
+        let mut clones = Vec::new();
+        if self.options.detect_clones {
+            match CloneDetector::new().detect_content(&content, &source) {
+                Ok(detected) => {
+                    clones = detected.iter().map(CloneReport::from_code_clone).collect();
+                }
+                Err(e) => tracing::warn!("Clone detection failed for {source}: {e}"),
+            }
+        }
+
         let scan_time = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let mut stats = ScanStats {
@@ -835,6 +856,7 @@ impl Scanner {
             scan_time_ms: scan_time,
             io_time_ms: io_time,
             workers_used: 1,
+            clones,
             ..Default::default()
         };
         stats
@@ -1308,6 +1330,80 @@ mod tests {
         assert_eq!(stats.files_skipped, 1);
     }
 
+    /// Two structurally identical regions, each comfortably longer than the
+    /// detector's 40-token block size. Identifiers are compared by role, so
+    /// the renamed copy still scores 1.0 and classifies as Type-1.
+    fn clone_fixture_source() -> String {
+        // `bound`, not `limit`: identifiers followed by a space trip the
+        // `missing-limit` (`LIMIT\s+`) rule, and the fixture must stay
+        // findings-clean so the clone assertions describe clones only.
+        let region = |name: &str| {
+            format!(
+                "fn {name}(bound: i64) -> i64 {{\n\
+                 \x20   let mut aggregate = 0;\n\
+                 \x20   for index in 0..bound {{\n\
+                 \x20       aggregate += index * 3;\n\
+                 \x20       aggregate -= index / 5;\n\
+                 \x20       aggregate += bound % 11;\n\
+                 \x20   }}\n\
+                 \x20   let adjusted = aggregate - bound;\n\
+                 \x20   let scaled = adjusted * 6 + aggregate / 4;\n\
+                 \x20   scaled - adjusted + aggregate\n\
+                 }}\n"
+            )
+        };
+        format!(
+            "{}\n// a separating comment\n\n{}",
+            region("first_region"),
+            region("second_region")
+        )
+    }
+
+    #[test]
+    fn test_scan_file_reports_clones_when_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_file = temp_dir.path().join("clones.rs");
+        File::create(&temp_file)
+            .unwrap()
+            .write_all(clone_fixture_source().as_bytes())
+            .unwrap();
+
+        let scanner = Scanner::from_definitions(vec![])
+            .unwrap()
+            .with_options(ScanOptions {
+                detect_clones: true,
+                ..Default::default()
+            });
+
+        let (_, stats) = scanner.scan_file(&temp_file).unwrap();
+        assert!(!stats.clones.is_empty(), "expected at least one clone pair");
+        let clone = &stats.clones[0];
+        assert_eq!(clone.kind, "type-1");
+        assert!((clone.similarity - 1.0).abs() < f64::EPSILON);
+        assert_eq!(clone.locations.len(), 2);
+        // Locations carry real line numbers inside the fixture, and the two
+        // occurrences are distinct, ordered regions of the same file.
+        assert!(clone.locations[0].start_line >= 1);
+        assert!(clone.locations[0].end_line > clone.locations[0].start_line);
+        assert_eq!(clone.locations[0].file, temp_file.to_string_lossy());
+        assert!(clone.locations[1].start_line > clone.locations[0].start_line);
+        assert!(clone.token_count > 0);
+    }
+
+    #[test]
+    fn test_scan_file_omits_clones_by_default() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_file = temp_dir.path().join("clones.rs");
+        File::create(&temp_file)
+            .unwrap()
+            .write_all(clone_fixture_source().as_bytes())
+            .unwrap();
+
+        let scanner = Scanner::from_definitions(vec![]).unwrap();
+        let (_, stats) = scanner.scan_file(&temp_file).unwrap();
+        assert!(stats.clones.is_empty());
+    }
+
     #[test]
     fn test_scan_file_binary_allowed() {
         let temp_dir = TempDir::new().unwrap();
@@ -1594,6 +1690,7 @@ mod tests {
             include_disabled: true,
             diff_file: Some(PathBuf::from("/diff.txt")),
             anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
+            detect_clones: true,
         };
 
         assert_eq!(options.max_file_size, 5 * 1024 * 1024);

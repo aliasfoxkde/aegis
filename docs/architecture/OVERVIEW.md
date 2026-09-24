@@ -135,6 +135,28 @@ disabling the layer entirely, and the `anomaly_detectors` field in a
 `-c/--config` profile JSON all select which of the four detectors run.
 Unknown detector names fail loudly with the valid list.
 
+### Code Clone Detection
+
+`aegis-core::clone` is a token-based intra-file duplicate detector. Each
+file's token stream is sliced into 40-token windows on a stride of 10,
+window pairs are scored with a longest-common-subsequence ratio over
+role-normalized tokens (identifiers and literals compared by role,
+keywords and operators by text) on the best-aligned window phase, and
+pairs are classified by similarity band: ≥ 0.98 Type-1 (identical), ≥
+0.85 Type-2 (renamed), ≥ 0.75 Type-3 (near-miss with reordered or
+inserted statements). Sound length and label-multiset bounds skip pairs
+before the LCS runs, and the block grid is thinned past 256 windows, so
+the worst case is a constant rather than a function of file size.
+
+The layer is opt-in: `ScanOptions::detect_clones` (core) or
+`aegis scan --detect-clones` (CLI). Clone pairs travel in
+`ScanStats::clones` — a separate output channel serialized as
+`stats.clones` in JSON and a `Code clones` section in human output, and
+absent entirely when detection is off. They are deliberately **not**
+findings: they never reach the finding list, risk score, SARIF document,
+or exit code. Detection is intra-file by design; cross-file pairing
+needs a caller-level pass that does not exist yet.
+
 ### Concurrency Model
 
 - Worker pool: `rayon` over files, defaulting to `available_parallelism()`
