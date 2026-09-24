@@ -19,7 +19,12 @@ fn main() -> std::io::Result<()> {
         .parent()
         .and_then(|p| p.parent())
         .map(|root| root.join("docs").join("patterns"))
-        .expect("crate must live inside the repository");
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "crate must live inside the repository",
+            )
+        })?;
     let categories_dir = docs_dir.join("categories");
 
     std::fs::create_dir_all(&categories_dir)?;

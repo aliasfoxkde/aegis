@@ -2,6 +2,10 @@
 //!
 //! Run with `cargo bench -p aegis-core`.
 
+// Benchmark binary: panicking on a broken fixture is the harness's
+// failure mechanism, and bench targets do not get clippy.toml's
+// test exemptions (they are not `#[test]` code).
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 use aegis_core::pattern::PatternDefinition;
 use aegis_core::Scanner;
 use aegis_patterns::Pattern;

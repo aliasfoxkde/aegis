@@ -49,15 +49,14 @@ pub struct InitializeParams {
 /// support it, otherwise answer with our latest.
 #[must_use]
 pub fn negotiate_protocol_version(requested: Option<&str>) -> &'static str {
-    match requested {
-        Some(version) if SUPPORTED_PROTOCOL_VERSIONS.contains(&version) => {
+    requested
+        .and_then(|version| {
             SUPPORTED_PROTOCOL_VERSIONS
                 .iter()
-                .find(|supported| **supported == version)
-                .expect("version matched the supported list")
-        }
-        _ => LATEST_PROTOCOL_VERSION,
-    }
+                .copied()
+                .find(|supported| *supported == version)
+        })
+        .unwrap_or(LATEST_PROTOCOL_VERSION)
 }
 
 /// The `initialize` result: negotiated version, the `tools` capability,

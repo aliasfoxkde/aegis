@@ -1,0 +1,16 @@
+# Clippy workspace configuration.
+#
+# `msrv` makes lint suggestions aware of the workspace MSRV declared in
+# Cargo.toml (`rust-version = "1.88"`): lints that would suggest newer
+# std APIs stay quiet on older toolchains.
+msrv = "1.88"
+
+# `unwrap`/`expect`/`panic` are denied in production code via the
+# workspace `[lints]` table; these flags keep the restriction lints from
+# firing inside test code (`#[test]` functions, `#[cfg(test)]` modules,
+# and `tests/` integration directories), where failing loudly *is* the
+# contract.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-print-in-tests = true

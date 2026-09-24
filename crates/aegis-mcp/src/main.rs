@@ -451,8 +451,10 @@ fn parse_no_params(params: jsonrpc_core::Params) -> Result<()> {
 fn parse_required_string_param(params: jsonrpc_core::Params) -> Result<String> {
     match params {
         jsonrpc_core::Params::Array(mut values) if values.len() == 1 => {
-            serde_json::from_value(values.pop().expect("array length checked by match guard"))
-                .map_err(invalid_params)
+            let value = values
+                .pop()
+                .ok_or_else(|| invalid_params("expected exactly one parameter"))?;
+            serde_json::from_value(value).map_err(invalid_params)
         }
         _ => Err(invalid_params(
             "expected exactly one string parameter: [\"/path/to/scan/target\"]",
@@ -668,7 +670,8 @@ enum FrameRead {
 /// Read one newline-terminated frame without buffering more than the cap.
 ///
 /// Unbounded line reads grow their buffer without limit, so this walks
-/// [`tokio::io::AsyncBufRead::fill_buf`] chunks instead and stops at
+/// [`AsyncBufReadExt::fill_buf`]
+/// chunks instead and stops at
 /// `max_bytes`. Bytes that are not valid UTF-8 become replacement
 /// characters, which the JSON parser then rejects with a parse error —
 /// a framed response beats ending the session on an encoding edge.

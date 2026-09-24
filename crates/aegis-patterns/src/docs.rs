@@ -12,7 +12,7 @@
 //!   `docs/patterns/categories/<category>.md` page per category with a
 //!   summary table and a detail section for every pattern, including the
 //!   liveness-verified example input (credential-shaped runs elided by
-//!   [`redact_token_runs`]) and the raw regex.
+//!   `redact_token_runs`) and the raw regex.
 //!
 //! Generation is deterministic: categories and patterns are emitted in
 //! sorted order.

@@ -16,10 +16,10 @@
 //! `aegis:ignore` with no pattern list suppresses nothing —
 //! suppressions must name what they suppress.
 
+use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::RwLock;
 
 /// Suppression for a finding
 #[derive(Debug, Clone)]
@@ -175,14 +175,14 @@ impl SuppressionManager {
 
         if let Some(rest) = spec.strip_prefix("-file") {
             // aegis:ignore-file — the whole file, patterns cannot be named.
-            let mut file = self.file_suppressed.write().unwrap();
+            let mut file = self.file_suppressed.write();
             *file = Some(reason.unwrap_or(rest.trim()).to_string());
             return;
         }
 
         if let Some(rest) = spec.strip_prefix("-start") {
             if rest.trim().is_empty() {
-                self.ranges.write().unwrap().push(SuppressionRange {
+                self.ranges.write().push(SuppressionRange {
                     start: line,
                     end: None,
                     reason: reason.map(str::to_string),
@@ -198,7 +198,6 @@ impl SuppressionManager {
                 if let Some(open) = self
                     .ranges
                     .write()
-                    .unwrap()
                     .iter_mut()
                     .rev()
                     .find(|range| range.end.is_none())
@@ -214,7 +213,7 @@ impl SuppressionManager {
         let Some(pattern_part) = spec.strip_prefix(':') else {
             return;
         };
-        let mut suppressions = self.suppressions.write().unwrap();
+        let mut suppressions = self.suppressions.write();
         for pattern in pattern_part.split(',').map(str::trim) {
             // A directive embedded in a string literal (common in
             // fixtures that test this parser) carries trailing source
@@ -241,17 +240,11 @@ impl SuppressionManager {
     /// Panics if a suppression lock was poisoned by a panic in another
     /// thread.
     pub fn is_suppressed(&self, pattern: &str, line: u32) -> bool {
-        let suppressed = self.file_suppressed.read().unwrap().is_some()
-            || self
-                .ranges
-                .read()
-                .unwrap()
-                .iter()
-                .any(|range| range.contains(line))
+        let suppressed = self.file_suppressed.read().is_some()
+            || self.ranges.read().iter().any(|range| range.contains(line))
             || self
                 .suppressions
                 .read()
-                .unwrap()
                 .contains(&Suppression::new(pattern, line));
         if suppressed {
             self.suppressed_hits.fetch_add(1, Ordering::Relaxed);
@@ -268,7 +261,6 @@ impl SuppressionManager {
     pub fn reason_for(&self, pattern: &str, line: u32) -> Option<String> {
         self.suppressions
             .read()
-            .unwrap()
             .get(&Suppression::new(pattern, line))
             .and_then(|suppression| suppression.reason.clone())
     }
@@ -280,7 +272,7 @@ impl SuppressionManager {
     /// Panics if the file-suppression lock was poisoned by a panic in
     /// another thread.
     pub fn is_file_suppressed(&self) -> bool {
-        self.file_suppressed.read().unwrap().is_some()
+        self.file_suppressed.read().is_some()
     }
 
     /// The reason recorded by `aegis:ignore-file`, if any.
@@ -292,7 +284,6 @@ impl SuppressionManager {
     pub fn file_reason(&self) -> Option<String> {
         self.file_suppressed
             .read()
-            .unwrap()
             .clone()
             .filter(|reason| !reason.is_empty())
     }
@@ -303,7 +294,7 @@ impl SuppressionManager {
     ///
     /// Panics if the range lock was poisoned by a panic in another thread.
     pub fn ranges(&self) -> Vec<SuppressionRange> {
-        self.ranges.read().unwrap().clone()
+        self.ranges.read().clone()
     }
 
     /// How many findings `is_suppressed` has suppressed so far.
@@ -318,7 +309,7 @@ impl SuppressionManager {
     /// Panics if the suppression lock was poisoned by a panic in another
     /// thread.
     pub fn add(&mut self, suppression: Suppression) {
-        self.suppressions.write().unwrap().insert(suppression);
+        self.suppressions.write().insert(suppression);
     }
 
     /// Remove a suppression
@@ -328,7 +319,7 @@ impl SuppressionManager {
     /// Panics if the suppression lock was poisoned by a panic in another
     /// thread.
     pub fn remove(&mut self, suppression: &Suppression) {
-        self.suppressions.write().unwrap().remove(suppression);
+        self.suppressions.write().remove(suppression);
     }
 
     /// Get all suppressions
@@ -338,7 +329,7 @@ impl SuppressionManager {
     /// Panics if the suppression lock was poisoned by a panic in another
     /// thread.
     pub fn all(&self) -> Vec<Suppression> {
-        self.suppressions.read().unwrap().iter().cloned().collect()
+        self.suppressions.read().iter().cloned().collect()
     }
 
     /// Clear all suppressions
@@ -348,9 +339,9 @@ impl SuppressionManager {
     /// Panics if any suppression lock was poisoned by a panic in another
     /// thread.
     pub fn clear(&mut self) {
-        self.suppressions.write().unwrap().clear();
-        self.ranges.write().unwrap().clear();
-        *self.file_suppressed.write().unwrap() = None;
+        self.suppressions.write().clear();
+        self.ranges.write().clear();
+        *self.file_suppressed.write() = None;
         self.suppressed_hits.store(0, Ordering::Relaxed);
     }
 
@@ -361,7 +352,7 @@ impl SuppressionManager {
     /// Panics if the suppression lock was poisoned by a panic in another
     /// thread.
     pub fn len(&self) -> usize {
-        self.suppressions.read().unwrap().len()
+        self.suppressions.read().len()
     }
 
     /// Check if empty
@@ -371,7 +362,7 @@ impl SuppressionManager {
     /// Panics if the suppression lock was poisoned by a panic in another
     /// thread.
     pub fn is_empty(&self) -> bool {
-        self.suppressions.read().unwrap().is_empty()
+        self.suppressions.read().is_empty()
     }
 }
 

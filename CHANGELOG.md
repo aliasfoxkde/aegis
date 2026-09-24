@@ -67,6 +67,22 @@ every release are attached to the matching GitHub release.
   the session; `aegis-daemon` answers once with a size error and drops
   the connection while continuing to serve other clients.
 
+### Changed
+
+- The workspace denies `clippy::unwrap_used`, `clippy::expect_used`, and
+  `clippy::panic` in production code: errors must be values. The 29
+  `unwrap()`/`expect()` call sites the gate surfaced were removed — 27
+  by converting internal lock state to `parking_lot`, which does not
+  poison and so needs no unwrap-on-lock idiom, and 2 by propagating the
+  error properly — and the 3 deliberate exceptions (a compile-time
+  constant regex, epoch arithmetic, a documented panicking convenience
+  constructor) carry an inline `#[allow]` naming the invariant it
+  protects. Test code is exempt through `clippy.toml`'s
+  `allow-…-in-tests` flags.
+- A new `[lints.rustdoc]` table denies broken and private intra-doc
+  links, and CI gains a `Rustdoc` job that runs `cargo doc` with
+  `RUSTDOCFLAGS=-D warnings` so the gate is actually exercised.
+
 ### Fixed
 
 - Pattern-finding columns are now 1-indexed within the match's own line.

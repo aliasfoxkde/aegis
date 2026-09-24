@@ -6,6 +6,11 @@
 //! MCP handshake, discovery, and error semantics against regressions —
 //! the property generic MCP clients depend on.
 
+// Test binary: panicking on failure *is* the assertion mechanism, and the
+// unwraps/expects here sit in child-process helpers that clippy's
+// "only called from `#[test]` functions" analysis cannot see through.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
 use serde::Deserialize;
 use serde_json::Value;
 use std::io::{Read, Write};

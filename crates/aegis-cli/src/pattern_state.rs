@@ -28,7 +28,7 @@ const STATE_VERSION: u32 = 1;
 /// The set of patterns the user has disabled, persisted between runs.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PatternState {
-    /// Schema version; written as [`STATE_VERSION`] and validated on load.
+    /// Schema version; written as `STATE_VERSION` and validated on load.
     #[serde(default = "default_version")]
     pub version: u32,
     /// Names of patterns the user disabled.

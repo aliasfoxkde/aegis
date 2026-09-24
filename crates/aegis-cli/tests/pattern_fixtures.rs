@@ -7,6 +7,9 @@
 
 use aegis_core::{Finding, Scanner};
 
+// Test-only helper, but not a `#[test]` function, so clippy.toml's
+// allow-expect-in-tests exemption does not reach it.
+#[allow(clippy::expect_used)]
 fn scanner() -> Scanner {
     let definitions: Vec<aegis_core::PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
