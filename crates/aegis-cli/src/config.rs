@@ -127,10 +127,10 @@ mod tests {
         // preset list — that is how a typo'd `--config` gets diagnosed.
         let error = resolve_profile("./config/no-such-profile.json").expect_err("missing file");
         let message = error.to_string();
-        assert!(
-            message.contains("No such file") || message.contains("no such file"),
-            "unexpected error: {message}"
-        );
+        // The OS-specific wording differs ("No such file or directory" vs
+        // "The system cannot find the path specified"); the contract is
+        // that it is the wrapped I/O error, not the preset-list hint.
+        assert!(message.contains("I/O error"), "unexpected error: {message}");
         assert!(!message.contains("available presets"));
     }
 
