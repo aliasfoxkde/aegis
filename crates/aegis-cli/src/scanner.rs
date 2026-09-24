@@ -98,6 +98,21 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
     }
 
+    // Fail loudly on an unusable --severity-threshold before any scan mode
+    // runs. Directory and single-file scans are also guarded inside
+    // aegis-core, but `--env`/`--stdin`/`--diff` never pass through those
+    // entry points, and an unrecognized threshold there would silently
+    // disable the filter and report more findings than requested.
+    if let Some(threshold) = &opts.severity_threshold {
+        let core_threshold = CoreOptions {
+            severity_threshold: Some(threshold.clone()),
+            ..Default::default()
+        };
+        core_threshold
+            .validate()
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
+
     let core_opts = CoreOptions {
         follow_symlinks: opts.follow_symlinks,
         categories: categories.clone(),

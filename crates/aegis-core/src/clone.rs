@@ -111,6 +111,17 @@ const BLOCK_STRIDE: usize = 10;
 /// accident of input size.
 const MAX_BLOCKS: usize = 256;
 
+/// Most clone pairs reported for a single file.
+///
+/// On a pathological input — a minified bundle, a generated dump — nearly
+/// every surviving window pair can clear the similarity floor, so collecting
+/// without a cap would let one file flood the report and pay for the full
+/// `O(B²)` pairing behind it. Pairing stops at this cap: the work and the
+/// output stay bounded at the same [`MAX_BLOCKS`]-scale constant, and the
+/// bound is deterministic because pairs are collected in grid order. A file
+/// that reaches the cap is, at minimum, not meant to be read by hand.
+const MAX_REPORTED_CLONES: usize = 256;
+
 /// A detected code clone
 #[derive(Debug, Clone)]
 pub struct CodeClone {
@@ -543,6 +554,10 @@ impl CloneDetector {
     /// once the pair cannot reach [`Self::min_similarity`]. This is the same
     /// pairing shape the detector has always had; no cross-file or
     /// all-against-all pass beyond it is introduced.
+    ///
+    /// Collection stops at [`MAX_REPORTED_CLONES`], so a file where nearly
+    /// every pair qualifies neither floods the report nor pays for the rest
+    /// of the quadratic pass.
     fn find_clones(&self, tokens: &[Token], blocks: &[CodeBlock], source: &str) -> Vec<CodeClone> {
         let mut clones = Vec::new();
         let (labels, distinct_labels) = Self::label_tokens(tokens);
@@ -553,7 +568,7 @@ impl CloneDetector {
             lcs: LcsRows::new(BLOCK_SIZE),
         };
 
-        for (i, first) in blocks.iter().enumerate() {
+        'pairing: for (i, first) in blocks.iter().enumerate() {
             for second in &blocks[i + 1..] {
                 let Some(similarity) = self.pair_similarity(tokens, first, second, &mut scratch)
                 else {
@@ -579,6 +594,10 @@ impl CloneDetector {
                     similarity,
                     token_count: first.end_token - first.start_token,
                 });
+
+                if clones.len() >= MAX_REPORTED_CLONES {
+                    break 'pairing;
+                }
             }
         }
 
@@ -1562,6 +1581,40 @@ fn βξζ() {
     }
 
     #[test]
+    fn test_report_is_capped_per_file() {
+        // One body repeated far past the cap: every surviving window pair is
+        // a verbatim match, so collection would run the full quadratic grid
+        // — 256 blocks would mean 32k+ pairs — if it were uncapped.
+        let body = r"
+fn original() {
+    let payload = build_payload(headers, body);
+    let signed = sign_payload(payload, private_key);
+    let sent = transmit(signed, endpoint_url);
+    verify_response(sent, expected_code);
+    record_audit(sent, audit_log);
+    return sent;
+}
+";
+        let content = body.repeat(400);
+        let detector = CloneDetector::new();
+        let clones = detector.detect_content(&content, "t.rs").unwrap();
+
+        assert_eq!(
+            clones.len(),
+            MAX_REPORTED_CLONES,
+            "a pathological file must stop reporting at the per-file cap"
+        );
+        // Repetition seams and non-phase-aligned windows score below 1.0, so
+        // the mix spans the bands — but nothing below the reporting floor
+        // may be in the list.
+        assert!(
+            clones.iter().all(|c| c.similarity >= 0.75),
+            "every capped pair must clear the similarity floor, got {:?}",
+            clones.iter().map(|c| c.similarity).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn test_clone_locations_point_at_the_copied_lines() {
         let body = r"
 fn original() {
@@ -1616,7 +1669,10 @@ fn two() {
         let forward = lcs.length(&tokens[..split], &tokens[split..], 0);
         let reverse = lcs.length(&tokens[split..], &tokens[..split], 0);
         assert_eq!(forward, reverse, "the LCS must be symmetric");
-        assert!(forward > 0, "the halves of one file must share tokens");
+        assert!(
+            forward > 0,
+            "the halves of one file must produce a non-empty LCS"
+        );
     }
 
     #[test]

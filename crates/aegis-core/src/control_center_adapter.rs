@@ -503,8 +503,25 @@ impl ControlCenterAdapter {
 
     fn begin_lifecycle(&mut self, work_request_id: &str) {
         let mut record = LifecycleRecord::new(work_request_id.to_string());
-        let _ = record.transition_to(LifecycleState::Accepted, None);
-        let _ = record.transition_to(LifecycleState::Running, None);
+        // A fresh record is always Pending, so both transitions are valid by
+        // construction; a `None` means the state machine changed out from
+        // under this adapter and must not pass silently.
+        if record
+            .transition_to(LifecycleState::Accepted, None)
+            .is_none()
+        {
+            tracing::error!(
+                "lifecycle {work_request_id}: Pending -> Accepted rejected by state machine"
+            );
+        }
+        if record
+            .transition_to(LifecycleState::Running, None)
+            .is_none()
+        {
+            tracing::error!(
+                "lifecycle {work_request_id}: Accepted -> Running rejected by state machine"
+            );
+        }
         self.lifecycle_store.push(record);
     }
 
@@ -519,7 +536,19 @@ impl ControlCenterAdapter {
             .iter_mut()
             .find(|record| record.work_request_id == work_request_id)
         {
-            let _ = record.transition_to(state, reason);
+            // A rejected transition means the caller drove the lifecycle out
+            // of order (e.g. Completed after Failed); recording nothing would
+            // store a history that never happened.
+            if record.transition_to(state, reason).is_none() {
+                tracing::warn!(
+                    "lifecycle {work_request_id}: transition to {state:?} rejected from {:?}",
+                    record.current_state
+                );
+            }
+        } else {
+            tracing::warn!(
+                "lifecycle {work_request_id}: transition to {state:?} requested for an unknown work request"
+            );
         }
     }
 
