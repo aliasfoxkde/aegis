@@ -77,10 +77,10 @@ jobs:
       # The workspace [lints.rustdoc] table (broken/private intra-doc
       # links) makes this gate meaningful; -D warnings additionally
       # escalates any future rustdoc lint that rustc ships.
-      env:
-        RUSTDOCFLAGS: -D warnings
       - name: Build docs
         run: cargo doc --locked --workspace --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   test:
     name: Test (${{ matrix.os }})
