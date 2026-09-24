@@ -7,7 +7,7 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-24, phases 0–13 and 15 of the improvement plan closed, phase 14 delivered except ML/regex hybrid and API-call verification; v0.6.2 released)
+## Current state (2026-09-24, phases 0–13 and 15 of the improvement plan closed, phase 14 delivered except ML/regex hybrid and API-call verification; v0.6.3 released)
 
 | Dimension | State |
 | --- | --- |
@@ -16,7 +16,7 @@ and quality phases. Status is updated as phases land.
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
 | Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
-| Release | v0.6.2 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
+| Release | v0.6.3 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and

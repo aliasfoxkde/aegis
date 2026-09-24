@@ -7,6 +7,8 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-09-24
+
 ### Added
 
 - `aegis-mcp` now speaks the Model Context Protocol lifecycle:

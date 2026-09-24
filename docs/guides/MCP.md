@@ -3,7 +3,7 @@
 Aegis ships a JSON-RPC 2.0 server over stdio for integration with AI
 tools and scripts.
 
-**Protocol surface (since 0.6.2):** the server speaks the Model Context
+**Protocol surface (since 0.6.3):** the server speaks the Model Context
 Protocol lifecycle and discovery methods — `initialize`,
 `notifications/initialized`, `tools/list`, `tools/call`, and `ping` —
 across protocol revisions `2024-11-05`, `2025-03-26`, and `2025-06-18`
