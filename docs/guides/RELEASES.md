@@ -66,6 +66,27 @@ the runner executes:
 docker build -t aegis-builder:1 scripts/release
 ```
 
+## Reproducibility
+
+Two builds of the same tag produce **byte-identical binaries** —
+demonstrated for v0.6.3, where the GitForge pipeline build and an
+independent fallback build in the same `aegis-builder` image yielded
+identical `aegis`, `aegis-mcp`, `aegis-daemon`, `aegis-bundler`,
+`aegis-wasm.wasm`, and `source.tar.gz`/`source.zip` (`git archive` is
+deterministic by construction).
+
+The five platform **tarballs** are also reproducible: `build.sh` pins
+what tar would otherwise copy from the build environment — owner/group
+`0:0` (`--numeric-owner`), fixed modes, and every member's mtime set to
+the tag's commit time — and gzips with `-n` so no wall clock enters the
+header. Before that fix the tarball digests drifted across builders even
+with identical contents (each builder's uid/gid leaked into the archive).
+
+The one intentionally volatile asset is `attestation.json`: its
+`built_at` records the real build time, and it embeds the asset digests.
+To cross-check two builds of the same tag, compare the binaries and
+tarball digests; expect `built_at` (and only it) to differ.
+
 ## The attestation
 
 `attestation.json` (`aegis.release-attestation/v1`) records the tag,

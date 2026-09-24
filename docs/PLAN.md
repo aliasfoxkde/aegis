@@ -582,8 +582,15 @@ blocked behind a dev-only churn PR. ☐
 **H. Small provenance/CI items — LOW, open.** SHA-pin
 `cache/upload-artifact` in `bench.yml`/`fuzz.yml` (main CI is already
 pinned); run cargo-machete in CI (configured locally, never enforced);
-`SOURCE_DATE_EPOCH` + sorted tar for reproducible archives; generate
-THIRD-PARTY-NOTICES via `cargo about` and ship it in tarballs. ☐
+generate THIRD-PARTY-NOTICES via `cargo about` and ship it in tarballs. ☐
+Reproducible archives are **done** (2026-09-24): `build.sh` pins tar
+owner/group to 0:0, normalizes modes, sets every member's mtime to the
+tag's commit time, and gzips with `-n`. Motivated by the v0.6.3
+cross-check — the GitForge pipeline build and the builder-image fallback
+produced **byte-identical binaries** (all four, plus the wasm module and
+both source archives) while the five tarball digests differed purely from
+each builder's uid/gid and wall-clock mtimes; the only intentionally
+volatile asset left is `attestation.json`'s `built_at`.
 
 **Decided against (recorded so nobody re-proposes them):** merge queue,
 `cargo-semver-checks` (nothing is published to crates.io — Phase 13),

@@ -23,6 +23,9 @@ tag="${1:-$(git describe --tags --exact-match HEAD)}"
 version="$(version_from_tag "$tag")"
 check_manifest_version "$repo" "$version"
 commit="$(git rev-parse --verify "$tag^{commit}")"
+# Fixed mtime for the platform tarballs (see build_platform): the tag's
+# commit time, so archives never carry a builder's wall clock.
+tag_epoch="$(git show -s --format=%ct "$tag")"
 
 cd "$repo"
 
@@ -71,7 +74,18 @@ build_platform() {
     done
 
     archive="$(archive_for "$target")"
-    tar -czf "$out/$archive" -C "$dir" "${members[@]}"
+    # Reproducible by construction: two builds of the same tag must produce
+    # byte-identical tarballs no matter who runs them. The v0.6.3 cross-check
+    # (pipeline build vs builder-image fallback, identical binaries) showed
+    # the only digest drift was tar recording each builder's uid/gid and the
+    # binaries' build-time mtimes, so owner, group, mode, and mtime are all
+    # pinned here. The pinned mtime is the tag's commit time — deterministic
+    # and meaningful — and `gzip -n` drops the wall-clock gzip header. GNU
+    # tar flags: the builder image is debian-based.
+    tar -cf - \
+        --sort=name --numeric-owner --owner=0 --group=0 \
+        --mode='u+rwX,go+rX,go-w' --mtime="@$tag_epoch" \
+        -C "$dir" "${members[@]}" | gzip -n > "$out/$archive"
     tar -tzf "$out/$archive" >/dev/null   # the archive itself must be readable
 
     printf 'built %s\n' "$archive"

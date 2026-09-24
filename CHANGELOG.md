@@ -7,6 +7,16 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release tarballs are byte-reproducible across builders: `build.sh` now
+  pins tar owner/group to `0:0`, normalizes member modes, sets every
+  member's mtime to the tag's commit time, and gzips with `-n`, so the
+  digests no longer depend on which uid/gid or clock ran the build.
+  Found by the v0.6.3 cross-check, where two independent builds of the
+  same tag produced byte-identical binaries but differing tarball
+  digests.
+
 ## [0.6.3] - 2026-09-24
 
 ### Added
