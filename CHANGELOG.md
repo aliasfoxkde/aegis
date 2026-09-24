@@ -82,6 +82,47 @@ every release are attached to the matching GitHub release.
 - A new `[lints.rustdoc]` table denies broken and private intra-doc
   links, and CI gains a `Rustdoc` job that runs `cargo doc` with
   `RUSTDOCFLAGS=-D warnings` so the gate is actually exercised.
+- The bounded newline framing shared by both wire servers lives in one
+  place: `aegis-core::transport` (`read_bounded_line`, `FrameRead`,
+  `MAX_FRAME_BYTES`) is now the single implementation behind the MCP
+  stdio server and the daemon socket server, which previously carried
+  byte-identical copies plus duplicate test suites.
+- `-c/--config` resolution is deterministic: a value with a path
+  separator or a `.json` extension is a file path (a typo'd path now
+  fails with the real I/O error instead of the preset list); a bare
+  name is always a preset, even if the working directory happens to
+  contain a file with that name.
+- `.aegis.yml` loading probes the scan root once: callers that already
+  located the file use `load_user_pattern_definitions_from_path`
+  instead of re-running the directory probe inside
+  `load_user_pattern_definitions`.
+- The daemon's `list_patterns` no longer builds a JSON description of
+  every pattern only to throw it away; it reports the registry count,
+  which is what the daemon protocol documents. Full pattern metadata
+  remains the MCP server's `list_patterns` response.
+- The CLI's internal scan dispatcher refuses `--stdin` with an
+  explicit error instead of silently scanning a decoy empty string;
+  real stdin content flows through the async entry point, which is
+  unchanged.
+
+### Removed
+
+- Dead `Scanner` state and config surface that no shipped binary could
+  observe: the never-read `suppression_manager` field (the scan path
+  already builds its own), the `Config` fields `strict_mode`,
+  `performance_mode`, `exit_on_findings`, `max_file_size_mb`,
+  `binary_file_detection`, `gitignore_respect`, `aegisignore_respect`,
+  and `timeout_seconds`, and the `StrictMode`/`PerformanceMode` enums
+  only those fields carried. Three of the fields were applied in
+  exactly one place, `Scanner::from_config`, which no binary in this
+  workspace calls — the CLI builds scanners from flags instead — so a
+  `gitignore_respect: false` in a profile never actually disabled
+  ignore handling anywhere; keeping parse-but-ignore fields was the
+  lie. Existing user profiles still load because serde skips unknown
+  keys by default. The dead `is_path_dangerous` / `get_sandbox_root`
+  sandbox helpers are gone too.
+- The `DEFAULT_CATEGORIES` constant, `Pattern::regex_matches` helper,
+  and the unused `parse_source` AST wrapper — all unreferenced.
 
 ### Fixed
 

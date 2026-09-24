@@ -14,7 +14,7 @@ All of these were verified to pass from the repository root on the current worki
 # Build
 cargo build --workspace --release
 
-# Test (830 tests across 25 test binaries, all green — measured 2026-09-24)
+# Test (818 tests across 25 test binaries, all green — measured 2026-09-24)
 cargo test --workspace
 
 # Lint (enforced: clean, zero warnings)

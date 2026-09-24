@@ -20,33 +20,9 @@ pub struct Config {
     /// Enabled categories
     #[serde(default)]
     pub enabled_categories: Option<Vec<String>>,
-    /// Strict mode
-    #[serde(default)]
-    pub strict_mode: StrictMode,
-    /// Performance mode
-    #[serde(default)]
-    pub performance_mode: PerformanceMode,
-    /// Exit on findings
-    #[serde(default = "default_true")]
-    pub exit_on_findings: bool,
-    /// Max file size in MB
-    #[serde(default = "default_max_file_size")]
-    pub max_file_size_mb: u64,
-    /// Binary file detection
-    #[serde(default = "default_true")]
-    pub binary_file_detection: bool,
-    /// Respect gitignore
-    #[serde(default = "default_true")]
-    pub gitignore_respect: bool,
-    /// Respect .aegisignore (or legacy .atheonignore)
-    #[serde(default = "default_true", alias = "gitignore_atheon_respect")]
-    pub aegisignore_respect: bool,
     /// Output format
     #[serde(default)]
     pub output_format: OutputFormat,
-    /// Timeout in seconds
-    #[serde(default = "default_timeout_cfg")]
-    pub timeout_seconds: u64,
     /// Severity threshold
     #[serde(default)]
     pub severity_threshold: Option<String>,
@@ -58,47 +34,6 @@ pub struct Config {
     /// Bundle path
     #[serde(skip)]
     pub bundle: Bundle,
-}
-
-fn default_timeout_cfg() -> u64 {
-    300
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_max_file_size() -> u64 {
-    10
-}
-
-/// Strictness level
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum StrictMode {
-    /// Relaxed level; applied when a profile leaves `strict_mode` unset.
-    #[default]
-    Permissive,
-    /// Balanced level chosen by the `pipeline`, `development`, and `mcp`
-    /// presets.
-    Standard,
-    /// Tightest level, chosen by the `production` preset.
-    Strict,
-}
-
-/// Performance mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum PerformanceMode {
-    /// Unoptimized profile that favours introspection; the default and the
-    /// `development` preset's choice.
-    #[default]
-    Debug,
-    /// Middle-of-the-road profile used by `Config::default_config`.
-    Standard,
-    /// Fastest profile, picked by the `production`, `pipeline`, and `mcp`
-    /// presets.
-    Optimized,
 }
 
 /// Output format
@@ -162,15 +97,7 @@ impl Config {
                     "web-security".to_string(),
                     "compliance".to_string(),
                 ]),
-                strict_mode: StrictMode::Strict,
-                performance_mode: PerformanceMode::Optimized,
-                exit_on_findings: true,
-                max_file_size_mb: 5,
-                binary_file_detection: true,
-                gitignore_respect: true,
-                aegisignore_respect: true,
                 output_format: OutputFormat::Sarif,
-                timeout_seconds: 60,
                 severity_threshold: None,
                 anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
@@ -187,15 +114,7 @@ impl Config {
                     "ai-detection".to_string(),
                     "supply-chain".to_string(),
                 ]),
-                strict_mode: StrictMode::Standard,
-                performance_mode: PerformanceMode::Optimized,
-                exit_on_findings: true,
-                max_file_size_mb: 10,
-                binary_file_detection: true,
-                gitignore_respect: true,
-                aegisignore_respect: true,
                 output_format: OutputFormat::Json,
-                timeout_seconds: 300,
                 severity_threshold: None,
                 anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
@@ -203,15 +122,7 @@ impl Config {
             "development" => Some(Self {
                 name: "development".to_string(),
                 enabled_categories: None,
-                strict_mode: StrictMode::Standard,
-                performance_mode: PerformanceMode::Debug,
-                exit_on_findings: false,
-                max_file_size_mb: 50,
-                binary_file_detection: false,
-                gitignore_respect: true,
-                aegisignore_respect: true,
                 output_format: OutputFormat::Human,
-                timeout_seconds: 0,
                 severity_threshold: None,
                 anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
@@ -219,15 +130,7 @@ impl Config {
             "mcp-integration" => Some(Self {
                 name: "mcp-integration".to_string(),
                 enabled_categories: None,
-                strict_mode: StrictMode::Standard,
-                performance_mode: PerformanceMode::Optimized,
-                exit_on_findings: false,
-                max_file_size_mb: 10,
-                binary_file_detection: true,
-                gitignore_respect: true,
-                aegisignore_respect: true,
                 output_format: OutputFormat::Json,
-                timeout_seconds: 30,
                 severity_threshold: None,
                 anomaly_detectors: None,
                 bundle: Bundle::new(vec![]),
@@ -248,15 +151,7 @@ impl Config {
         Self {
             name: "default".to_string(),
             enabled_categories: None,
-            strict_mode: StrictMode::Standard,
-            performance_mode: PerformanceMode::Standard,
-            exit_on_findings: false,
-            max_file_size_mb: 10,
-            binary_file_detection: true,
-            gitignore_respect: true,
-            aegisignore_respect: true,
             output_format: OutputFormat::Human,
-            timeout_seconds: 300,
             severity_threshold: None,
             anomaly_detectors: None,
             bundle: Bundle::new(vec![]),
@@ -308,29 +203,8 @@ mod tests {
                 from_file.enabled_categories, preset.enabled_categories,
                 "preset {name}"
             );
-            assert_eq!(from_file.strict_mode, preset.strict_mode, "preset {name}");
-            assert_eq!(
-                from_file.performance_mode, preset.performance_mode,
-                "preset {name}"
-            );
-            assert_eq!(
-                from_file.exit_on_findings, preset.exit_on_findings,
-                "preset {name}"
-            );
-            assert_eq!(
-                from_file.max_file_size_mb, preset.max_file_size_mb,
-                "preset {name}"
-            );
-            assert_eq!(
-                from_file.binary_file_detection, preset.binary_file_detection,
-                "preset {name}"
-            );
             assert_eq!(
                 from_file.output_format, preset.output_format,
-                "preset {name}"
-            );
-            assert_eq!(
-                from_file.timeout_seconds, preset.timeout_seconds,
                 "preset {name}"
             );
             assert_eq!(
@@ -344,7 +218,7 @@ mod tests {
     fn test_config_preset_production() {
         let config = Config::preset("production").unwrap();
         assert_eq!(config.name, "production");
-        assert!(config.exit_on_findings);
+        assert_eq!(config.output_format, OutputFormat::Sarif);
     }
 
     #[test]
@@ -352,11 +226,6 @@ mod tests {
         assert_eq!(OutputFormat::Human.to_string(), "human");
         assert_eq!(OutputFormat::Json.to_string(), "json");
         assert_eq!(OutputFormat::Sarif.to_string(), "sarif");
-    }
-
-    #[test]
-    fn test_strict_mode_default() {
-        assert_eq!(StrictMode::default(), StrictMode::Permissive);
     }
 
     #[test]
@@ -378,9 +247,7 @@ mod tests {
         config.save(&path).expect("save config");
         let loaded = Config::load(&path).expect("load config");
         assert_eq!(loaded.name, "production");
-        assert_eq!(loaded.strict_mode, StrictMode::Strict);
         assert_eq!(loaded.output_format, OutputFormat::Sarif);
-        assert_eq!(loaded.max_file_size_mb, 5);
     }
 
     #[test]
@@ -401,21 +268,24 @@ mod tests {
 
     #[test]
     fn default_config_and_default_impl_agree() {
-        assert_eq!(Config::default_config().name, "default");
-        let (default, manual) = (Config::default(), Config::default_config());
-        assert_eq!(default.strict_mode, manual.strict_mode);
-        assert_eq!(default.max_file_size_mb, manual.max_file_size_mb);
-        assert_eq!(default.timeout_seconds, manual.timeout_seconds);
-        assert!(!default.exit_on_findings);
+        // The `Default` impl must stay the canonical constructor: a preset
+        // file, `-c` profile, or `Config::default()` caller all rely on it.
+        // (`Config` carries a non-PartialEq bundle, so compare fields.)
+        let via_impl = Config::default();
+        let via_fn = Config::default_config();
+        assert_eq!(via_impl.name, via_fn.name);
+        assert_eq!(via_impl.enabled_categories, via_fn.enabled_categories);
+        assert_eq!(via_impl.output_format, via_fn.output_format);
+        assert_eq!(via_impl.severity_threshold, via_fn.severity_threshold);
+        assert_eq!(via_impl.anomaly_detectors, via_fn.anomaly_detectors);
+        assert_eq!(via_fn.name, "default");
     }
 
     #[test]
     fn serde_defaults_apply_for_sparse_documents() {
         let config: Config = serde_json::from_str("{}").expect("sparse config");
-        assert_eq!(config.timeout_seconds, 300);
-        assert_eq!(config.max_file_size_mb, 10);
-        assert!(config.exit_on_findings);
         assert_eq!(config.output_format, OutputFormat::Human);
+        assert_eq!(config.severity_threshold, None);
     }
 
     #[test]
@@ -430,12 +300,5 @@ mod tests {
             assert_eq!(parsed, expected);
             assert_eq!(expected.to_string(), text);
         }
-    }
-
-    #[test]
-    fn aegisignore_alias_still_deserializes() {
-        let config: Config =
-            serde_json::from_str(r#"{ "gitignore_atheon_respect": false }"#).expect("aliased");
-        assert!(!config.aegisignore_respect);
     }
 }

@@ -4,6 +4,8 @@
 //! Listens on a Unix socket for scan requests.
 
 #[cfg(unix)]
+use aegis_core::transport::{read_bounded_line, FrameRead, MAX_FRAME_BYTES};
+#[cfg(unix)]
 use anyhow::Result;
 #[cfg(unix)]
 use std::fs;
@@ -14,7 +16,7 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::sync::Arc;
 #[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWriteExt, BufReader};
 #[cfg(unix)]
 use tokio::net::UnixStream;
 #[cfg(unix)]
@@ -34,79 +36,6 @@ const SOCKET_PATH_ENV: &str = "AEGIS_DAEMON_SOCKET_PATH";
 
 #[cfg(unix)]
 const SCAN_ROOT_ENV: &str = "AEGIS_DAEMON_SCAN_ROOT";
-
-/// Upper bound on one request frame (the JSON line, newline excluded).
-///
-/// `scan_string` is the only method that ships content in the frame, and
-/// it is meant for snippets; file and directory scans carry only a path.
-/// Without a cap, `BufReader::read_line` would grow without limit and a
-/// single authorized peer could exhaust daemon memory with one line.
-#[cfg(unix)]
-const MAX_FRAME_BYTES: usize = 10 * 1024 * 1024;
-
-/// What [`read_bounded_line`] produced.
-#[cfg(unix)]
-#[derive(Debug, PartialEq, Eq)]
-enum FrameRead {
-    /// A complete line (a final line without its newline still counts).
-    Line,
-    /// The peer closed the connection with nothing pending.
-    Eof,
-    /// The pending line is longer than the configured frame cap.
-    Oversize,
-}
-
-/// Read one newline-terminated frame without buffering more than the cap.
-///
-/// Unbounded line reads grow their buffer without limit, so this walks
-/// [`tokio::io::AsyncBufRead::fill_buf`] chunks instead and stops at
-/// `max_bytes`. Bytes that are not valid UTF-8 become replacement
-/// characters, which the JSON parser then rejects — a parse-error
-/// response beats the old behaviour of silently dropping the connection.
-///
-/// # Errors
-/// Propagates transport failures; the caller ends the connection.
-#[cfg(unix)]
-async fn read_bounded_line<R: tokio::io::AsyncBufRead + Unpin>(
-    reader: &mut R,
-    max_bytes: usize,
-    out: &mut String,
-) -> std::io::Result<FrameRead> {
-    out.clear();
-    let mut buffered = 0usize;
-    loop {
-        let (line_complete, chunk_len) = {
-            let available = reader.fill_buf().await?;
-            if available.is_empty() {
-                // A final partial line is still a frame; nothing pending
-                // means the peer closed the connection.
-                return Ok(if buffered == 0 {
-                    FrameRead::Eof
-                } else {
-                    FrameRead::Line
-                });
-            }
-            if let Some(end) = available.iter().position(|&byte| byte == b'\n') {
-                if buffered + end > max_bytes {
-                    return Ok(FrameRead::Oversize);
-                }
-                out.push_str(&String::from_utf8_lossy(&available[..end]));
-                (true, end + 1)
-            } else {
-                if buffered + available.len() > max_bytes {
-                    return Ok(FrameRead::Oversize);
-                }
-                out.push_str(&String::from_utf8_lossy(available));
-                buffered += available.len();
-                (false, available.len())
-            }
-        };
-        reader.consume(chunk_len);
-        if line_complete {
-            return Ok(FrameRead::Line);
-        }
-    }
-}
 
 /// Serialize a response, falling back to a framing-level error envelope if
 /// serialization itself fails (infallible in practice).
@@ -582,87 +511,5 @@ mod tests {
         drop(tokio::net::UnixListener::bind(&socket).expect("bind socket"));
         remove_socket_if_present(&socket);
         assert!(!socket.exists(), "stale sockets are cleaned up");
-    }
-
-    /// Drive `read_bounded_line` over both halves of an in-memory duplex;
-    /// the tiny buffer capacity forces `fill_buf` to hand back partial
-    /// chunks, exercising the no-newline-yet accumulation path.
-    //
-    // Test-only helper, but the expects live inside a `tokio::spawn`
-    // closure, which clippy's test-function analysis cannot see into.
-    #[allow(clippy::expect_used)]
-    async fn read_line_over_duplex(input: &[u8], cap: usize) -> std::io::Result<FrameRead> {
-        let (mut client, server) = tokio::io::duplex(64);
-        let mut reader = BufReader::new(server);
-        let input = input.to_vec();
-        let writer_task = tokio::spawn(async move {
-            use tokio::io::AsyncWriteExt;
-            client.write_all(&input).await.expect("write input");
-        });
-
-        let mut line = String::new();
-        let outcome = read_bounded_line(&mut reader, cap, &mut line).await;
-        writer_task.await.expect("writer task");
-        outcome
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_accepts_a_line_within_the_cap() {
-        let outcome = read_line_over_duplex(b"{\"method\":\"ping\"}\n", 64)
-            .await
-            .expect("read succeeds");
-        assert_eq!(outcome, FrameRead::Line);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_accepts_a_line_exactly_at_the_cap() {
-        let payload = vec![b'a'; 32];
-        let mut input = payload.clone();
-        input.push(b'\n');
-        let outcome = read_line_over_duplex(&input, 32)
-            .await
-            .expect("read succeeds");
-        assert_eq!(outcome, FrameRead::Line);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_reports_oversize_frames() {
-        let input = vec![b'0'; 65]; // one past the cap, newline never arrives
-        let outcome = read_line_over_duplex(&input, 64).await;
-        assert_eq!(outcome.expect("read succeeds"), FrameRead::Oversize);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_reports_oversize_even_when_newline_follows() {
-        let mut input = vec![b'0'; 65];
-        input.push(b'\n');
-        let outcome = read_line_over_duplex(&input, 64).await;
-        assert_eq!(outcome.expect("read succeeds"), FrameRead::Oversize);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_treats_eof_with_pending_bytes_as_a_line() {
-        let outcome = read_line_over_duplex(b"{\"method\":\"ping\"}", 64)
-            .await
-            .expect("read succeeds");
-        assert_eq!(outcome, FrameRead::Line);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_reports_eof_on_empty_input() {
-        let outcome = read_line_over_duplex(b"", 64).await;
-        assert_eq!(outcome.expect("read succeeds"), FrameRead::Eof);
-    }
-
-    #[tokio::test]
-    async fn bounded_reader_accumulates_across_partial_chunks() {
-        // Larger than the 64-byte duplex buffer and newline-free until the
-        // end, so the reader must accumulate several fill_buf chunks.
-        let mut input = vec![b'x'; 300];
-        input.push(b'\n');
-        let outcome = read_line_over_duplex(&input, 1024)
-            .await
-            .expect("read succeeds");
-        assert_eq!(outcome, FrameRead::Line);
     }
 }

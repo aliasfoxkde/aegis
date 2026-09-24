@@ -480,24 +480,13 @@ pub async fn handle_request(
                 return DaemonResponse::error(format!("scanner unavailable: {error}"));
             }
             let scanner = state.scanner.read().await;
-            let registry = scanner.registry();
-            let patterns = registry.all();
-            let _pattern_infos: Vec<_> = patterns
-                .iter()
-                .map(|p| {
-                    serde_json::json!({
-                        "name": p.name(),
-                        "category": p.category(),
-                        "severity": p.severity().to_string(),
-                        "confidence": p.confidence().to_string(),
-                        "description": p.description()
-                    })
-                })
-                .collect();
+            // Count-only by contract: pattern metadata belongs to the MCP
+            // server's `list_patterns`, which has a response shape for it.
+            let pattern_count = scanner.registry().all().len();
             DaemonResponse {
                 success: true,
                 findings: vec![],
-                finding_count: patterns.len(),
+                finding_count: pattern_count,
                 risk_level: "none".to_string(),
                 risk_score: 0,
                 stats: ScanStats::default(),

@@ -16,16 +16,18 @@ built-ins in sync with the JSON copies that ship in
 [`config/profiles/`](../../config/profiles/) (`development.json`,
 `pipeline.json`, `production.json`, `mcp-integration.json`).
 
+A `-c` value is treated as a file path when it contains a path
+separator or ends in `.json`, and as a preset name otherwise — so a
+stray file called `production` in the working directory cannot hijack
+the preset, and a typo'd path fails with the real I/O error instead of
+the preset list.
+
 A profile supplies defaults for the current run for any flag you did
 not set explicitly. Four fields are applied: `enabled_categories`
 become the category allowlist, `output_format` the render,
 `severity_threshold` the threshold, and `anomaly_detectors` the
 statistical-anomaly allowlist. Flags given on the command line always
-win over profile values. The remaining fields (`strict_mode`,
-`performance_mode`, `exit_on_findings`, `max_file_size_mb`,
-`binary_file_detection`, `gitignore_respect`, `aegisignore_respect`,
-`timeout_seconds`) are recorded profile metadata and are not yet
-applied to the scan itself.
+win over profile values.
 
 ## Profile Fields
 
@@ -35,15 +37,7 @@ A profile is a single JSON object with these keys:
 |-------|------|-------|
 | `name` | string | Profile label |
 | `enabled_categories` | array or `null` | Restrict the scan to these categories; `null` enables all |
-| `strict_mode` | string | `permissive`, `standard`, or `strict` |
-| `performance_mode` | string | `debug`, `standard`, or `optimized` |
-| `exit_on_findings` | bool | Exit non-zero when findings are reported |
-| `max_file_size_mb` | integer | Files above this size are skipped |
-| `binary_file_detection` | bool | Detect and skip binary files |
-| `gitignore_respect` | bool | Honour `.gitignore` (default `true`) |
-| `aegisignore_respect` | bool | Honour `.aegisignore` (default `true`) |
 | `output_format` | string | `human`, `json`, or `sarif` |
-| `timeout_seconds` | integer | Scan timeout; `0` means no timeout |
 | `severity_threshold` | string or `null` | Minimum severity to report: `critical`, `high`, `medium`, or `low`; anything else fails the scan (`info` observations sit below every threshold) |
 | `anomaly_detectors` | array or `null` | Statistical anomaly detectors to run; `null` runs all four, `[]` disables the layer, and a list runs exactly the named detectors (`comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`) |
 
@@ -64,14 +58,7 @@ High-security settings for production environments
     "web-security",
     "compliance"
   ],
-  "strict_mode": "strict",
-  "performance_mode": "optimized",
-  "exit_on_findings": true,
-  "max_file_size_mb": 5,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "sarif",
-  "timeout_seconds": 60
+  "output_format": "sarif"
 }
 ```
 
@@ -92,14 +79,7 @@ Optimized for CI/CD pipelines (`config/profiles/pipeline.json`):
     "ai-detection",
     "supply-chain"
   ],
-  "strict_mode": "standard",
-  "performance_mode": "optimized",
-  "exit_on_findings": true,
-  "max_file_size_mb": 10,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "json",
-  "timeout_seconds": 300
+  "output_format": "json"
 }
 ```
 
@@ -112,14 +92,7 @@ Relaxed settings for local development
 {
   "name": "development",
   "enabled_categories": null,
-  "strict_mode": "standard",
-  "performance_mode": "debug",
-  "exit_on_findings": false,
-  "max_file_size_mb": 50,
-  "binary_file_detection": false,
-  "gitignore_respect": true,
-  "output_format": "human",
-  "timeout_seconds": 0
+  "output_format": "human"
 }
 ```
 
@@ -132,14 +105,7 @@ Settings for MCP server mode
 {
   "name": "mcp-integration",
   "enabled_categories": null,
-  "strict_mode": "standard",
-  "performance_mode": "optimized",
-  "exit_on_findings": false,
-  "max_file_size_mb": 10,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "json",
-  "timeout_seconds": 30
+  "output_format": "json"
 }
 ```
 
@@ -177,10 +143,8 @@ Semantics:
   is absent.
 - `node_modules/`, `target/`, and `.git/` are always ignored.
 
-Both sources can be toggled independently in a profile:
-`gitignore_respect` and `aegisignore_respect` (both default to `true`;
-the legacy key `gitignore_atheon_respect` is still accepted as an alias
-for the latter).
+Ignore handling is always on for scans of directories; there is no
+profile key or flag to turn it off.
 
 ## Environment Variables
 

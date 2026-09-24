@@ -7,12 +7,5 @@
     "web-security",
     "compliance"
   ],
-  "strict_mode": "strict",
-  "performance_mode": "optimized",
-  "exit_on_findings": true,
-  "max_file_size_mb": 5,
-  "binary_file_detection": true,
-  "gitignore_respect": true,
-  "output_format": "sarif",
-  "timeout_seconds": 60
+  "output_format": "sarif"
 }
