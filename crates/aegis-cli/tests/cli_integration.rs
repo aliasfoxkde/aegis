@@ -289,6 +289,39 @@ fn clone_fixture() -> String {
 }
 
 #[test]
+fn test_scan_rejects_unknown_severity_threshold() {
+    // A threshold that no severity name matches would otherwise disable the
+    // filter silently and report more findings than requested. The scan must
+    // refuse to run and name the value.
+    let cfg = isolated_config();
+    let dir = tempfile::TempDir::new().unwrap();
+    let file_path = dir.path().join("clean.rs");
+    std::fs::write(&file_path, "fn main() { println!(\"ok\"); }").unwrap();
+
+    let output = cfg
+        .command()
+        .args([
+            "scan",
+            "--severity-threshold",
+            "hihg",
+            file_path.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("hihg") && stderr.contains("severity threshold"),
+        "the error must name the value and the option, got: {stderr}"
+    );
+}
+
+#[test]
 fn test_scan_detect_clones_pins_json_shape_and_exit_code() {
     let cfg = isolated_config();
     let dir = tempfile::TempDir::new().unwrap();

@@ -74,6 +74,13 @@ pub struct ScanOptions {
     /// Categories to include (empty = all)
     pub categories: Vec<String>,
     /// Severity threshold
+    ///
+    /// The value is matched case-insensitively against
+    /// [`Severity::parse`](crate::pattern::Severity::parse) names
+    /// (`critical`, `high`, `medium`, `low`, `info` and their common
+    /// abbreviations). An unrecognized string would silently disable the
+    /// filter, so [`Self::validate`] rejects it and the scanner entry points
+    /// call it before any file is read.
     pub severity_threshold: Option<String>,
     /// Respect .gitignore when walking the scan root
     pub use_gitignore: bool,
@@ -122,6 +129,32 @@ impl Default for ScanOptions {
 
 fn num_cpus() -> usize {
     std::thread::available_parallelism().map_or(4, std::num::NonZeroUsize::get)
+}
+
+impl ScanOptions {
+    /// Reject options whose misuse would be silent.
+    ///
+    /// A severity threshold that no [`Severity::parse`](crate::pattern::Severity::parse)
+    /// name matches would disable the filter and report *more* findings than
+    /// requested at exit code 1, with no diagnostic — the same shape a typo
+    /// in `--categories` or the anomaly allow-list would have, and both of
+    /// those fail loudly. This returns the same courtesy for every caller:
+    /// the CLI, the MCP server, the daemon, and library users.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the offending value and the accepted
+    /// spellings when `severity_threshold` is set but unparseable.
+    pub fn validate(&self) -> Result<(), String> {
+        match &self.severity_threshold {
+            None => Ok(()),
+            Some(threshold) if Severity::parse(threshold).is_some() => Ok(()),
+            Some(threshold) => Err(format!(
+                "unrecognized severity threshold '{threshold}' \
+                 (expected critical, high, medium, low, or info)"
+            )),
+        }
+    }
 }
 
 /// Main scanner
@@ -585,6 +618,10 @@ impl Scanner {
             Severity::parse(threshold),
             Severity::parse(&finding.severity),
         ) else {
+            // Unreachable for thresholds that came through
+            // [`ScanOptions::validate`]; a finding severity can still be
+            // unparseable only if a future producer stores a non-enum
+            // string, and passing it is safer than dropping the finding.
             return true;
         };
         actual.weight() >= threshold.weight()
@@ -738,15 +775,20 @@ impl Scanner {
     ///
     /// # Errors
     ///
-    /// Returns [`ScanError::FileNotFound`] when `path` does not exist and
-    /// [`ScanError::IoError`] when metadata or content cannot be read, or
-    /// the file is not valid UTF-8.
+    /// Returns [`ScanError::InvalidOptions`] when the scan options fail
+    /// [`ScanOptions::validate`], [`ScanError::FileNotFound`] when `path`
+    /// does not exist, and [`ScanError::IoError`] when metadata or content
+    /// cannot be read, or the file is not valid UTF-8.
     ///
     /// # Panics
     ///
     /// Panics if the metrics-sink lock was poisoned by a panic in another
     /// thread.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
+        // Options are validated before any file access so a typo in the
+        // threshold is reported even when the path is also wrong.
+        self.options.validate().map_err(ScanError::InvalidOptions)?;
+
         let start = Instant::now();
         let io_start = Instant::now();
 
@@ -834,15 +876,20 @@ impl Scanner {
             self.scan_string_with_inspection(&content, &source);
 
         // Clone detection runs inside the measured scan window so its cost
-        // is visible in `scan_time_ms`. A detector failure is reported, not
-        // swallowed: a silently absent clone list would read as "no clones".
+        // is visible in `scan_time_ms`. A detector failure is recorded in
+        // the inspection ledger — the same treatment the AST pipeline gets —
+        // so a failed pass cannot masquerade as "no clones found".
         let mut clones = Vec::new();
+        let mut clone_error = None;
         if self.options.detect_clones {
             match CloneDetector::new().detect_content(&content, &source) {
                 Ok(detected) => {
                     clones = detected.iter().map(CloneReport::from_code_clone).collect();
                 }
-                Err(e) => tracing::warn!("Clone detection failed for {source}: {e}"),
+                Err(e) => {
+                    tracing::warn!("Clone detection failed for {source}: {e}");
+                    clone_error = Some(e.to_string());
+                }
             }
         }
 
@@ -878,6 +925,18 @@ impl Scanner {
             ast_inspection.required,
             ast_inspection.reason,
         );
+
+        // Clone detection is a best-effort channel: it is never required, so
+        // its failure cannot flip the ledger's safe/unsafe verdict — but the
+        // failure itself is visible in the ledger and SARIF run properties.
+        if let Some(reason) = clone_error {
+            stats.inspection_ledger.record(
+                format!("{source}#clones"),
+                InspectionStatus::Failed,
+                false,
+                Some(reason),
+            );
+        }
 
         for finding in &findings {
             stats.add_finding(finding);
@@ -937,6 +996,8 @@ impl Scanner {
     /// Panics if the metrics-sink lock was poisoned by a panic in another
     /// thread.
     pub fn scan_dir(&self, root: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
+        self.options.validate().map_err(ScanError::InvalidOptions)?;
+
         let start = Instant::now();
 
         // Initialize ignore manager with the root directory, honoring the
@@ -1227,6 +1288,12 @@ pub enum ScanError {
     /// with a misconfigured rule silently is worse than failing loudly
     #[error("{0}")]
     CustomPatterns(String),
+
+    /// The scan options would silently change what is scanned — today, only
+    /// an unrecognized [`ScanOptions::severity_threshold`], which would
+    /// disable the filter and report more findings than requested.
+    #[error("Invalid scan options: {0}")]
+    InvalidOptions(String),
 }
 
 #[cfg(test)]
@@ -1273,6 +1340,44 @@ mod tests {
         let scanner = Scanner::new();
         let result = scanner.scan_file(Path::new("/nonexistent/file.txt"));
         assert!(matches!(result, Err(ScanError::FileNotFound(_))));
+    }
+
+    #[test]
+    fn test_scan_options_validate_accepts_valid_thresholds() {
+        assert!(ScanOptions::default().validate().is_ok());
+        for threshold in ["critical", "high", "HIGH", "med", "low", "informational"] {
+            let options = ScanOptions {
+                severity_threshold: Some(threshold.to_string()),
+                ..ScanOptions::default()
+            };
+            assert!(options.validate().is_ok(), "'{threshold}' must be accepted");
+        }
+    }
+
+    #[test]
+    fn test_scan_options_validate_rejects_unknown_threshold() {
+        let options = ScanOptions {
+            severity_threshold: Some("hihg".to_string()),
+            ..ScanOptions::default()
+        };
+        let message = options.validate().unwrap_err();
+        assert!(
+            message.contains("hihg") && message.contains("info"),
+            "the error must name the value and the accepted spellings, got: {message}"
+        );
+    }
+
+    #[test]
+    fn test_scan_file_reports_invalid_options_before_missing_path() {
+        // The threshold check runs before file access: a typo must be
+        // reported even when the path is also wrong, and it must not be
+        // mistaken for "no threshold filter" and silently pass.
+        let scanner = Scanner::new().with_options(ScanOptions {
+            severity_threshold: Some("severe".to_string()),
+            ..ScanOptions::default()
+        });
+        let result = scanner.scan_file(Path::new("/nonexistent/file.txt"));
+        assert!(matches!(result, Err(ScanError::InvalidOptions(_))));
     }
 
     #[test]

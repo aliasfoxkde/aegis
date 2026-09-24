@@ -199,7 +199,7 @@ Dockerignore file reference detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(^|[^A-Za-z0-9_.])\.env(\.\w+)?\b
+(?m)(?:^|[^\r\nA-Za-z0-9_.])\.env(\.\w+)?\b
 ```
 
 **Input that fires** (verified by the liveness test):
@@ -380,7 +380,7 @@ Potential secret in Dockerfile detected
 **Input that fires** (verified by the liveness test):
 
 ```text
- ARG 6q_SECRET
+	 	ARG 	 MSECRET
 ```
 
 ### terraform-state

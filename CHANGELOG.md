@@ -69,6 +69,32 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- `env-file-in-git` matched a `.env` path at a line start by consuming the
+  preceding newline character, which attributed the finding to the previous
+  line — where an `aegis:ignore:env-file-in-git` directive does not sit —
+  so a deliberately committed-and-suppressed `.env` mention in
+  `docker/.dockerignore` still failed the scan. The rule now uses `^` in
+  multiline mode for the line-boundary case, so the match starts at the
+  `.env` itself and inline suppression works.
+- An unrecognized `--severity-threshold` value (or the `severity_threshold`
+  key of a `-c` profile) silently disabled the severity filter — a typo
+  like `hihg` reported *more* findings than requested at exit code 1,
+  with no diagnostic. The value is now validated the way `--categories`
+  and the anomaly allow-list always were: the CLI rejects it before any
+  scan mode runs (including `--env`/`--stdin`/`--diff`), and the
+  `aegis-core` scan entry points return
+  `ScanError::InvalidOptions`; `ScanOptions::validate` offers the same
+  check to library callers.
+- Clone reports are bounded: pairing stops at 256 clone pairs per file
+  (`MAX_REPORTED_CLONES`), so a minified or generated file where nearly
+  every window pair qualifies can neither flood the report with a
+  multi-gigabyte `stats.clones` list nor pay for the rest of the
+  quadratic pairing pass behind it. Previously the per-file pair count
+  was unbounded (up to 32,640 with a full block grid).
+- A clone-detector failure on a file is now recorded in the inspection
+  ledger (`<path>#clones`, status `Failed`) instead of only being
+  logged, so a failed pass cannot masquerade as "no clones found" in
+  SARIF run properties and receipts.
 - Anchored ignore rules (`.aegisignore` / `.gitignore`) now match when
   the scan root is absolute: rules are evaluated against the path
   relative to the configured root, so `"docs/files/js/"` fires on

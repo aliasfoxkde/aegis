@@ -142,11 +142,15 @@ file's token stream is sliced into 40-token windows on a stride of 10,
 window pairs are scored with a longest-common-subsequence ratio over
 role-normalized tokens (identifiers and literals compared by role,
 keywords and operators by text) on the best-aligned window phase, and
-pairs are classified by similarity band: ≥ 0.98 Type-1 (identical), ≥
-0.85 Type-2 (renamed), ≥ 0.75 Type-3 (near-miss with reordered or
+pairs are classified by similarity band: ≥ 0.98 Type-1 (identical after
+role normalization — a pure rename scores 1.0), ≥ 0.85 Type-2 (renamed
+with light structural drift), ≥ 0.75 Type-3 (near-miss with reordered or
 inserted statements). Sound length and label-multiset bounds skip pairs
-before the LCS runs, and the block grid is thinned past 256 windows, so
-the worst case is a constant rather than a function of file size.
+before the LCS runs, the block grid is thinned past 256 windows, and
+pairing stops at 256 reported pairs per file (`MAX_REPORTED_CLONES`) —
+so a minified or generated file where nearly every pair qualifies can
+neither flood the report nor pay for the rest of the quadratic pass. The
+worst case is a constant rather than a function of file size.
 
 The layer is opt-in: `ScanOptions::detect_clones` (core) or
 `aegis scan --detect-clones` (CLI). Clone pairs travel in

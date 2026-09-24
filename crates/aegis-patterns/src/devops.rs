@@ -115,8 +115,12 @@ pub fn get() -> Vec<Pattern> {
             // boundary, or a non-identifier character before it. This keeps
             // `import.meta.env` / `process.env` variable reads from reading
             // as a committed env file; the trailing \b stops matches inside
-            // ".environment".
-            match_pattern: r"(^|[^A-Za-z0-9_.])\.env(\.\w+)?\b".to_string(),
+            // ".environment". The line-boundary case is matched by `^` in
+            // multiline mode, and the consuming class excludes `\r`/`\n`:
+            // a class that could eat the preceding newline would start the
+            // match on the previous line, where an
+            // `aegis:ignore:env-file-in-git` directive would be missed.
+            match_pattern: r"(?m)(?:^|[^\r\nA-Za-z0-9_.])\.env(\.\w+)?\b".to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
