@@ -180,10 +180,13 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
         let stats = stats_with_findings(ScanStats::for_environment(), &findings);
         (findings, stats)
     } else if opts.scan_stdin {
-        // Note: stdin read must happen in async context
-        let findings = scanner.scan_string("", "stdin");
-        let stats = stats_with_findings(ScanStats::for_content("string:stdin", 0), &findings);
-        (findings, stats)
+        // Stdin content is drained in async context by the caller and
+        // handed to `execute_scan_with_stdin`; reaching this branch means
+        // that wiring was bypassed. Scanning a decoy empty string would
+        // report a clean pass nobody asked for.
+        return Err(anyhow::anyhow!(
+            "internal error: --stdin content must be scanned via execute_scan_with_stdin"
+        ));
     } else if opts.scan_file {
         let path = &opts.path;
         if path.is_dir() {
@@ -252,12 +255,6 @@ fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
-/// Heuristic mirroring the engine's binary detection: NUL in the first
-/// window means the blob is binary and is skipped like scan_dir does.
-fn looks_binary(bytes: &[u8]) -> bool {
-    bytes[..bytes.len().min(8192)].contains(&0)
-}
-
 /// Scan the staged (index) content of the repository at `opts.path`.
 ///
 /// Pre-commit semantics: the index is what a commit would contain and it
@@ -276,7 +273,9 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
     let mut stats = ScanStats::default();
     for file in files {
         let blob = staged_blob(&opts.path, &file)?;
-        if looks_binary(&blob) {
+        // Same NUL-sniff the engine applies to files on disk; skipped
+        // staged blobs are counted exactly like `scan_dir` skips binaries.
+        if aegis_core::scanner::is_binary_blob(&blob) {
             stats.files_skipped += 1;
             continue;
         }
@@ -346,30 +345,8 @@ fn persist_receipt_if_configured(receipt: &ScanReceipt) -> Result<()> {
 /// rendered.
 pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
     let scanner = build_scanner_from_opts(opts)?;
-
     let (findings, stats) = perform_scan(&scanner, opts)?;
-    // Informational findings are reported but never fail a CI run.
-    let has_findings = findings.iter().any(|f| f.severity != "info");
-    let receipt = build_receipt(opts, &findings, stats.clone());
-
-    // Calculate risk score
-    let risk = RiskScore::new(
-        &findings,
-        &std::collections::HashMap::default(),
-        &std::collections::HashMap::default(),
-    );
-
-    // Output results
-    let mut output_dev = Output::new(opts.format.clone(), opts.quiet);
-    output_dev.write_findings(&findings, &stats, &risk)?;
-
-    Ok(ScanResult {
-        findings,
-        stats,
-        output: output_dev.to_string(),
-        has_findings,
-        receipt,
-    })
+    finish(opts, findings, stats)
 }
 
 /// Execute scan from stdin content (testable)
@@ -380,31 +357,31 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
 /// baseline) or when the report cannot be rendered.
 pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Result<ScanResult> {
     let scanner = build_scanner_from_opts(opts)?;
-
     let findings = scanner.scan_string(stdin_content, "stdin");
-    // Informational findings are reported but never fail a CI run.
-    let has_findings = findings.iter().any(|f| f.severity != "info");
     let stats = stats_with_findings(
         ScanStats::for_content("string:stdin", stdin_content.len()),
         &findings,
     );
-    let receipt = build_receipt(opts, &findings, stats.clone());
+    finish(opts, findings, stats)
+}
 
-    // Calculate risk score
+/// Shared tail of both scan entry points: score risk, render the report,
+/// build the receipt, and package the result. Informational findings are
+/// reported but never fail a CI run.
+fn finish(opts: &ScanOptions, findings: Vec<Finding>, stats: ScanStats) -> Result<ScanResult> {
+    let has_findings = findings.iter().any(|f| f.severity != "info");
+    let receipt = build_receipt(opts, &findings, stats.clone());
     let risk = RiskScore::new(
         &findings,
         &std::collections::HashMap::default(),
         &std::collections::HashMap::default(),
     );
-
-    // Output results
-    let mut output_dev = Output::new(opts.format.clone(), opts.quiet);
-    output_dev.write_findings(&findings, &stats, &risk)?;
-
+    let mut output = Output::new(opts.format.clone(), opts.quiet);
+    output.write_findings(&findings, &stats, &risk)?;
     Ok(ScanResult {
         findings,
         stats,
-        output: output_dev.to_string(),
+        output: output.to_string(),
         has_findings,
         receipt,
     })
@@ -878,7 +855,8 @@ mod tests {
 
     #[test]
     fn test_perform_scan_stdin_branch() {
-        // Test the perform_scan function with scan_stdin = true (line 77-78)
+        // perform_scan refuses stdin: the async caller owns the read and
+        // forwards content to execute_scan_with_stdin.
         let opts = ScanOptions {
             path: PathBuf::from("/test"),
             scan_file: false,
@@ -899,11 +877,8 @@ mod tests {
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
-        let result = perform_scan(&scanner, &opts);
-        assert!(result.is_ok());
-        let (findings, _stats) = result.unwrap();
-        // When scan_stdin is true, empty string is passed to scan_string
-        assert!(findings.is_empty());
+        let error = perform_scan(&scanner, &opts).expect_err("stdin must be refused");
+        assert!(error.to_string().contains("execute_scan_with_stdin"));
     }
 
     #[test]

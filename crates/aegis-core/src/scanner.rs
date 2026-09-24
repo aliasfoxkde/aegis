@@ -161,8 +161,6 @@ impl ScanOptions {
 pub struct Scanner {
     registry: Arc<PatternRegistry>,
     ignore_manager: Arc<IgnoreManager>,
-    #[allow(dead_code)]
-    suppression_manager: SuppressionManager,
     options: ScanOptions,
     /// Cached category scanners for performance
     /// Per-extension category scanners ("" = sources without an extension);
@@ -261,7 +259,6 @@ impl Scanner {
         Self {
             registry: Arc::new(PatternRegistry::new()),
             ignore_manager: Arc::new(IgnoreManager::new()),
-            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
@@ -283,7 +280,6 @@ impl Scanner {
         Ok(Self {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
-            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
@@ -307,7 +303,6 @@ impl Scanner {
         Ok(Self {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
-            suppression_manager: SuppressionManager::new(),
             options: ScanOptions::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
@@ -326,7 +321,7 @@ impl Scanner {
     /// bundle cannot be loaded (invalid regex, duplicate name) or when
     /// `enabled_categories` names a category absent from the registry.
     pub fn from_config(config: &Config) -> Result<Self, crate::pattern::PatternError> {
-        let mut scanner = Self::from_bundle(&config.bundle)?;
+        let scanner = Self::from_bundle(&config.bundle)?;
 
         if let Some(categories) = &config.enabled_categories {
             // Only meaningful against a populated registry; an empty bundle
@@ -339,10 +334,6 @@ impl Scanner {
                 scanner.registry.set_category_enabled(cat, true);
             }
         }
-
-        scanner.options.max_file_size = config.max_file_size_mb * 1024 * 1024;
-        scanner.options.use_gitignore = config.gitignore_respect;
-        scanner.options.use_aegisignore = config.aegisignore_respect;
 
         Ok(scanner)
     }
@@ -956,9 +947,9 @@ impl Scanner {
             return Ok(());
         }
 
-        let definitions = crate::user_patterns::load_user_pattern_definitions(root)
+        let definitions = crate::user_patterns::load_user_pattern_definitions_from_path(&path)
             .map_err(|e| ScanError::CustomPatterns(e.to_string()))?;
-        for definition in definitions.unwrap_or_default() {
+        for definition in definitions {
             self.registry
                 .register(definition)
                 .map_err(|e| ScanError::CustomPatterns(e.to_string()))?;
@@ -1203,15 +1194,25 @@ impl Default for Scanner {
     }
 }
 
+/// Byte window inspected when sniffing for binary content.
+const BINARY_SNIFF_BYTES: usize = 8192;
+
+/// Heuristic binary detection: a NUL byte in the leading window means the
+/// content is binary and is skipped rather than pattern-scanned.
+#[must_use]
+pub fn is_binary_blob(bytes: &[u8]) -> bool {
+    bytes[..bytes.len().min(BINARY_SNIFF_BYTES)].contains(&0)
+}
+
 /// Check if a file is binary
 fn is_binary_file(path: &Path) -> Result<bool, std::io::Error> {
     use std::io::Read;
 
     let mut file = std::fs::File::open(path)?;
-    let mut buffer = [0u8; 8192];
+    let mut buffer = [0u8; BINARY_SNIFF_BYTES];
     let n = file.read(&mut buffer)?;
 
-    Ok(buffer[..n].contains(&0))
+    Ok(is_binary_blob(&buffer[..n]))
 }
 
 /// Pre-computed line index for O(log n) line number lookups

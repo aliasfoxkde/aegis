@@ -1426,12 +1426,6 @@ pub mod tree_sitter_analysis {
         }
         Ok(convert_node(root, content))
     }
-
-    /// Parse source code using tree-sitter
-    #[must_use]
-    pub fn parse_source(content: &str, language: Language) -> Option<AstNode> {
-        parse_source_checked(content, language).ok()
-    }
 }
 
 #[cfg(all(test, feature = "tree-sitter"))]

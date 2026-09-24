@@ -57,37 +57,6 @@ fn lexical_contains(root: &Path, candidate: &Path) -> bool {
     candidate == root || candidate.starts_with(&format!("{root}/"))
 }
 
-/// Validate that a path doesn't contain dangerous patterns
-#[allow(dead_code)]
-pub fn is_path_dangerous(path: &Path) -> bool {
-    let path_str = path.to_string_lossy().to_lowercase();
-
-    // Check for dangerous patterns
-    let dangerous = [
-        "/etc/passwd",
-        "/etc/shadow",
-        "/.ssh/",
-        "/.aws/",
-        "/proc/",
-        "/sys/",
-        "/dev/",
-    ];
-
-    for pattern in dangerous {
-        if path_str.contains(pattern) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Get the sandboxed root directory
-#[allow(dead_code)]
-pub fn get_sandbox_root() -> PathBuf {
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,16 +83,6 @@ mod tests {
             let malicious = cwd.join("..").join("etc").join("passwd");
             assert!(!is_path_safe(&malicious));
         }
-    }
-
-    #[test]
-    fn test_dangerous_paths() {
-        assert!(is_path_dangerous(&PathBuf::from("/etc/passwd")));
-        assert!(is_path_dangerous(&PathBuf::from("/.ssh/id_rsa")));
-        assert!(is_path_dangerous(&PathBuf::from("/proc/self/environ")));
-        assert!(!is_path_dangerous(&PathBuf::from(
-            "/home/user/project/src/main.rs"
-        )));
     }
 
     #[test]
@@ -174,26 +133,5 @@ mod tests {
         if !outside.canonicalize().is_ok_and(|p| p.starts_with(&cwd)) {
             assert!(!is_path_safe(&outside));
         }
-    }
-
-    #[test]
-    fn test_is_path_dangerous_sys() {
-        assert!(is_path_dangerous(&PathBuf::from("/sys/kernel")));
-    }
-
-    #[test]
-    fn test_is_path_dangerous_dev() {
-        assert!(is_path_dangerous(&PathBuf::from("/dev/null")));
-    }
-
-    #[test]
-    fn test_is_path_dangerous_aws() {
-        assert!(is_path_dangerous(&PathBuf::from("/.aws/credentials")));
-    }
-
-    #[test]
-    fn test_get_sandbox_root() {
-        let root = get_sandbox_root();
-        assert!(root.is_absolute() || root.to_string_lossy() == "/");
     }
 }

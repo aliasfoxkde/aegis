@@ -1,6 +1,6 @@
 //! Configuration management
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Load a configuration document from disk.
 ///
@@ -30,26 +30,34 @@ pub fn save_config(config: &aegis_core::Config, path: &PathBuf) -> Result<(), an
 
 /// Resolve a `-c/--config` value to a configuration profile.
 ///
-/// A value that names an existing file or directory path is loaded from
-/// disk; anything else is looked up among the built-in presets
-/// (`production`, `pipeline`, `development`, `mcp-integration`). Unknown
-/// names fail with the list of valid presets.
+/// A value that looks like a path — it carries a path separator or ends in
+/// `.json` — is loaded from disk, so a typo'd path fails with the real
+/// I/O error instead of a preset list. Anything else is a bare preset
+/// name (`production`, `pipeline`, `development`, `mcp-integration`);
+/// probing bare names against the working directory would make a stray
+/// file called `production` hijack the preset. Unknown names fail with
+/// the list of valid presets.
 ///
 /// # Errors
 ///
-/// Returns an error when `name_or_path` looks like a file but cannot be
+/// Returns an error when `name_or_path` looks like a path but cannot be
 /// read or parsed, or when it is not a known preset.
 pub fn resolve_profile(name_or_path: &str) -> Result<aegis_core::Config, anyhow::Error> {
-    let candidate = PathBuf::from(name_or_path);
-    if candidate.is_file() {
-        return aegis_core::Config::load(&candidate).map_err(anyhow::Error::from);
+    let looks_like_path = name_or_path.contains('/')
+        || name_or_path.contains('\\')
+        || Path::new(name_or_path)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
+    if !looks_like_path {
+        return aegis_core::Config::preset(name_or_path).ok_or_else(|| {
+            anyhow::anyhow!(
+                "unknown configuration profile `{name_or_path}`; available presets: {}",
+                aegis_core::Config::list_presets().join(", ")
+            )
+        });
     }
-    aegis_core::Config::preset(name_or_path).ok_or_else(|| {
-        anyhow::anyhow!(
-            "unknown configuration profile `{name_or_path}`; available presets: {}",
-            aegis_core::Config::list_presets().join(", ")
-        )
-    })
+    let candidate = PathBuf::from(name_or_path);
+    aegis_core::Config::load(&candidate).map_err(anyhow::Error::from)
 }
 
 #[cfg(test)]
@@ -111,5 +119,26 @@ mod tests {
         assert!(message.contains("no-such-profile"));
         assert!(message.contains("production"));
         assert!(message.contains("mcp-integration"));
+    }
+
+    #[test]
+    fn resolve_profile_treats_missing_json_paths_as_io_errors() {
+        // A path-looking value must fail with the real read error, not the
+        // preset list — that is how a typo'd `--config` gets diagnosed.
+        let error = resolve_profile("./config/no-such-profile.json").expect_err("missing file");
+        let message = error.to_string();
+        // The OS-specific wording differs ("No such file or directory" vs
+        // "The system cannot find the path specified"); the contract is
+        // that it is the wrapped I/O error, not the preset-list hint.
+        assert!(message.contains("I/O error"), "unexpected error: {message}");
+        assert!(!message.contains("available presets"));
+    }
+
+    #[test]
+    fn resolve_profile_prefers_presets_over_same_named_cwd_files() {
+        // `production.json` in the working directory must not shadow the
+        // bare `production` preset name.
+        let profile = resolve_profile("production").expect("bare preset name");
+        assert_eq!(profile.name, "production");
     }
 }

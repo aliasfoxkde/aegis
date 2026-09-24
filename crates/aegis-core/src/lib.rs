@@ -39,6 +39,8 @@ pub mod risk;
 pub mod sbom;
 pub mod scanner;
 pub mod suppression;
+#[cfg(feature = "tokio")]
+pub mod transport;
 pub mod user_patterns;
 
 // Internal helpers - not part of public API. Some are intentionally kept as

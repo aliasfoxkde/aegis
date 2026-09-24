@@ -131,13 +131,26 @@ pub fn load_user_pattern_definitions(
     let Some(path) = find_user_pattern_file(root) else {
         return Ok(None);
     };
+    load_user_pattern_definitions_from_path(&path).map(Some)
+}
 
-    let content = std::fs::read_to_string(&path).map_err(|source| UserPatternError::Io {
+/// Load and validate user patterns from a path already located with
+/// [`find_user_pattern_file`], so callers that need the path anyway do not
+/// probe the filesystem twice.
+///
+/// # Errors
+///
+/// Returns [`UserPatternError`] under the same conditions as
+/// [`load_user_pattern_definitions`].
+pub fn load_user_pattern_definitions_from_path(
+    path: &Path,
+) -> Result<Vec<crate::pattern::PatternDefinition>, UserPatternError> {
+    let content = std::fs::read_to_string(path).map_err(|source| UserPatternError::Io {
         path: path.display().to_string(),
         source,
     })?;
 
-    parse_user_pattern_content(&content, &path).map(Some)
+    parse_user_pattern_content(&content, path)
 }
 
 /// Parse and validate the YAML content of a user patterns file.
