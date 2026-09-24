@@ -727,17 +727,13 @@ impl Scanner {
                 continue;
             }
 
-            let line_num = u32::try_from(line_index.get_line_number(m.start)).unwrap_or(u32::MAX);
+            let (line, column) = line_index.get_position(m.start);
+            let line_num = u32::try_from(line).unwrap_or(u32::MAX);
             if suppression_mgr.is_suppressed(pattern.name(), line_num) {
                 continue;
             }
 
-            let location = Location::new(
-                source,
-                line_num as usize,
-                m.start,
-                m.matched_text.to_string(),
-            );
+            let location = Location::new(source, line, column, m.matched_text.to_string());
             let mut finding = Finding::new(
                 pattern.name(),
                 pattern.category(),
@@ -1251,6 +1247,19 @@ impl LineIndex {
             }
         }
     }
+
+    /// 1-indexed `(line, column)` for a byte offset.
+    ///
+    /// The column counts bytes from the start of the match's own line, so a
+    /// match on the first byte of a line reports column 1 — not its offset
+    /// within the whole file, which is unreadable in editor jump-to-location
+    /// and produced garbage SARIF `startColumn` values on anything but tiny
+    /// files.
+    fn get_position(&self, byte_offset: usize) -> (usize, usize) {
+        let line = self.get_line_number(byte_offset);
+        let line_start = self.line_starts[line - 1];
+        (line, byte_offset - line_start + 1)
+    }
 }
 
 /// Scan error types
@@ -1378,6 +1387,18 @@ mod tests {
         });
         let result = scanner.scan_file(Path::new("/nonexistent/file.txt"));
         assert!(matches!(result, Err(ScanError::InvalidOptions(_))));
+    }
+
+    #[test]
+    fn test_line_index_positions_are_within_line() {
+        let index = LineIndex::new("first\nsecond\nthird");
+        // "second" starts at byte 6; its `c` sits at byte 9 → line 2,
+        // column 4 (1-indexed from the start of the line, not offset 9
+        // within the file).
+        assert_eq!(index.get_position(0), (1, 1));
+        assert_eq!(index.get_position(9), (2, 4));
+        assert_eq!(index.get_position(6), (2, 1));
+        assert_eq!(index.get_position(13), (3, 1));
     }
 
     #[test]

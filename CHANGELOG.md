@@ -69,6 +69,13 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- Pattern-finding columns are now 1-indexed within the match's own line.
+  They previously carried the byte offset within the whole file, so
+  `file.rs:42:18513`-style locations could not be opened in an editor and
+  SARIF `startColumn` values were meaningless on anything but tiny files.
+  `fingerprint` (the baseline key) never included the column, so existing
+  baselines still match; `stable_id` values change because the column is
+  part of their material.
 - `env-file-in-git` matched a `.env` path at a line start by consuming the
   preceding newline character, which attributed the finding to the previous
   line — where an `aegis:ignore:env-file-in-git` directive does not sit —
