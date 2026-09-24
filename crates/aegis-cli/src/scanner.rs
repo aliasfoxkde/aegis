@@ -47,6 +47,10 @@ pub struct ScanOptions {
     /// Comma-separated allowlist of statistical anomaly detectors; `None`
     /// runs all of them, an empty string runs none.
     pub anomaly_detectors: Option<String>,
+    /// Detect copy-paste code clones while scanning; pairs land in
+    /// `ScanStats::clones` and are rendered by the human and JSON formats
+    /// without affecting findings or the exit code.
+    pub detect_clones: bool,
     /// Renderer for the report buffer, mirroring the `--format` flag.
     pub format: OutputFormat,
     /// Suppress header and stats blocks so the buffer carries findings only.
@@ -102,6 +106,7 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         diff_file: opts.diff.clone(),
         baseline: opts.baseline.clone(),
         anomaly_detectors,
+        detect_clones: opts.detect_clones,
         ..Default::default()
     };
 
@@ -522,6 +527,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             anomaly_detectors: None,
+            detect_clones: false,
         };
 
         assert!(!opts.scan_file);
@@ -549,6 +555,7 @@ mod tests {
             quiet: true,
             staged: false,
             anomaly_detectors: None,
+            detect_clones: false,
         };
 
         assert_eq!(opts.categories.as_ref().unwrap(), "secrets,pii");
@@ -571,6 +578,7 @@ mod tests {
             diff: None,
             staged: false,
             anomaly_detectors: list.map(str::to_string),
+            detect_clones: false,
             format: OutputFormat::Human,
             quiet: false,
         }
@@ -624,6 +632,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -648,6 +657,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -672,6 +682,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -701,6 +712,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -724,6 +736,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -748,6 +761,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -776,6 +790,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -803,6 +818,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -832,6 +848,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -862,6 +879,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -892,6 +910,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -933,6 +952,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -961,6 +981,7 @@ mod tests {
             format: OutputFormat::Json,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -995,6 +1016,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -1026,6 +1048,7 @@ mod tests {
             format: OutputFormat::Sarif,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -1055,6 +1078,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -1119,6 +1143,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 
@@ -1191,6 +1216,7 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
             staged: false,
+            detect_clones: false,
         }
     }
 
@@ -1373,6 +1399,7 @@ mod tests {
             all: false,
             diff: None,
             staged: true,
+            detect_clones: false,
             anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,
@@ -1509,6 +1536,7 @@ mod tests {
             format: OutputFormat::Json,
             quiet: false,
             staged: false,
+            detect_clones: false,
             anomaly_detectors: None,
         };
 

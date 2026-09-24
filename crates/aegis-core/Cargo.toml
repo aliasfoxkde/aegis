@@ -74,5 +74,9 @@ harness = false
 name = "scanner_init"
 harness = false
 
+[[bench]]
+name = "clone_detection"
+harness = false
+
 [lints]
 workspace = true

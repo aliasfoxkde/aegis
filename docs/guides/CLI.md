@@ -28,6 +28,7 @@ aegis scan [path] [options]
 | `--all` | Include disabled patterns | `false` |
 | `--anomaly-detectors` | Comma-separated allow-list of statistical anomaly detectors: `comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`; unknown names fail with the valid list | all |
 | `--no-anomalies` | Disable the statistical anomaly layer entirely (conflicts with `--anomaly-detectors`) | `false` |
+| `--detect-clones` | Also detect copy-paste code clones (Type 1–3) within each scanned file. Pairs render in a `Code clones` section (human) and under `stats.clones` (JSON) with kind, similarity, token count, and line ranges. SARIF omits them; they never affect findings or the exit code | `false` |
 
 **Global flags:** `-f, --format <human|json|sarif>` and `-c, --config
 <profile>` are top-level options, so they must come **before** the
@@ -69,6 +70,10 @@ aegis scan . --baseline baseline.json
 # Pre-commit: scan exactly what would be committed (the git index),
 # even if the working tree has since changed
 aegis scan . --staged
+
+# Also surface copy-paste code clones; reported separately, never
+# part of the exit code
+aegis scan . --detect-clones
 ```
 
 ### aegis list

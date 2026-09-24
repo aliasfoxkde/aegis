@@ -48,6 +48,15 @@ every release are attached to the matching GitHub release.
   windows are no longer compared with each other, a file yielding more
   than 256 windows is sampled rather than paired in full, and reported
   clone locations carry real line numbers (they were always line 1).
+- Clone detection is wired into the CLI: `aegis scan --detect-clones`
+  runs the detector on every analyzed file and reports the pairs in a
+  `Code clones` section of the human output and under `stats.clones` in
+  JSON output (kind, description, similarity, token count, and the two
+  locations with real line numbers). Clones are a separate output
+  channel, not findings: they never enter the finding list, risk score,
+  SARIF document, or exit code, and default scans serialize
+  byte-identical JSON to previous releases. A `clone_detection`
+  criterion bench feeds the weekly trend.
 
 ### Security
 

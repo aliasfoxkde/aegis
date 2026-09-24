@@ -1,6 +1,6 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-09-23
+**Last Updated:** 2026-09-24
 **Status:** 🔄 Active — v0.6.2 released (first release whose assets were
 actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
 checksums verified at publish); full gate set green (`--locked` fmt /
@@ -84,12 +84,12 @@ Service; cluster usage is the scan CronJob in `kubernetes/cronjob.yaml`.
 
 ---
 
-## Test Status (verified 2026-09-22)
+## Test Status (verified 2026-09-24)
 
 ```
 cargo fmt --all -- --check                              ✅
 cargo clippy --workspace --all-targets --locked -- -D warnings  ✅
-cargo test --workspace --locked                         ✅ 812 tests
+cargo test --workspace --locked                         ✅ 824 tests
 aegis scan . --severity-threshold high                  ✅ 0 findings
 ```
 
@@ -203,11 +203,12 @@ enforced: test steps must omit `--all-targets` (criterion benches reject
    the 670 rules have too few corpus observations to measure at all —
    coverage grows only as fixtures are added.
 5. **ML/regex hybrid detection** and **AST-level API-call verification**
-   remain unshipped roadmap items (Phase 14); near-miss clone detection
-   shipped 2026-09-23 (#139) — `aegis-core::clone` now classifies
-   Type-3 copies with sequence-aware (LCS) scoring, though the detector
-   still has no caller in the workspace, so it is core capability plus
-   tests only.
+   remain unshipped roadmap items (Phase 14). Near-miss clone detection
+   shipped 2026-09-23 (#139) and is wired to the CLI as
+   `aegis scan --detect-clones` (2026-09-24): pairs report under
+   `stats.clones` in JSON and a `Code clones` section in human output,
+   never as findings, and a `clone_detection` criterion bench tracks the
+   per-file cost in the weekly trend.
 
 Resolved 2026-09-22/23 (previously listed here): pattern state not
 persisted (now `pattern-state.json`), `ScanOptions::workers` ignored (now
