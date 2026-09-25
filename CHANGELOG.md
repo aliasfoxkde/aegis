@@ -14,6 +14,15 @@ every release are attached to the matching GitHub release.
   (rust-version 1.88 — a bump now must change the job in the same
   commit), cargo-machete unused-dependency checks, and a lychee link
   check over README and docs (config in `lychee.toml`).
+- `THIRD-PARTY-NOTICES.md`, generated from `Cargo.lock` by the pinned
+  cargo-about 0.9.2 (`scripts/release/generate-notices.sh`; its
+  accepted-license list mirrors `deny.toml`). Every release tarball now
+  ships it alongside aegis's own `LICENSE`, and a `notices` CI job
+  regenerates and diffs the committed file so it cannot go stale
+  behind a dependency bump.
+- The workspace `repository` metadata now points at the real public
+  mirror (`github.com/aliasfoxkde/aegis`) instead of the nonexistent
+  `aegis/aegis`.
 
 ### Fixed
 

@@ -1,0 +1,34 @@
+# cargo-about configuration for THIRD-PARTY-NOTICES.md.
+#
+# Regenerate via scripts/release/generate-notices.sh (the pinned cargo-about
+# version lives in the `notices` CI job in .github/workflows/ci.yml) and
+# commit the result together with the Cargo.lock change that made it stale.
+# The committed file is the shipped artifact: `scripts/release/build.sh`
+# copies it into every platform tarball, so PR review sees exactly what users
+# receive.
+#
+# The `accepted` list is kept identical to deny.toml's `[licenses] allow`
+# list — one policy, two consumers. Adding a dependency under a new license
+# must update both (cargo-deny fails closed on the dependency side; the
+# generation below fails closed on the notices side).
+
+accepted = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+    "CC0-1.0",
+    "BSL-1.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+
+

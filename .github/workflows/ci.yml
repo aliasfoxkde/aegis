@@ -163,6 +163,28 @@ jobs:
       - name: Run cargo-machete
         run: cargo machete
 
+  # The committed THIRD-PARTY-NOTICES.md is the shipped artifact (release
+  # tarballs carry it verbatim), so it must never go stale: regenerate from
+  # Cargo.lock and diff. A dependency bump that forgets `scripts/release/
+  # generate-notices.sh` fails here.
+  notices:
+    name: Third-Party Notices
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install cargo-about
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          # Pinned to the version THIRD-PARTY-NOTICES.md was generated with;
+          # a cargo-about upgrade may re-detect license files and rewrite the
+          # file, so it moves only through a regeneration PR.
+          tool: cargo-about@0.9.2
+      - name: Regenerate notices
+        run: scripts/release/generate-notices.sh
+      - name: Diff against committed notices
+        run: git diff --exit-code THIRD-PARTY-NOTICES.md
+
   links:
     name: Links
     needs: fmt

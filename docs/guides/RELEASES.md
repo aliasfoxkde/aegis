@@ -10,7 +10,7 @@ Every release ships exactly these uploaded assets:
 
 | Asset | Contents |
 |---|---|
-| `aegis-linux-x86_64.tar.gz` | `aegis`, `aegis-mcp`, `aegis-daemon`, `aegis-bundler` |
+| `aegis-linux-x86_64.tar.gz` | `aegis`, `aegis-mcp`, `aegis-daemon`, `aegis-bundler`, `LICENSE`, `THIRD-PARTY-NOTICES.md` |
 | `aegis-linux-arm64.tar.gz` | same, aarch64 glibc |
 | `aegis-darwin-x86_64.tar.gz` | same, Intel macOS |
 | `aegis-darwin-arm64.tar.gz` | same, Apple Silicon |
@@ -23,6 +23,18 @@ Every release ships exactly these uploaded assets:
 GitHub additionally attaches `Source code (zip)` / `Source code (tar.gz)`.
 The release **title is the bare tag** (`vX.Y.Z`); the body is a short
 summary followed by the version's `CHANGELOG.md` section.
+
+### License compliance in the tarballs
+
+Each platform tarball carries aegis's own `LICENSE` plus
+`THIRD-PARTY-NOTICES.md`, the license texts of all distributed
+third-party crates. The notices file is **committed** at the repo root —
+PR review sees exactly what users extract — and is generated from
+`Cargo.lock` by `scripts/release/generate-notices.sh` using the
+cargo-about version pinned in the `notices` CI job; that job also
+regenerates and diffs it, so a dependency bump cannot land with stale
+notices. Its accepted-license list must stay identical to `deny.toml`'s
+`[licenses] allow` list.
 
 ## The flow
 
