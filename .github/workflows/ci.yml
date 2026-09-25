@@ -176,8 +176,9 @@ jobs:
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           # Pinned to the lychee version the link set was validated against
-          # locally; the action's floating default moved ahead of it.
-          lycheeVersion: 0.23.0
+          # locally; the release tags are named `lychee-vX.Y.Z`, so the v
+          # prefix is required here or the download 404s.
+          lycheeVersion: v0.23.0
           args: --no-progress 'README.md' 'docs/**/*.md'
           fail: true
           token: ${{ secrets.GITHUB_TOKEN }}
