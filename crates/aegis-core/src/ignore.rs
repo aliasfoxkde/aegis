@@ -112,10 +112,14 @@ impl IgnoreManager {
     /// `.aegisignore` re-includes a path excluded by `.gitignore`.
     pub fn should_ignore(&self, path: &Path) -> bool {
         // Built-in rules first: build/cache/VCS directories are always
-        // ignored and cannot be re-included.
+        // ignored and cannot be re-included. `.aegis` is the scanner's
+        // own state directory — its baseline quotes the very findings it
+        // documents, so scanning it re-flags every recorded secret and
+        // compounds the baseline on every refresh. The skip cannot be
+        // opted out of, exactly like `.git`.
         for name in path.components() {
             let name = name.as_os_str().to_string_lossy();
-            if name == "node_modules" || name == "target" || name == ".git" {
+            if name == "node_modules" || name == "target" || name == ".git" || name == ".aegis" {
                 return true;
             }
         }
@@ -321,6 +325,20 @@ mod tests {
         assert!(manager.should_ignore(Path::new("node_modules/package.json")));
         assert!(manager.should_ignore(Path::new("target/debug/binary")));
         assert!(manager.should_ignore(Path::new(".git/config")));
+        assert!(manager.should_ignore(Path::new(".aegis/baseline.json")));
+    }
+
+    #[test]
+    fn test_aegis_state_directory_cannot_be_re_included() {
+        let manager = IgnoreManager::new();
+        // Even an explicit negation must not pull the state directory
+        // back into the scan set: the baseline quotes recorded findings
+        // verbatim, so re-inclusion self-pollutes the next refresh.
+        manager.add_pattern("!baseline.json").unwrap();
+        manager.add_pattern("!docs/**").unwrap();
+        assert!(manager.should_ignore(Path::new(".aegis/baseline.json")));
+        assert!(manager.should_ignore(Path::new("repo/.aegis/baseline.json")));
+        assert!(!manager.should_ignore(Path::new("docs/baseline.json")));
     }
 
     #[test]
@@ -537,7 +555,7 @@ mod tests {
 
         manager.clear();
         // After clear, should not ignore (unless default rules apply)
-        // Note: node_modules/target/.git are always ignored
+        // Note: node_modules/target/.git/.aegis are always ignored
         assert!(!manager.should_ignore(Path::new("debug.log")));
     }
 

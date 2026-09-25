@@ -74,7 +74,7 @@ aegis_core
 ├── control_center_adapter.rs  # Control Center / GitForge integration
 ├── entropy.rs        # Entropy-based secret detection
 ├── finding.rs        # Finding, location, and inspection-ledger types
-├── ignore.rs         # Ignore pattern management (.aegisignore, gitignore)
+├── ignore.rs         # Ignore pattern management (.aegisignore, gitignore, built-in .aegis skip)
 ├── pattern.rs        # Pattern registry, definitions, category scanners
 ├── receipt.rs        # Redacted scan receipts
 ├── remediation.rs    # Guided remediation advisor

@@ -22,7 +22,7 @@ aegis scan [path] [options]
 | `--categories` | Comma-separated category list to include | all |
 | `--severity-threshold` | Minimum severity: `critical`, `high`, `medium`, `low` (`info` observations sit below every threshold and never fail the exit code) | all |
 | `--output-file` | Also write results to this file, rendered in the selected `--format`; stdout output is unaffected | none |
-| `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only. The baseline file itself is excluded from the scan, so it can live inside the scanned tree | none |
+| `--baseline` | Filter out findings recorded in this baseline — JSON output from a previous `--format json` scan; the exit code then reflects new findings only. The `.aegis/` state directory is always excluded from scans, so the baseline can live at `.aegis/baseline.json` inside the scanned tree | none |
 | `--diff` | Scan only the changed lines of a unified diff file | none |
 | `--staged` | Scan the staged (index) content of the git repository instead of files on disk; `<path>` selects the repository | `false` |
 | `--all` | Include disabled patterns | `false` |
@@ -63,10 +63,11 @@ aegis -f sarif scan . --output-file results.sarif
 aegis scan --env
 
 # CI gate over new findings only: record a baseline once, then
-# compare every subsequent scan against it. The baseline file itself
-# is skipped during rescans, so it can live inside the scanned tree.
-aegis -f json scan . --output-file baseline.json
-aegis scan . --baseline baseline.json
+# compare every subsequent scan against it. The `.aegis/` state
+# directory is always skipped, so the baseline can live at
+# .aegis/baseline.json inside the scanned tree.
+aegis -f json scan . --output-file .aegis/baseline.json
+aegis scan . --baseline .aegis/baseline.json
 
 # Pre-commit: scan exactly what would be committed (the git index),
 # even if the working tree has since changed

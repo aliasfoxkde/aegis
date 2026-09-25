@@ -239,14 +239,18 @@ JSON-RPC 2.0 over stdio with methods:
 
 ### Ignore Handling
 
-1. `.aegisignore` - Aegis-specific ignore patterns
-2. `.gitignore` - Standard git ignore
-3. Inline suppression directives (`//`, `#`, `/* ... */` comments):
+1. Built-in exclusions - `node_modules`, `target`, `.git`, and the
+   `.aegis` state directory (baseline, ignore file) are always skipped;
+   they cannot be re-included, so a tracked `.aegis/baseline.json` never
+   re-flags the findings it documents
+2. `.aegisignore` - Aegis-specific ignore patterns
+3. `.gitignore` - Standard git ignore
+4. Inline suppression directives (`//`, `#`, `/* ... */` comments):
    - `aegis:ignore:pattern-name` - suppress named patterns on that line
    - `aegis:ignore-start` / `aegis:ignore-end` - suppress a line range
    - `aegis:ignore-file` - suppress the whole file
    - optional reason after `--` is recorded with the suppression
-4. `--baseline` - Baseline file suppression (findings from a previous
+5. `--baseline` - Baseline file suppression (findings from a previous
    `--format json` scan are filtered; exit codes reflect new findings)
 
 ### Custom Patterns

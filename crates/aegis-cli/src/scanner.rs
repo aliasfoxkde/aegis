@@ -272,6 +272,13 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
     let mut findings = Vec::new();
     let mut stats = ScanStats::default();
     for file in files {
+        // Staged blobs bypass `scan_file`, so ignore rules are applied
+        // here explicitly; otherwise a staged `.aegis/baseline.json`
+        // would re-flag every secret the artifact documents.
+        if scanner.should_ignore(Path::new(&file)) {
+            stats.files_skipped += 1;
+            continue;
+        }
         let blob = staged_blob(&opts.path, &file)?;
         // Same NUL-sniff the engine applies to files on disk; skipped
         // staged blobs are counted exactly like `scan_dir` skips binaries.
@@ -1237,8 +1244,9 @@ mod tests {
             findings.len()
         );
 
-        // The baseline lives outside the scanned tree: a baseline inside
-        // it would itself be scanned (and flagged) on the next run.
+        // The baseline lives outside the scanned tree: a baseline placed
+        // outside `.aegis/` would itself be scanned (and flagged) on the
+        // next run — only the `.aegis/` state directory is always exempt.
         let outside = tempfile::tempdir().unwrap();
         let baseline_path = outside.path().join("baseline.json");
         write_baseline_document(&baseline_path, &findings);
@@ -1250,6 +1258,47 @@ mod tests {
             filtered.is_empty(),
             "all baseline findings must be filtered, got {}",
             filtered.len()
+        );
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    #[test]
+    fn test_in_tree_aegis_baseline_is_not_rescanned() {
+        // A baseline tracked at `.aegis/baseline.json` inside the scan
+        // root is in the walk set, and it quotes the findings it
+        // documents. Without the built-in state-directory skip every
+        // gated rescan re-flags the artifact's own contents (fingerprints
+        // naming the baseline file, which can never be in the baseline),
+        // so the gate could not ever go green.
+        let fixture = baseline_fixture_path();
+        let state_dir = fixture.join(".aegis");
+        std::fs::create_dir(&state_dir).unwrap();
+        let in_tree = state_dir.join("baseline.json");
+
+        let record_opts = baseline_scan_opts(fixture.clone(), None);
+        let scanner = build_scanner_from_opts(&record_opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &record_opts).unwrap();
+        assert!(findings.len() >= 2, "precondition: two flagged lines");
+        write_baseline_document(&in_tree, &findings);
+
+        // Refresh pass (no --baseline): the full finding set is expected,
+        // but none of it may originate inside the state directory.
+        let (refreshed, _) = perform_scan(&scanner, &record_opts).unwrap();
+        assert!(
+            refreshed
+                .iter()
+                .all(|finding| !finding.location.file.contains(".aegis")),
+            "state-directory files must never be re-flagged: {refreshed:?}"
+        );
+
+        // Gated pass (--baseline .aegis/baseline.json): recorded findings
+        // are filtered and the artifact contributes nothing new.
+        let gate_opts = baseline_scan_opts(fixture.clone(), Some(in_tree));
+        let gated_scanner = build_scanner_from_opts(&gate_opts).unwrap();
+        let (gated, _) = perform_scan(&gated_scanner, &gate_opts).unwrap();
+        assert!(
+            gated.is_empty(),
+            "in-tree baseline must gate the scan clean, got: {gated:?}"
         );
         std::fs::remove_dir_all(fixture).ok();
     }
@@ -1409,6 +1458,35 @@ mod tests {
         assert_eq!(findings.len(), 1, "staged secret must be reported");
         assert_eq!(stats.files_scanned, 1);
         assert_eq!(findings[0].location.file, "config.env"); // aegis:ignore:env-file-in-git
+    }
+
+    #[test]
+    fn test_staged_scan_skips_the_state_directory() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(
+            fixture.path(),
+            &[
+                ("config.env", STAGED_SECRET),
+                // A staged baseline quotes the findings it documents;
+                // staged blobs bypass `scan_file`, so the state-directory
+                // skip must be applied to the staged list as well.
+                (".aegis/baseline.json", STAGED_SECRET),
+            ],
+        ); // aegis:ignore:env-file-in-git
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, stats) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(
+            findings.len(),
+            1,
+            "the state-directory blob must not be reported"
+        );
+        assert_eq!(findings[0].location.file, "config.env");
+        assert_eq!(
+            stats.files_skipped, 1,
+            "the skipped baseline must count as skipped"
+        );
     }
 
     #[test]

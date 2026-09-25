@@ -172,11 +172,13 @@ Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
    aegis --format json scan . --output-file baseline.json
    ```
 
-2. **Baseline Gate**: Only new findings fail the build. Store the
-   baseline outside the scanned tree (or add it to `.aegisignore`) so it
-   does not get scanned itself:
+2. **Baseline Gate**: Only new findings fail the build. The
+   conventional home for the baseline is `.aegis/baseline.json` inside
+   the scanned tree — the `.aegis/` state directory is always excluded
+   from scans, so the artifact can quote recorded findings without ever
+   being re-scanned itself:
    ```bash
-   aegis scan . --baseline ../baseline.json
+   aegis scan . --baseline .aegis/baseline.json
    ```
 
 3. **Diff Mode**: Scan only the changed lines of a PR
