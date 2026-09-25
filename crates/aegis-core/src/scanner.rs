@@ -353,6 +353,19 @@ impl Scanner {
         self.ignore_manager.set_root(root)
     }
 
+    /// Whether a path is excluded by the built-in or configured ignore
+    /// rules.
+    ///
+    /// Exposed so callers that enumerate files themselves (staged scans,
+    /// editor integrations) can apply the same exclusions as
+    /// [`Scanner::scan_dir`] — notably the built-in `.aegis`
+    /// state-directory skip, without which scanning a staged baseline
+    /// re-flags every secret it documents.
+    #[must_use]
+    pub fn should_ignore(&self, path: &Path) -> bool {
+        self.ignore_manager.should_ignore(path)
+    }
+
     /// Update options and rebuild category scanners if needed
     ///
     /// # Panics
@@ -2276,6 +2289,69 @@ mod tests {
                 .iter()
                 .all(|unit| unit.unit_id != baseline_file.to_string_lossy()),
             "baseline artifact must stay out of the inspection ledger"
+        );
+    }
+
+    #[test]
+    fn test_scan_dir_skips_the_state_directory() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let def = PatternDefinition {
+            name: "secrets-aws-access-key".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: r"AKIA[0-9A-Z]{16}".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+            enabled: true,
+            severity: Severity::Critical,
+            confidence: crate::Confidence::High,
+            min_entropy: None,
+            description: "AWS Access Key ID detected".to_string(),
+            reference: None,
+            tags: vec!["aws".to_string()],
+            env_var: false,
+            binary: false,
+            remediation: None,
+        };
+        let scanner = Scanner::from_definitions(vec![def]).unwrap();
+
+        // The documented refresh path runs with no --baseline flag at all
+        // (that flag points at the *previous* artifact; the fresh baseline
+        // is written after the scan). A tracked baseline at the scan root
+        // therefore sits in the walk set, and it quotes the very findings
+        // it documents — without the built-in `.aegis` skip every refresh
+        // folds the artifact's own matches into the next baseline.
+        let aegis_dir = temp_dir.path().join(".aegis");
+        std::fs::create_dir(&aegis_dir).unwrap();
+        std::fs::write(
+            aegis_dir.join("baseline.json"),
+            r#"[{"fingerprint":"sha256:encoded-akiaiosfodnn7example"}]"#,
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.path().join("app.rs"),
+            "key = \"AKIAIOSFODNN7EXAMPLE\"",
+        )
+        .unwrap();
+
+        let (findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
+
+        assert_eq!(findings.len(), 1, "control file must still be scanned");
+        assert!(
+            findings[0].location.file.ends_with("app.rs"),
+            "the one finding must come from the control file: {findings:?}"
+        );
+        assert!(
+            stats
+                .inspection_ledger
+                .units
+                .iter()
+                .filter(|unit| unit.unit_id.contains(".aegis"))
+                .all(|unit| unit.status == InspectionStatus::Excluded),
+            "state-directory files must be excluded, never analyzed: {:?}",
+            stats.inspection_ledger.units
         );
     }
 
