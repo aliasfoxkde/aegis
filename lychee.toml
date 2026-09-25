@@ -17,4 +17,8 @@ exclude = [
     "localhost",         # doc examples
     "127.0.0.1",         # doc examples
 ]
-max_retries = 2
+# Slow CDNs and connection flaps from CI ranges: give each request
+# room and retry before failing. (A browser user_agent is NOT the fix —
+# w3.org 403s UAs that claim Chrome without full browser headers.)
+max_retries = 4
+timeout = 30
