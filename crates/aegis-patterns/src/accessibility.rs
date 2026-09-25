@@ -175,7 +175,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "high".to_string(),
             min_entropy: None,
             description: "Document head missing a <title> element".to_string(),
-            reference: Some("https://www.w3.org/WAI/WCAG22/Understanding/page-title".to_string()),
+            reference: Some("https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html".to_string()),
             tags: vec![
                 "accessibility".to_string(),
                 "wcag".to_string(),

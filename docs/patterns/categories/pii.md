@@ -235,7 +235,7 @@ User consent record detected
 (?i)consent\s*(record|management|given)
 ```
 
-**Reference**: <https://gdpr.eu/article-7-conditions-for-consent/>
+**Reference**: <https://gdpr-info.eu/art-7-gdpr/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -432,7 +432,7 @@ Data processing agreement reference detected
 (?i)data\s*processing\s*agreement
 ```
 
-**Reference**: <https://gdpr.eu/article-28-processors/>
+**Reference**: <https://gdpr-info.eu/art-28-gdpr/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -511,7 +511,7 @@ Employer Identification Number (EIN) detected
 \b\d{2}-\d{7}\b
 ```
 
-**Reference**: <https://www.irs.gov/employers/taxpayer-identification-numbers>
+**Reference**: <https://www.irs.gov/businesses/small-businesses-self-employed/employer-id-numbers>
 
 **Input that fires** (verified by the liveness test):
 
@@ -733,7 +733,7 @@ Individual Taxpayer Identification Number (ITIN) detected
 \b9\d{2}-\d{2}-\d{4}\b
 ```
 
-**Reference**: <https://www.irs.gov/individuals/itin>
+**Reference**: <https://www.irs.gov/individuals/individual-taxpayer-identification-number-itin>
 
 **Input that fires** (verified by the liveness test):
 
@@ -943,7 +943,7 @@ Right to erasure request detected
 (?i)(right\s*to\s*erasure|right\s*to\s*be\s*forgotten|delete\s*request)
 ```
 
-**Reference**: <https://gdpr.eu/article-17-right-to-erasure/>
+**Reference**: <https://gdpr-info.eu/art-17-gdpr/>
 
 **Input that fires** (verified by the liveness test):
 

@@ -146,7 +146,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "medium".to_string(),
             min_entropy: None,
             description: "Money held in a binary floating-point field; IEEE 754 cannot represent decimal currency exactly".to_string(),
-            reference: Some("https://martinfowler.com/articles/quantity.html".to_string()),
+            reference: Some("https://martinfowler.com/eaaCatalog/money.html".to_string()),
             tags: vec!["finance".to_string(), "correctness".to_string()],
             env_var: false,
             binary: false,

@@ -114,6 +114,71 @@ jobs:
       - name: Build
         run: cargo build --locked --workspace --release
 
+  feature-tree-sitter:
+    name: Feature tree-sitter
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: stable
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      # The optional grammars are user-selectable but no default lane
+      # enables them, so a broken feature would merge silently. Compile it
+      # and run its dedicated test module.
+      - name: Check feature
+        run: cargo check --locked -p aegis-core --features tree-sitter
+      - name: Test feature
+        run: cargo test --locked -p aegis-core --features tree-sitter tree_sitter_tests
+
+  msrv:
+    name: MSRV 1.88
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: "1.88.0"
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      # Cargo.toml declares rust-version 1.88; this job makes the claim
+      # real. Bumping the declared MSRV requires changing this job in the
+      # same commit (docs/PLAN.md, "MSRV is declared but never enforced").
+      - name: Check workspace on MSRV
+        run: cargo check --locked --workspace
+
+  machete:
+    name: Unused Dependencies
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install cargo-machete
+        uses: taiki-e/install-action@98d24199e2a0e4c9619770c16072327a813b72f0 # v2
+        with:
+          tool: cargo-machete
+      - name: Run cargo-machete
+        run: cargo machete
+
+  links:
+    name: Links
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Config (excludes, retries) lives in lychee.toml at the repo root.
+      # Moving or renaming a linked doc must pass through here; bot-host
+      # 403 exclusions are documented in that file, not inline.
+      - name: Check links in README and docs
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: --no-progress 'README.md' 'docs/**/*.md'
+          fail: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   coverage:
     name: Coverage
     needs: fmt

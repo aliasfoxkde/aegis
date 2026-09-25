@@ -6,7 +6,14 @@
 #
 # Build and load locally where the GitForge runner executes:
 #   docker build -t aegis-builder:1 scripts/release
-FROM rust:1-bookworm
+#
+# Pinned minor, not `rust:1`: a floating tag means the same release tag
+# built in different weeks can carry different rustc versions (and
+# therefore different binaries), and it would drift away from the
+# workspace MSRV that the CI MSRV job enforces. `docker/Dockerfile` pins
+# the same series for the runtime image; bump both together, and only
+# after the MSRV job proves the workspace builds on the new minor.
+FROM rust:1.88-bookworm
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl xz-utils git \

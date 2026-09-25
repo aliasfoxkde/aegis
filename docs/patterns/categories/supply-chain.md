@@ -94,7 +94,7 @@ Rust Cargo.lock detected
 Cargo\.lock
 ```
 
-**Reference**: <https://doc.rust-lang.org/cargo/reference/locking.html>
+**Reference**: <https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html>
 
 **Input that fires** (verified by the liveness test):
 
@@ -638,7 +638,7 @@ Pipfile detected
 Pipfile
 ```
 
-**Reference**: <https://pipenv.pypa.io/en/latest/basics/>
+**Reference**: <https://pipenv.pypa.io/en/latest/pipfile.html>
 
 **Input that fires** (verified by the liveness test):
 
@@ -665,7 +665,7 @@ Pipfile.lock detected
 Pipfile\.lock
 ```
 
-**Reference**: <https://pipenv.pypa.io/en/latest/basics/#pipfile-lock>
+**Reference**: <https://pipenv.pypa.io/en/latest/pipfile.html#pipfile-lock>
 
 **Input that fires** (verified by the liveness test):
 

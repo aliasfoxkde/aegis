@@ -153,7 +153,7 @@ Mobile optimization issue detected - charts may not render properly on mobile de
 responsive.*false|width.*100%.*height.*100%|chart.*mobile.*breakpoint
 ```
 
-**Reference**: <https://chartjs.org/docs/latest/general/responsive.html>
+**Reference**: <https://www.chartjs.org/docs/latest/configuration/responsive.html>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into

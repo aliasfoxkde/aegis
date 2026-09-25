@@ -521,17 +521,22 @@ Rust projects (each claim verified against this tree the day it was
 written). Items already delivered are marked; the rest are open work in
 priority order.
 
-**A. Features that CI never compiles — HIGH, open.** The `tree-sitter`
-feature of `aegis-core` (optional Go/Rust/Python/JS/TS grammars) is not
-enabled by any CI lane, so it can break silently for a user who enables
-it. Fix: a `cargo check -p aegis-core --locked --features tree-sitter`
-lane (plus one focused test) in the existing CI workflow — not a new
-workflow. Exit criteria: the feature cannot merge broken. ☐
+**A. Features that CI never compiles — HIGH, delivered 2026-09-24.**
+The `tree-sitter` feature of `aegis-core` (optional
+Go/Rust/Python/JS/TS grammars) was not enabled by any CI lane, so it
+could break silently for a user who enables it. Delivered: a
+`Feature tree-sitter` job in ci.yml running
+`cargo check -p aegis-core --features tree-sitter` plus its dedicated
+`tree_sitter_tests` module. Exit criteria met: the feature cannot merge
+broken. ✅
 
-**B. MSRV is declared but never enforced — HIGH, open.** Cargo.toml says
-1.88 and docs repeat it, but nothing builds on 1.88. Fix: an MSRV CI job
-(`dtolnay/rust-toolchain@1.88.0`, `cargo check --locked --workspace`).
-Exit criteria: an MSRV regression fails CI before release. ☐
+**B. MSRV is declared but never enforced — HIGH, delivered 2026-09-24
+(as `MSRV 1.88` job).** Cargo.toml says 1.88 and docs repeat it, but
+nothing built on 1.88. Delivered: an MSRV CI job
+(`dtolnay/rust-toolchain` pinned, `toolchain: "1.88.0"`,
+`cargo check --locked --workspace`). Bumping the declared MSRV now
+requires changing that job in the same commit. Exit criteria met: an
+MSRV regression fails CI before release. ✅
 
 **C. Coverage gate that actually gates — HIGH, delivered 2026-09-24.**
 Codecov uploads have been failing on every run ("Token required - not
@@ -552,10 +557,16 @@ operator follow-up (outside repo): set a CODECOV_TOKEN secret so PR
 annotations resume, then re-validate the patch target, which has never
 had data. ✅
 
-**D. Link checking — MEDIUM, open.** The Rustdoc gate exists (deny
-intra-doc lints + `Rustdoc` CI job, 2026-09-24); markdown links are
-unchecked. Fix: lychee in CI (SHA-pinned action, markdown + rendered
-docs). Exit criteria: a moved file fails the docs lane. ☐
+**D. Link checking — MEDIUM, delivered 2026-09-24.** Delivered: a
+`Links` CI job (SHA-pinned lychee-action, README + docs/**/*.md, config
+in `lychee.toml`). The first local run justified the lane: **43 broken
+links**, including 25 dead `reference:` URLs shipped inside pattern
+definitions (fixed in `aegis-patterns`, docs regenerated via
+`generate_docs` so the two cannot drift), one domain that had been taken
+over by redirect spam (`soxlaw.com` → replaced with the official
+govinfo.gov text of SOX), and bot-hostile sites excluded in
+`lychee.toml` with per-host reasons. Exit criteria met: a moved file or
+dead reference fails the docs lane. ✅
 
 **E. GitForge required status checks — MEDIUM, open (GitForge-side).**
 The GitHub ruleset requires PR + CodeQL code-scanning; the GitForge repo
@@ -571,18 +582,26 @@ merge there. Cross-project follow-up in the GitForge admin surface. ☐
   `sha256sum -c` but itself unsigned; the GitForge path carries the
   minisign-signed attestation. Sign the mirror's checksums with the same
   key or document that provenance lives on the GitForge release only.
-- macOS binaries are unsigned/notarized-never: document the Gatekeeper
-  caveat on the release page instead of pretending otherwise. ☐
+- macOS binaries are unsigned/notarized-never: the Gatekeeper caveat is
+  documented in `docs/guides/RELEASES.md` and on the v0.6.3 release page
+  itself (2026-09-24). ✅ (checksums signing: resolved as the "document
+  it" branch — provenance anchor is the minisign-signed GitForge
+  attestation; the mirror's `checksums.txt` is not treated as a root of
+  trust)
 
-**G. Dependency automation split — LOW, open.** Dependabot groups *all*
-cargo updates into one weekly PR (`patterns: ['*']`). Split
-production vs dev-dependency groups so a breaking prod bump is not
-blocked behind a dev-only churn PR. ☐
+**G. Dependency automation split — LOW, delivered 2026-09-24.**
+Dependabot cargo updates are split into `prod-deps` / `dev-deps` groups
+by `dependency-type`, so a breaking production bump is no longer blocked
+behind a dev-only churn PR. ✅
 
-**H. Small provenance/CI items — LOW, open.** SHA-pin
-`cache/upload-artifact` in `bench.yml`/`fuzz.yml` (main CI is already
-pinned); run cargo-machete in CI (configured locally, never enforced);
-generate THIRD-PARTY-NOTICES via `cargo about` and ship it in tarballs. ☐
+**H. Small provenance/CI items — LOW, open (one item left).** SHA-pin
+`actions/cache`/`upload-artifact` in `bench.yml` and the
+`dtolnay/rust-toolchain@nightly` branch ref in `fuzz.yml` (done
+2026-09-24 — every action ref in the repo is now a pinned SHA); run
+cargo-machete in CI (done 2026-09-24, `Unused Dependencies` job); the
+release builder image is pinned to `rust:1.88-bookworm` to match
+`docker/Dockerfile` (done 2026-09-24). Remaining: generate
+THIRD-PARTY-NOTICES via `cargo about` and ship it in tarballs. ☐
 Reproducible archives are **done** (2026-09-24): `build.sh` pins tar
 owner/group to 0:0, normalizes modes, sets every member's mtime to the
 tag's commit time, and gzips with `-n`. Motivated by the v0.6.3

@@ -5,10 +5,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    # Split by dependency type so a production bump is never blocked behind
+    # a dev-only churn PR (docs/PLAN.md, "Dependency automation split").
     groups:
-      rust:
-        patterns:
-          - '*'
+      prod-deps:
+        dependency-type: production
+      dev-deps:
+        dependency-type: development
 
   - package-ecosystem: github-actions
     directory: /

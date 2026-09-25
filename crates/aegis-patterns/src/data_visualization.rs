@@ -83,7 +83,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "high".to_string(),
             min_entropy: None,
             description: "Mobile optimization issue detected - charts may not render properly on mobile devices".to_string(),
-            reference: Some("https://chartjs.org/docs/latest/general/responsive.html".to_string()),
+            reference: Some("https://www.chartjs.org/docs/latest/configuration/responsive.html".to_string()),
             tags: vec!["chart".to_string(), "mobile".to_string(), "responsive".to_string()],
             env_var: false,
             binary: false,

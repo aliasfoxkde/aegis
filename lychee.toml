@@ -1,0 +1,20 @@
+# Link-check config for the `Links` CI job (lychee-action, ci.yml).
+# Scope is README.md + docs/**/*.md, passed as the action's args.
+#
+# Excluded hosts are valid pages that reject non-browser agents: they
+# answer 403 to any datacenter client, so a failure there is a bot
+# block, not a moved page. Everything else that 404s is a real defect —
+# fix the link (verify the replacement with curl first); do not grow
+# this list to make a broken link pass.
+exclude = [
+    "ssa.gov",           # 403 to non-browser agents
+    "hhs.gov",           # 403 to non-browser agents
+    "ato.gov.au",        # 403 to non-browser agents
+    "stackoverflow.com", # Stack Exchange blocks scripted clients
+    "www2.ed.gov",       # 403 to default library UA
+    "canada.ca",         # unreachable from datacenter clients (CDN/geo);
+                         # page verified manually 2026-09-24
+    "localhost",         # doc examples
+    "127.0.0.1",         # doc examples
+]
+max_retries = 2
