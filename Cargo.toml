@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 authors = ["Aegis Team"]
 license = "Apache-2.0"
-repository = "https://github.com/aegis/aegis"
+repository = "https://github.com/aliasfoxkde/aegis"
 description = "Aegis - Security scanning for DevOps and CI/CD"
 
 [[bin]]
@@ -33,7 +33,7 @@ version = "0.6.3"
 edition = "2021"
 authors = ["Aegis Team"]
 license = "Apache-2.0"
-repository = "https://github.com/aegis/aegis"
+repository = "https://github.com/aliasfoxkde/aegis"
 rust-version = "1.88"
 
 # Strict-but-practical lint baseline. Every member crate opts in with

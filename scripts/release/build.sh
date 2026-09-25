@@ -9,7 +9,7 @@
 # untagged or mis-versioned tree.
 #
 # Outputs (uploaded verbatim by publish.sh):
-#   aegis-<os>-<arch>.tar.gz  x5   the four binaries per platform
+#   aegis-<os>-<arch>.tar.gz  x5   the four binaries + LICENSE + notices
 #   aegis-wasm.wasm                the browser/Node scanner module
 #   source.tar.gz / source.zip     `git archive` of the tag
 #   checksums.txt                  `sha256sum -c` manifest over all of the above
@@ -74,6 +74,13 @@ build_platform() {
     done
 
     archive="$(archive_for "$target")"
+    # Every tarball ships the license set: aegis's own Apache-2.0 text and
+    # the third-party notices generated from Cargo.lock. The committed files
+    # are the artifacts (see about.toml and scripts/release/
+    # generate-notices.sh), so what goes in the archive is exactly what
+    # review approved.
+    cp "$repo/LICENSE" "$repo/THIRD-PARTY-NOTICES.md" "$dir/"
+    members+=("LICENSE" "THIRD-PARTY-NOTICES.md")
     # Reproducible by construction: two builds of the same tag must produce
     # byte-identical tarballs no matter who runs them. The v0.6.3 cross-check
     # (pipeline build vs builder-image fallback, identical binaries) showed
