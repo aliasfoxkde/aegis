@@ -401,7 +401,7 @@ Hardcoded credential detected
 (?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -459,7 +459,7 @@ Potential insecure deserialization
 (?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\(
 ```
 
-**Reference**: <https://owasp.org/www-community/attacks/Insecure_Deserialization>
+**Reference**: <https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data>
 
 **Input that fires** (verified by the liveness test):
 
@@ -486,7 +486,7 @@ JWT with 'none' algorithm detected
 (?i)\balg(?:orithm)?\s*["']?\s*[:=]\s*["']?\s*none\b
 ```
 
-**Reference**: <https://owasp.org/www-project-web-security-testing/latest/4-Web_Application_Security_Testing/06-Session_Management_Testing/10-Testing_JSON_Web_Tokens>
+**Reference**: <https://github.com/OWASP/wstg/blob/master/document/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens.md>
 
 **Input that fires** (verified by the liveness test):
 
@@ -538,7 +538,7 @@ Security headers detected
 (?i)X-Content-Type-Options|X-XSS-Protection|Content-Security-Policy
 ```
 
-**Reference**: <https://owasp.org/www-community/projects/verification>
+**Reference**: <https://github.com/OWASP/ASVS>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -1017,7 +1017,7 @@ XML External Entity (XXE) detected
 (?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\"
 ```
 
-**Reference**: <https://owasp.org/www-community/attacks/XML_External_Entities_(XXE)_Processing>
+**Reference**: <https://owasp.org/www-community/vulnerabilities/XML_External_Entity_%28XXE%29_Processing>
 
 **Input that fires** (verified by the liveness test):
 
@@ -1071,7 +1071,7 @@ XXE protection disabled
 (?i)(DocumentBuilder|SAXParser|XMLReader|XMLInputFactory).*disabled
 ```
 
-**Reference**: <https://owasp.org/www-community/attacks/XML_External_Entities_(XXE)_Processing>
+**Reference**: <https://owasp.org/www-community/vulnerabilities/XML_External_Entity_%28XXE%29_Processing>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into

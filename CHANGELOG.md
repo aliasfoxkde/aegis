@@ -7,8 +7,21 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- CI lanes for every declared-but-untested surface: the optional
+  `tree-sitter` feature (compile + its dedicated tests), the MSRV
+  (rust-version 1.88 — a bump now must change the job in the same
+  commit), cargo-machete unused-dependency checks, and a lychee link
+  check over README and docs (config in `lychee.toml`).
+
 ### Fixed
 
+- 25 dead `reference:` URLs shipped inside pattern definitions (and the
+  generated pattern docs), including `soxlaw.com`, whose domain had been
+  taken over and now redirects to unrelated sites; SOX patterns now
+  point at the official govinfo.gov text. Found by the new link-check
+  lane's first run (43 broken links).
 - Release tarballs are byte-reproducible across builders: `build.sh` now
   pins tar owner/group to `0:0`, normalizes member modes, sets every
   member's mtime to the tag's commit time, and gzips with `-n`, so the
@@ -16,6 +29,10 @@ every release are attached to the matching GitHub release.
   Found by the v0.6.3 cross-check, where two independent builds of the
   same tag produced byte-identical binaries but differing tarball
   digests.
+- The release builder image is pinned to `rust:1.88-bookworm` (matching
+  the runtime image) instead of floating `rust:1-bookworm`, and every
+  GitHub Actions ref — including the `@nightly` toolchain ref and the
+  bench cache/artifact actions — is now SHA-pinned.
 
 ## [0.6.3] - 2026-09-24
 

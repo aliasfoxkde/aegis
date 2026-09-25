@@ -346,7 +346,7 @@ Consul service definition detected
 (?i)service\s*\{.*name.*}
 ```
 
-**Reference**: <https://www.consul.io/docs/services>
+**Reference**: <https://developer.hashicorp.com/consul/docs>
 
 **Input that fires** (verified by the liveness test):
 
@@ -431,7 +431,7 @@ Privileged container detected
 (?i)privileged:\s*true
 ```
 
-**Reference**: <https://kubernetes.io/docs/concepts/security/linux-namespaces/#privileged-containers>
+**Reference**: <https://kubernetes.io/docs/concepts/security/>
 
 **Input that fires** (verified by the liveness test):
 

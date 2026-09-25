@@ -104,7 +104,7 @@ API Key embedded in URL detected
 (?i)[?&](api_key|api-key|apikey|access_token|auth_token)=[a-zA-Z0-9_-]{10,}
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -222,7 +222,7 @@ Connection string with password detected
 (?i)(server|host|data source).*(password|pwd).*[;=]
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -252,7 +252,7 @@ Database connection string detected
 (?i)(mongodb|postgres|mysql|redis|mssql)://[^\s'"]{10,}
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Environment value that fires** (verified by the liveness test):
 
@@ -431,7 +431,7 @@ Firebase API Key detected
 AIza[0-9A-Za-z_-]{35}
 ```
 
-**Reference**: <https://firebase.google.com/docs/api-keys>
+**Reference**: <https://firebase.google.com/docs/projects/api-keys>
 
 **Environment value that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -517,7 +517,7 @@ GitHub OAuth Token detected
 gho_[A-Za-z0-9]{36}
 ```
 
-**Reference**: <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-tokens>
+**Reference**: <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>
 
 **Environment value that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -664,7 +664,7 @@ Hardcoded password detected
 (?i)(password|passwd|pwd|secret)\s*[:=]\s*['"][^'"]{3,}['"]
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -692,7 +692,7 @@ Hardcoded username detected
 (?i)(username|user|login)\s*[:=]\s*['"][^'"]{2,}['"]
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -752,7 +752,7 @@ HuggingFace API Key detected
 hf_[A-Za-z0-9]{34,}
 ```
 
-**Reference**: <https://huggingface.co/docs/api-keys>
+**Reference**: <https://huggingface.co/docs/hub/security-tokens>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -872,7 +872,7 @@ OpenAI API Key detected
 sk-[A-Za-z0-9]{48}
 ```
 
-**Reference**: <https://platform.openai.com/docs/api-keys>
+**Reference**: <https://platform.openai.com/docs/guides/production-best-practices>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -901,7 +901,7 @@ PGP Private Key detected
 -----BEGIN PGP PRIVATE KEY BLOCK-----
 ```
 
-**Reference**: <https://gnupg.org/documentation/manuals/gnupg/GPG-Key-generation.html>
+**Reference**: <https://gnupg.org/documentation/manuals/gnupg/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -1043,7 +1043,7 @@ GitHub Token detected
 gh[pousr]_[A-Za-z0-9_]{36,}
 ```
 
-**Reference**: <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-tokens>
+**Reference**: <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>
 
 **Environment value that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
@@ -1193,7 +1193,7 @@ Twilio API Key detected
 SK[0-9a-fA-F]{32}
 ```
 
-**Reference**: <https://www.twilio.com/docs/iam/keys>
+**Reference**: <https://www.twilio.com/docs/iam/api-keys>
 
 **Environment value that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into

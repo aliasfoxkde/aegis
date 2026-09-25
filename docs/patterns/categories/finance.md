@@ -189,7 +189,7 @@ Money held in a binary floating-point field; IEEE 754 cannot represent decimal c
 (?i)\b(?:double|float)\s+(?:price|amount|balance|total|cost|fee|subtotal|salary|payment)s?\b|(?:price|amount|balance|total|cost|fee)s?\s*:\s*float\b
 ```
 
-**Reference**: <https://martinfowler.com/articles/quantity.html>
+**Reference**: <https://martinfowler.com/eaaCatalog/money.html>
 
 **Input that fires** (verified by the liveness test):
 

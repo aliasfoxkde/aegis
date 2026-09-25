@@ -807,7 +807,7 @@ regex is suppressed:
 ```regex
 (?i)<title[\s>]
 ```
-**Reference**: <https://www.w3.org/WAI/WCAG22/Understanding/page-title>
+**Reference**: <https://www.w3.org/WAI/WCAG22/Understanding/page-titled.html>
 
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into

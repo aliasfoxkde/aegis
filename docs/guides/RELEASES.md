@@ -114,6 +114,19 @@ attestation; the attestation covers every asset *including*
 - **`checksums.txt` is over the published archives**, in `sha256sum -c`
   format (since 0.6.0). Per-platform checksum files hashed unpacked
   binaries and were removed.
+- **`checksums.txt` on the GitHub mirror is unsigned.** It is verifiable
+  only against itself; the provenance anchor is the GitForge release,
+  whose attestation is minisign-signed. After every publish, compare the
+  mirror's asset digests against the GitForge pipeline's receipt (or let
+  both builds of the same tag prove byte-reproducibility — see
+  "Reproducibility" above); do not treat the mirror's `checksums.txt` as
+  a root of trust.
+- **macOS binaries are unsigned and never notarized.** The darwin
+  targets are zig-linked on the build host (stated in the attestation),
+  so Gatekeeper quarantines them on first launch. Run
+  `xattr -d com.apple.quarantine aegis` (or right-click → Open) after
+  extracting; the release page says the same instead of implying the
+  binaries are Apple-signed.
 - **`fuzz/Cargo.lock` pins `aegis-core`** and is not verified by CI — the
   weekly fuzz jobs run `cargo fuzz run` without `--locked`, so a drifted
   lock would silently resolve fresh. The version-bump PR must update it

@@ -29,16 +29,13 @@ parking_lot = "0.12"
 glob = "0.3"
 
 # Ignore files
-ignore = "0.4"
 
 # Walking directories
 walkdir = "2.5"
 
 # Diffs
-similar = "3.1"
 
 # Time
-time = { version = "0.3", features = ["formatting"] }
 
 # Directories
 dirs = "7.0"

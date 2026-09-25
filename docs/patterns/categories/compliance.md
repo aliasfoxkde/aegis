@@ -304,7 +304,7 @@ GDPR Article 17 (Right to Erasure) reference detected
 (?i)article\s*17|right\s*to\s*erasure
 ```
 
-**Reference**: <https://gdpr.eu/article-17-right-to-erasure/>
+**Reference**: <https://gdpr-info.eu/art-17-gdpr/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -412,7 +412,7 @@ GLBA (Gramm-Leach-Bliley Act) reference detected
 (?i)glba|gramm[-_]?leach[-_]?bliley
 ```
 
-**Reference**: <https://www.ftc.gov/privacy/privacyinitiatives/glbact>
+**Reference**: <https://www.ftc.gov/business-guidance/privacy-security/gramm-leach-bliley-act>
 
 **Input that fires** (verified by the liveness test):
 
@@ -871,7 +871,7 @@ SOC 2 reference detected
 (?i)soc\s*2|service\s*organization\s*control
 ```
 
-**Reference**: <https://www.aicpa.org/soc2>
+**Reference**: <https://www.aicpa-cima.com/topic/audit-assurance>
 
 **Input that fires** (verified by the liveness test):
 
@@ -898,7 +898,7 @@ SOC 2 trust service criteria detected
 (?i)(security|availability|processing\s*integrity|confidentiality|privacy)\s*(criteria|principle)
 ```
 
-**Reference**: <https://www.aicpa.org/soc2>
+**Reference**: <https://www.aicpa-cima.com/topic/audit-assurance>
 
 **Input that fires** (verified by the liveness test):
 
@@ -925,7 +925,7 @@ SOX compliance reference detected
 (?i)sox|sarbanes[-_]?oxley
 ```
 
-**Reference**: <https://www.soxlaw.com/>
+**Reference**: <https://www.govinfo.gov/content/pkg/PLAW-107publ204/html/PLAW-107publ204.htm>
 
 **Input that fires** (verified by the liveness test):
 

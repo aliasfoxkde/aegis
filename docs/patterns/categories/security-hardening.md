@@ -149,7 +149,7 @@ Potential insecure deserialization vulnerability
 (?i)(unpickle|unserialize|ObjectInputStream|YAML\.load)\s*\(
 ```
 
-**Reference**: <https://owasp.org/www-community/attacks/Insecure_Deserialization>
+**Reference**: <https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data>
 
 **Input that fires** (verified by the liveness test):
 
@@ -559,7 +559,7 @@ XML External Entity (XXE) vulnerability detected
 (?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\"
 ```
 
-**Reference**: <https://owasp.org/www-community/attacks/XML_External_Entities_(XXE)_Processing>
+**Reference**: <https://owasp.org/www-community/vulnerabilities/XML_External_Entity_%28XXE%29_Processing>
 
 **Input that fires** (verified by the liveness test):
 
@@ -800,7 +800,7 @@ Weak cryptographic protocol/algorithm detected
 (?i)(ssl_v2|ssl_v3|tls_1[01]|md5|sha1)\s*[=:]
 ```
 
-**Reference**: <https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure>
+**Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test):
 
