@@ -24,8 +24,15 @@ version="$(version_from_tag "$tag")"
 check_manifest_version "$repo" "$version"
 commit="$(git rev-parse --verify "$tag^{commit}")"
 # Fixed mtime for the platform tarballs (see build_platform): the tag's
-# commit time, so archives never carry a builder's wall clock.
-tag_epoch="$(git show -s --format=%ct "$tag")"
+# commit time, so archives never carry a builder's wall clock. Read %ct from
+# the commit, not the tag: on an annotated tag, `git show -s` still prints
+# the whole tag-object display, and tar would silently substitute a garbage
+# date for the multi-line string instead of failing.
+tag_epoch="$(git show -s --format=%ct "$commit")"
+[[ "$tag_epoch" =~ ^[0-9]+$ ]] || {
+    printf 'tag epoch is not a bare number: %q\n' "$tag_epoch" >&2
+    exit 1
+}
 
 cd "$repo"
 
