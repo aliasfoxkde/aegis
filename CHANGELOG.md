@@ -9,6 +9,10 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+## [0.6.4] - 2026-09-27
+
+### Added
+
 - CI lanes for every declared-but-untested surface: the optional
   `tree-sitter` feature (compile + its dedicated tests), the MSRV
   (rust-version 1.88 — a bump now must change the job in the same
