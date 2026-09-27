@@ -26,6 +26,18 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- The `.aegis` state directory is now a built-in exclusion, like
+  `node_modules`, `target`, and `.git`. A baseline tracked at
+  `.aegis/baseline.json` quotes the findings it documents, so any scan
+  that included it re-flagged those contents under fingerprints naming
+  the baseline file — which can never appear in the baseline itself —
+  and every refresh compounded the artifact (one repository's baseline
+  grew 2,721 → 13,143 entries, ~80% self-referential). The skip applies
+  to directory scans, single-file scans, and `--staged` (which now
+  consults ignore rules via the new `Scanner::should_ignore`), and it
+  cannot be re-included by `.aegisignore` or `!` rules. The baseline
+  can now live at the conventional `.aegis/baseline.json` inside the
+  scanned tree with no out-of-tree dance.
 - 25 dead `reference:` URLs shipped inside pattern definitions (and the
   generated pattern docs), including `soxlaw.com`, whose domain had been
   taken over and now redirects to unrelated sites; SOX patterns now
