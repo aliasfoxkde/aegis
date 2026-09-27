@@ -571,7 +571,21 @@ dead reference fails the docs lane. ✅
 **E. GitForge required status checks — MEDIUM, open (GitForge-side).**
 The GitHub ruleset requires PR + CodeQL code-scanning; the GitForge repo
 has no required-checks policy, so a red GitForge run does not block a
-merge there. Cross-project follow-up in the GitForge admin surface. ☐
+merge there. Cross-project follow-up in the GitForge admin surface.
+
+Investigated 2026-09-25 against the GitForge source
+(`/nas/Temp/repos/GitForge`): required checks are **not currently
+implementable there — it is a product gap, not a configuration gap**.
+The API surface is auth, repos (CRUD + artifacts), pipelines and jobs
+only; there is no pull-request/merge model, no branch/ref-protection
+concept, and no `pre-receive`/`update` hook enforcement (served repos
+carry only git's stock `.sample` hooks). The sole "check-runs" code is
+an *outbound* terminal-status publisher in
+`crates/gitforge-storage/src/publication.rs`. Enforcement therefore
+lives entirely on the GitHub side; GitForge `main` is a mirror updated
+by `git push gitforge origin/main:main`, gated by credentials rather
+than policy. Resuming this item means filing the feature upstream
+(status aggregation + ref-update policy hooks) in the GitForge repo. ☐
 
 **F. Release provenance gaps — MEDIUM, open.**
 - `scripts/release/Dockerfile` builds on `rust:1-bookworm` (floating
