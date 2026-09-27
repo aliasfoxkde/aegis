@@ -16,6 +16,12 @@ exclude = [
                          # page verified manually 2026-09-24
     "iso.org",           # 403 to datacenter clients (bot policy); pages
                          # verified manually 2026-09-25
+    "gdpr.eu",           # times out from GitHub runners while answering
+                         # from elsewhere (200 in <1s verified locally
+                         # 2026-09-25 and 2026-09-27); datacenter
+                         # geo-throttling, not dead links — it flapped
+                         # three CI runs in two days even with the
+                         # retries below
     "localhost",         # doc examples
     "127.0.0.1",         # doc examples
 ]
