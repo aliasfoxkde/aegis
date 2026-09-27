@@ -9,6 +9,18 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+### Fixed
+
+- Release builds: the tarball mtime pin now reads the tag commit's time
+  (`git show -s --format=%ct` on the commit, not the tag — on an
+  annotated tag the command prints the whole tag-object display, and
+  tar silently substituted a garbage date instead of failing). The
+  build now also rejects a non-numeric epoch outright. The v0.6.4
+  tarballs carry a constant `INT64_MIN` mtime as a result; extraction
+  is unaffected (GNU tar 1.35, busybox tar, and python tarfile all
+  verified), and the digests are stable, so the release stands as
+  published.
+
 ## [0.6.4] - 2026-09-27
 
 ### Added
