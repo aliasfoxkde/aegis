@@ -139,7 +139,9 @@ attestation; the attestation covers every asset *including*
   `xattr -d com.apple.quarantine aegis` (or right-click → Open) after
   extracting; the release page says the same instead of implying the
   binaries are Apple-signed.
-- **`fuzz/Cargo.lock` pins `aegis-core`** and is not verified by CI — the
-  weekly fuzz jobs run `cargo fuzz run` without `--locked`, so a drifted
-  lock would silently resolve fresh. The version-bump PR must update it
-  by hand (`cd fuzz && cargo update -p aegis-core`).
+- **`fuzz/Cargo.lock` pins `aegis-core`** and lives outside the workspace,
+  so `--locked` never verifies it — a drifted lock would silently resolve
+  fresh at fuzz time. The Dependency Policy CI job now runs
+  `scripts/check-fuzz-lock.sh` to catch exactly that; the version-bump
+  PR still fixes it by hand (`cd fuzz && cargo update -p aegis-core`)
+  when the check goes red.

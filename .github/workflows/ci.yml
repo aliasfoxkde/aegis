@@ -180,6 +180,10 @@ jobs:
           # a cargo-about upgrade may re-detect license files and rewrite the
           # file, so it moves only through a regeneration PR.
           tool: cargo-about@0.9.2
+      # One license policy, two consumers (cargo-deny, cargo-about): the
+      # lists must be identical or the gates disagree.
+      - name: Check license-list parity
+        run: scripts/check-license-parity.sh
       - name: Regenerate notices
         run: scripts/release/generate-notices.sh
       - name: Diff against committed notices
@@ -269,3 +273,7 @@ jobs:
           tool: cargo-deny
       - name: Check advisories, licenses, bans, sources
         run: cargo deny check
+      # The fuzz lockfile lives outside the workspace, so `--locked` never
+      # verifies it; catch a version bump that forgot to update it.
+      - name: Check fuzz lockfile pins the workspace
+        run: scripts/check-fuzz-lock.sh

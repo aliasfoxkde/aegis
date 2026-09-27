@@ -23,6 +23,12 @@ every release are attached to the matching GitHub release.
 - The workspace `repository` metadata now points at the real public
   mirror (`github.com/aliasfoxkde/aegis`) instead of the nonexistent
   `aegis/aegis`.
+- Two CI drift checks close documented "keep in sync by hand" gaps:
+  `scripts/check-license-parity.sh` (in the `notices` job) fails unless
+  `deny.toml`'s allowed licenses and `about.toml`'s accepted list are
+  identical, and `scripts/check-fuzz-lock.sh` (in the Dependency Policy
+  job) fails when `fuzz/Cargo.lock` pins an `aegis-core` version other
+  than the workspace's.
 
 ### Fixed
 
