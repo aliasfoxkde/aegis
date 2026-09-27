@@ -220,16 +220,15 @@ testing and are out of scope by design.
 
 ## Distribution
 
-Current channels:
+Historical claim below predates the GitForge-first pipeline. The current
+asset set, release flow, and tarball contents live in
+[`guides/RELEASES.md`](guides/RELEASES.md); `PLAN.md`'s "Current state"
+table is the authoritative status snapshot.
 
 - **GitHub Releases**: checksummed binaries (SHA-256 `checksums.txt` per
   platform) for linux-amd64, linux-arm64, macOS x86_64/arm64, Windows,
   plus `aegis_wasm.wasm`, published by `.github/workflows/release.yml` on
   `v*` tags — 9 assets in total
-- **From source**: `cargo install --path crates/aegis-cli` or the
-  workspace build; MSRV 1.88
-- **MCP / daemon**: `aegis-mcp` and `aegis-daemon` binaries ship in the
-  same release assets for editor and service integrations
 
 ---
 
