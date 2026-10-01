@@ -112,6 +112,7 @@ impl Config {
                     "code-quality".to_string(),
                     "devops".to_string(),
                     "ai-detection".to_string(),
+                    "ai-slop".to_string(),
                     "supply-chain".to_string(),
                 ]),
                 output_format: OutputFormat::Json,

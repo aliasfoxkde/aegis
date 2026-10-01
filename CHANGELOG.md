@@ -9,6 +9,19 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- New `ai-slop` detection category (7 rules) flagging LLM-prose style
+  tells in source trees: em dashes and other typographic punctuation
+  (curly quotes, the single-character ellipsis), AI attribution footers
+  (`Generated with …`, `Co-Authored-By: …` — medium confidence, since
+  they are provenance records), chat-transcript openers ("You're
+  absolutely right", "Certainly!"), and the recycled narrative/hype
+  lexicon ("delve into", "rich tapestry", "harness the power"). Every
+  rule is `info` severity — reported, but never contributing to the
+  risk score or the exit code — with low confidence per the honesty
+  contract of the sibling `ai-detection` category: triage signals, not
+  verdicts. A file where several slop rules fire at once is the real
+  signal.
+
 ### Fixed
 
 - Release builds: the tarball mtime pin now reads the tag commit's time

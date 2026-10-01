@@ -37,6 +37,8 @@ from dataclasses import dataclass
 
 OVERRIDES: dict[str, str] = {
     "ai-formulaic-verb": "// This function leverages the config cache",
+    "slop-em-dash": "—",
+    "slop-ai-attribution": "co-authored-by: Claude",
     "finance-balance-read-modify-write": "balance = balance - amount",
     "finance-float-equality": "balance == 0.0",
     "finance-math-round-money": "Math.round(totalAmount * 100) / 100",

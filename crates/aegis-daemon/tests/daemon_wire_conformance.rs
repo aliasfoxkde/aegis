@@ -29,7 +29,7 @@ use tokio::net::UnixStream;
 
 const FIXTURES: &str = include_str!("fixtures/daemon_wire_conformance.json");
 
-/// The first scan request pays the one-time lazy compilation of 670
+/// The first scan request pays the one-time lazy compilation of 677
 /// patterns; on a loaded runner that can take a minute.
 const SESSION_DEADLINE: Duration = Duration::from_secs(180);
 

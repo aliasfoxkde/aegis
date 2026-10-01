@@ -77,7 +77,7 @@ Every category is a lowercase kebab-case string dispatched by
 `aegis_patterns::by_category()`. Selecting an unknown category with
 `--categories` or in a config profile is a hard error listing the valid
 names (`PatternRegistry::validate_categories`). Current categories:
-accessibility, ai-detection, ai-safety, api-integration, arm,
+accessibility, ai-detection, ai-safety, ai-slop, api-integration, arm,
 cloud-native, cloudformation, code-quality, compliance, container,
 data-visualization, devops, finance, frameworks, git-hygiene, git-ops,
 graphql, healthcare, infrastructure, kubernetes, llm-guardrails,

@@ -11,7 +11,7 @@ and quality phases. Status is updated as phases land.
 
 | Dimension | State |
 | --- | --- |
-| Patterns | 670 across 34 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
+| Patterns | 677 across 35 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
 | Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
@@ -50,7 +50,7 @@ Every shipped rule must prove it can fire. The corpus harness caught three
 dead rules on first contact; liveness makes that bug class impossible to
 reintroduce. Shipped in this phase: `scripts/generate_examples.py`
 (deterministic, crc32-seeded, reproducible byte-for-byte),
-`crates/aegis-patterns/src/examples.rs` (all 670 enabled patterns), and
+`crates/aegis-patterns/src/examples.rs` (all 677 enabled patterns), and
 `crates/aegis-core/tests/pattern_liveness.rs` (runs via
 `cargo test --workspace`, so CI covers it).
 
@@ -73,7 +73,7 @@ Remaining for follow-up phases: hand-polish generator output realism
 
 ### Phase 2 — Lazy per-extension compilation — DELIVERED
 
-The full registry compiled synchronously at startup (~670 patterns) — what
+The full registry compiled synchronously at startup (~677 patterns) — what
 blew the MCP 30-second deadline. Shipped in this phase:
 
 - `PatternRegistry::build_category_scanners_for_extension` narrows patterns

@@ -84,6 +84,7 @@ impl From<Pattern> for aegis_core::PatternDefinition {
 pub mod accessibility;
 pub mod ai_detection;
 pub mod ai_safety;
+pub mod ai_slop;
 pub mod api_integration;
 pub mod arm;
 pub mod cloud_native;
@@ -128,6 +129,7 @@ pub fn all_patterns() -> Vec<Pattern> {
     patterns.extend(code_quality::get());
     patterns.extend(devops::get());
     patterns.extend(ai_detection::get());
+    patterns.extend(ai_slop::get());
     patterns.extend(security_hardening::get());
     patterns.extend(accessibility::get());
     patterns.extend(web_security::get());
@@ -169,6 +171,7 @@ pub fn by_category(category: &str) -> Vec<Pattern> {
         "code-quality" => code_quality::get(),
         "devops" => devops::get(),
         "ai-detection" => ai_detection::get(),
+        "ai-slop" => ai_slop::get(),
         "security-hardening" => security_hardening::get(),
         "accessibility" => accessibility::get(),
         "web-security" => web_security::get(),

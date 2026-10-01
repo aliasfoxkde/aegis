@@ -231,6 +231,11 @@ fn default_category_weights() -> HashMap<String, f64> {
     m.insert("accessibility".to_string(), 0.7);
     m.insert("git-hygiene".to_string(), 0.5);
     m.insert("ai-detection".to_string(), 1.0);
+    // Slop findings are info severity, so this weight is moot today (the
+    // zero severity weight already scores them at zero); kept explicit at
+    // half weight so a future severity re-rating cannot silently jump to
+    // the 1.0 fallback.
+    m.insert("ai-slop".to_string(), 0.5);
     m.insert("shift-left".to_string(), 1.0);
     m
 }
