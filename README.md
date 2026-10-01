@@ -7,7 +7,7 @@
 
 ## Features
 
-- **[670 Detection Patterns](docs/patterns/README.md)** across 34 categories
+- **[677 Detection Patterns](docs/patterns/README.md)** across 35 categories
 - **High Performance** - Built in Rust with category-based regex pre-filtering
 - **CI/CD Integration** - GitHub Actions, GitLab CI, Jenkins, Azure DevOps
 - **MCP Server** - Model Context Protocol server for AI tool integration
@@ -85,7 +85,7 @@ More examples in the [Quick Start Guide](docs/guides/QUICK_START.md).
 
 ## Pattern Categories
 
-Aegis includes **670 patterns** across **34 categories** (counts generated
+Aegis includes **677 patterns** across **35 categories** (counts generated
 from source; see the full catalog for every rule):
 
 | Category | Patterns | Description |
@@ -116,6 +116,7 @@ from source; see the full catalog for every rule):
 | [cryptography](docs/patterns/README.md#cryptography) | 10 | Cryptographic primitive misuse |
 | [api-integration](docs/patterns/README.md#api-integration) | 9 | HTTP client, webhook mistakes |
 | [terraform](docs/patterns/README.md#terraform) | 7 | HashiCorp Terraform |
+| [ai-slop](docs/patterns/README.md#ai-slop) | 7 | LLM prose tells: em dashes, slop lexicon |
 | [data-visualization](docs/patterns/README.md#data-visualization) | 5 | Charting pitfalls |
 | [pwa](docs/patterns/README.md#pwa) | 5 | Progressive web app checks |
 | [container](docs/patterns/README.md#container) | 4 | Container hardening |
@@ -125,7 +126,7 @@ from source; see the full catalog for every rule):
 | [cloudformation](docs/patterns/README.md#cloudformation) | 3 | CloudFormation templates |
 | [arm](docs/patterns/README.md#arm) | 2 | Azure Resource Manager |
 
-Browse all [670 detection patterns](docs/patterns/README.md).
+Browse all [677 detection patterns](docs/patterns/README.md).
 
 ## Documentation
 
@@ -215,14 +216,14 @@ aegis/
 │   ├── aegis-daemon/     # Daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
 │   ├── aegis-wasm/       # WebAssembly binding
-│   └── aegis-patterns/    # 670 pattern definitions
+│   └── aegis-patterns/    # 677 pattern definitions
 ├── config/profiles/       # Configuration profiles
 └── docs/                  # Documentation
 ```
 
 ## Contributing Patterns
 
-The 670 shipped patterns live as Rust definitions in
+The 677 shipped patterns live as Rust definitions in
 `crates/aegis-patterns/src/` and are compiled into every binary. For
 one-off organization rules without a code change, a `.aegis.yml` /
 `.aegis.yaml` at the scan root accepts custom patterns (fail-loud

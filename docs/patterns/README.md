@@ -1,6 +1,6 @@
 # Detection Patterns
 
-Aegis ships **670 detection patterns** across **34 categories**.
+Aegis ships **677 detection patterns** across **35 categories**.
 Every pattern is compiled into every Aegis surface (CLI, MCP server,
 daemon, WASM) from the source in `crates/aegis-patterns/src/`.
 
@@ -51,6 +51,7 @@ example enforced by the liveness test (`pattern_liveness.rs` in CI).
 | [accessibility](./categories/accessibility.md) | 28 | WCAG 2.x success criteria for markup, media, and styles |
 | [ai-detection](./categories/ai-detection.md) | 33 | Informative markers of likely AI-generated code — triage signals, not verdicts |
 | [ai-safety](./categories/ai-safety.md) | 25 | Agentic and LLM application safety checks |
+| [ai-slop](./categories/ai-slop.md) | 7 | LLM prose style markers: em dashes, typographic punctuation, slop lexicon — informative |
 | [api-integration](./categories/api-integration.md) | 9 | HTTP client and webhook integration mistakes |
 | [arm](./categories/arm.md) | 2 | Azure Resource Manager template issues |
 | [cloud-native](./categories/cloud-native.md) | 38 | Cloud-native build and runtime practices |

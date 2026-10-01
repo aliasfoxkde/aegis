@@ -13,6 +13,14 @@
 //! * every `aegis:expect-none <rule>` fixture in `negative/` must keep
 //!   the named rule silent outside its directive lines.
 //!
+//! Info-severity findings are exempt from the precision floors: they
+//! cannot fail a scan (the CLI's exit code ignores `info`) and they
+//! score zero risk, so flagging ordinary prose is their contract, not a
+//! regression. They are still counted and printed so their volume stays
+//! auditable — the `ai-slop` style markers are the first rules in this
+//! class, and no clean fixture could satisfy a zero-findings contract
+//! against a rule that exists to notice em dashes.
+//!
 //! Thresholds are pinned just below measured performance — ratchet them
 //! up as the corpus grows, never down to make a regression pass.
 
@@ -223,6 +231,7 @@ fn corpus_meets_precision_and_recall_thresholds() {
     let mut misses: Vec<Miss> = Vec::new();
     let mut true_positives = 0usize;
     let mut false_positives: Vec<String> = Vec::new();
+    let mut info_observations: Vec<String> = Vec::new();
     let mut rule_stats: BTreeMap<String, RuleStat> = BTreeMap::new();
 
     for (relative, content) in collect_sources(&root.join("vulnerable")) {
@@ -232,6 +241,13 @@ fn corpus_meets_precision_and_recall_thresholds() {
 
         let findings = scanner.scan_string(&content, &relative);
         for finding in &findings {
+            if finding.severity == "info" {
+                info_observations.push(format!(
+                    "vulnerable/{relative}:{}: {} (info observation)",
+                    finding.location.line, finding.pattern
+                ));
+                continue;
+            }
             let stat = rule_stats.entry(finding.pattern.clone()).or_default();
             if expected_lines.contains(&finding.location.line) {
                 true_positives += 1;
@@ -268,6 +284,13 @@ fn corpus_meets_precision_and_recall_thresholds() {
     for (relative, content) in collect_sources(&root.join("clean")) {
         let findings = scanner.scan_string(&content, &relative);
         for finding in &findings {
+            if finding.severity == "info" {
+                info_observations.push(format!(
+                    "clean/{relative}:{}: {} (info observation)",
+                    finding.location.line, finding.pattern
+                ));
+                continue;
+            }
             let location = format!(
                 "clean/{relative}:{}: {} flagged benign code",
                 finding.location.line, finding.pattern
@@ -276,6 +299,17 @@ fn corpus_meets_precision_and_recall_thresholds() {
             let stat = rule_stats.entry(finding.pattern.clone()).or_default();
             stat.false_positives += 1;
             stat.false_positive_locations.push(location);
+        }
+    }
+
+    if !info_observations.is_empty() {
+        eprintln!(
+            "{} info-severity observation(s) over the corpus — exempt from the \
+             precision floors (see the module docs), printed for audit:",
+            info_observations.len()
+        );
+        for observation in &info_observations {
+            eprintln!("  {observation}");
         }
     }
 

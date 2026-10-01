@@ -77,6 +77,7 @@ Optimized for CI/CD pipelines (`config/profiles/pipeline.json`):
     "code-quality",
     "devops",
     "ai-detection",
+    "ai-slop",
     "supply-chain"
   ],
   "output_format": "json"

@@ -363,6 +363,9 @@ fn category_description(category: &str) -> &'static str {
         "ai-detection" => {
             "Informative markers of likely AI-generated code — triage signals, not verdicts"
         }
+        "ai-slop" => {
+            "LLM prose style markers: em dashes, typographic punctuation, slop lexicon — informative"
+        }
         "ai-safety" => "Agentic and LLM application safety checks",
         "api-integration" => "HTTP client and webhook integration mistakes",
         "arm" => "Azure Resource Manager template issues",
