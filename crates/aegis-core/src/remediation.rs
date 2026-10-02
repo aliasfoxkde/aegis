@@ -764,7 +764,7 @@ mod tests {
         assert!(remediation.is_some());
         let rem = remediation.unwrap();
         assert_eq!(rem.pattern_name, "sql-injection");
-        assert!(!rem.fix_pattern.steps.is_empty());
+        assert_ne!(rem.fix_pattern.steps, [] as [String; 0]);
     }
 
     #[test]

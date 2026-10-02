@@ -838,7 +838,7 @@ mod tests {
         let result = rpc.list_categories().await;
         assert!(result.is_ok());
         let categories = result.unwrap();
-        assert!(!categories.is_empty());
+        assert_ne!(categories, [] as [String; 0]);
     }
 
     async fn ready_state() -> Arc<ServerState> {

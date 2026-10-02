@@ -305,7 +305,7 @@ mod tests {
         let bundle = Bundle::new(patterns.clone());
 
         let gzip_data = bundle.to_gzip().unwrap();
-        assert!(!gzip_data.is_empty());
+        assert_ne!(gzip_data, [] as [u8; 0]);
 
         let loaded = Bundle::from_gzip(&gzip_data).unwrap();
         assert_eq!(loaded.patterns.len(), 1);
@@ -363,8 +363,8 @@ mod tests {
 
         assert_eq!(metadata.version, BUNDLE_VERSION);
         assert_eq!(metadata.pattern_count, 1);
-        assert!(!metadata.checksum.is_empty());
-        assert!(!metadata.created_at.is_empty());
+        assert_ne!(metadata.checksum, "");
+        assert_ne!(metadata.created_at, "");
     }
 
     #[test]

@@ -269,7 +269,7 @@ fn full_mcp_client_lifecycle_in_one_session() {
     assert_eq!(tool_list.len(), 7, "seven tools: {tools}");
     for tool in &tool_list {
         assert_eq!(tool["inputSchema"]["type"], "object", "{tool}");
-        assert!(!tool["description"].as_str().unwrap_or_default().is_empty());
+        assert_ne!(tool["description"].as_str().unwrap_or_default(), "");
     }
 }
 

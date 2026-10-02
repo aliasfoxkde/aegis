@@ -826,7 +826,7 @@ mod tests {
         let scan_result = result.unwrap();
         // has_findings should match whether findings is empty
         assert_eq!(scan_result.has_findings, !scan_result.findings.is_empty());
-        assert!(!scan_result.output.is_empty());
+        assert_ne!(scan_result.output, "");
         std::fs::remove_dir_all(scan_path).ok();
     }
 
@@ -857,7 +857,7 @@ mod tests {
         );
         assert!(result.is_ok());
         let scan_result = result.unwrap();
-        assert!(!scan_result.output.is_empty());
+        assert_ne!(scan_result.output, "");
     }
 
     #[test]
@@ -1021,7 +1021,7 @@ mod tests {
         assert!(result.is_ok());
         let scan_result = result.unwrap();
         // execute_scan populates output but doesn't write to file (async run_scan_and_get_exit_code does)
-        assert!(!scan_result.output.is_empty());
+        assert_ne!(scan_result.output, "");
 
         std::fs::remove_dir_all(temp_dir).ok();
         std::fs::remove_dir_all(scan_path).ok();

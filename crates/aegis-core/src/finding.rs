@@ -678,7 +678,7 @@ mod tests {
         );
 
         // Fingerprints retain matching behavior without exposing the content.
-        assert!(!finding.fingerprint.is_empty());
+        assert_ne!(finding.fingerprint, "");
         assert!(finding.fingerprint.contains("hardcoded-secret"));
         assert!(!finding.fingerprint.contains("abc"));
         assert!(finding.stable_id.starts_with("aegis-"));

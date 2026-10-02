@@ -1259,8 +1259,8 @@ func main() {}
                 "{} has node types",
                 pattern.name
             );
-            assert!(!pattern.description.is_empty());
-            assert!(!pattern.severity.is_empty());
+            assert_ne!(pattern.description, "");
+            assert_ne!(pattern.severity, "");
         }
         assert!(patterns.iter().any(|p| p.name == "sql-injection"));
     }

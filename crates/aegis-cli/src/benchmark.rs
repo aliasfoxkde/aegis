@@ -280,7 +280,7 @@ mod tests {
     fn external_benchmark_surfaces_missing_binaries() {
         let error = run_external_benchmark("/nonexistent/aegis-tool", &PathBuf::from("."))
             .expect_err("missing binary must error");
-        assert!(!error.to_string().is_empty());
+        assert_ne!(error.to_string(), "");
     }
 
     #[test]

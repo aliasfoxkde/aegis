@@ -1540,7 +1540,7 @@ mod tests {
 
         let scanner = Scanner::from_definitions(vec![]).unwrap();
         let (_, stats) = scanner.scan_file(&temp_file).unwrap();
-        assert!(stats.clones.is_empty());
+        assert_eq!(stats.clones, [] as [CloneReport; 0]);
     }
 
     #[test]
@@ -1808,7 +1808,7 @@ mod tests {
         assert_eq!(options.max_file_size, 10 * 1024 * 1024);
         assert!(!options.follow_symlinks);
         assert!(!options.scan_binary);
-        assert!(options.categories.is_empty());
+        assert_eq!(options.categories, [] as [String; 0]);
         assert!(options.severity_threshold.is_none());
         assert!(options.use_gitignore);
         assert!(options.use_aegisignore);

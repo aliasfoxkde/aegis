@@ -1132,7 +1132,7 @@ fn bar() {
             token_count: 50,
         };
         let debug_str = format!("{clone:?}");
-        assert!(!debug_str.is_empty());
+        assert_ne!(debug_str, "");
     }
 
     #[test]
@@ -1145,7 +1145,7 @@ fn bar() {
             CloneType::Type4,
         ];
         for t in types {
-            assert!(!t.description().is_empty());
+            assert_ne!(t.description(), "");
         }
     }
 
