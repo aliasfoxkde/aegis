@@ -374,7 +374,7 @@ mod tests {
 
         let bundle = create_bundle(patterns);
         // Timestamp should be set
-        assert!(!bundle.created_at.is_empty());
+        assert_ne!(bundle.created_at, "");
         assert_eq!(bundle.schema_version, 2);
     }
 
@@ -396,7 +396,7 @@ mod tests {
         let result = create_bundle_from_dir(temp_dir.path());
         assert!(result.is_ok());
         let compressed = result.unwrap();
-        assert!(!compressed.is_empty());
+        assert_ne!(compressed, [] as [u8; 0]);
     }
 
     #[test]

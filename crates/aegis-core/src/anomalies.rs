@@ -550,12 +550,18 @@ mod tests {
     fn too_few_files_produce_no_observations() {
         let below_threshold = u32::try_from(MIN_FILES - 1).unwrap_or(0);
         let population: Vec<FileMetrics> = uniform_population(below_threshold);
-        assert!(analyze_anomalies(&population).is_empty());
+        assert_eq!(
+            analyze_anomalies(&population),
+            [] as [AnomalyObservation; 0]
+        );
     }
 
     #[test]
     fn uniform_population_produce_no_observations() {
-        assert!(analyze_anomalies(&uniform_population(40)).is_empty());
+        assert_eq!(
+            analyze_anomalies(&uniform_population(40)),
+            [] as [AnomalyObservation; 0]
+        );
     }
 
     #[test]
@@ -831,7 +837,7 @@ mod tests {
             &outlier_population(),
             Some(&["file-size-outlier".to_string()]),
         );
-        assert!(!observations.is_empty());
+        assert_ne!(observations, [] as [AnomalyObservation; 0]);
         assert!(observations
             .iter()
             .all(|o| o.pattern_name == "file-size-outlier"));
@@ -839,8 +845,14 @@ mod tests {
 
     #[test]
     fn empty_allow_list_disables_every_detector() {
-        assert!(analyze_anomalies_with(&outlier_population(), Some(&[])).is_empty());
+        assert_eq!(
+            analyze_anomalies_with(&outlier_population(), Some(&[])),
+            [] as [AnomalyObservation; 0]
+        );
         // Unset runs everything.
-        assert!(!analyze_anomalies_with(&outlier_population(), None).is_empty());
+        assert_ne!(
+            analyze_anomalies_with(&outlier_population(), None),
+            [] as [AnomalyObservation; 0]
+        );
     }
 }

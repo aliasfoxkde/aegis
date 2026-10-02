@@ -33,6 +33,23 @@ tag_epoch="$(git show -s --format=%ct "$commit")"
     printf 'tag epoch is not a bare number: %q\n' "$tag_epoch" >&2
     exit 1
 }
+# Deterministic cross-linking: lld stamps the windows PE TimeDateStamp with
+# the link wall clock, which made two builds of one tag drift — the v0.6.4
+# pipeline cross-check caught 3 bytes differing in every windows binary on
+# exactly that field. Pin the link epoch to the tag's commit time — the
+# same value tar pins below. Exported, not just set: the zigbuild link runs
+# in child processes, and lld reads the environment. Measured in
+# aegis-builder:1: with the epoch pinned, two independent windows builds
+# link byte-identical.
+#
+# The darwin targets keep one per-link nondeterminism: the 16-byte LC_UUID
+# (plus its page-0 hash inside the ad-hoc code signature) differs between
+# links of identical input even with the epoch pinned. zig's published
+# calcUuid is a content hash, but the dev build in the builder image
+# demonstrably seeds it from something the environment does not expose.
+# It is execution-irrelevant metadata, so it is disclosed in the
+# attestation note below rather than papered over.
+export SOURCE_DATE_EPOCH="$tag_epoch"
 
 cd "$repo"
 
@@ -144,7 +161,7 @@ bytes_of()  { stat -c '%s' "$out/$1"; }
     printf '    "platform": "%s",\n' "$host"
     printf '    "rustc": "%s",\n' "$rustc_version"
     printf '    "zig": "%s",\n' "$zig_version"
-    printf '    "note": "all targets cross-compiled on %s; darwin binaries are zig-linked (cargo-zigbuild), not built on Apple hardware"\n' "$host"
+    printf '    "note": "all targets cross-compiled on %s; darwin binaries are zig-linked (cargo-zigbuild), not built on Apple hardware, and carry a per-link LC_UUID that is not reproducible"\n' "$host"
     printf '  },\n'
     printf '  "source": {\n'
     printf '    "url": "https://github.com/aliasfoxkde/aegis",\n'

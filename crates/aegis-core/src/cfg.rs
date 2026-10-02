@@ -511,7 +511,7 @@ func main() {
             successors: vec![2],
             predecessors: vec![],
         };
-        assert!(!format!("{node:?}").is_empty());
+        assert_ne!(format!("{node:?}"), "");
     }
 
     #[test]
@@ -577,7 +577,7 @@ func main() {
             confidence: "medium".to_string(),
         };
         let display = format!("{issue:?}");
-        assert!(!display.is_empty());
+        assert_ne!(display, "");
     }
 
     #[test]

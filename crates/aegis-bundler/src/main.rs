@@ -76,6 +76,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let error = run(&dir.path().join("absent"), &dir.path().join("out.bundle"))
             .expect_err("missing input directory must error");
-        assert!(!error.to_string().is_empty());
+        // assert_ne! rather than `assert!(!x.is_empty())`: rust 1.99 added
+        // clippy::assert_is_empty, and this shows the value on failure.
+        assert_ne!(error.to_string(), "");
     }
 }

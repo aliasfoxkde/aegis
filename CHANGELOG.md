@@ -34,6 +34,20 @@ every release are attached to the matching GitHub release.
   verified), and the digests are stable, so the release stands as
   published.
 
+- Release builds: cross-compiled windows binaries embedded the link
+  wall clock in the PE `TimeDateStamp`, so two builds of the same tag
+  drifted by 3 bytes per binary while the linux/wasm/source artifacts
+  reproduced exactly. `build.sh` now exports `SOURCE_DATE_EPOCH`
+  pinned to the tag commit time; measured byte-identical across
+  independent builds. The darwin targets keep one disclosed exception:
+  their `LC_UUID` (and its page-0 hash in the ad-hoc code signature)
+  varies per link in the builder image's zig — execution-irrelevant
+  metadata, now noted in the attestation instead of silently breaking
+  reproducibility. Found by the v0.6.4 pipeline reproducibility
+  cross-check: 5 of 8 artifacts byte-identical to the published
+  release, windows reproducible after the pin, darwin differing only
+  in the UUID field.
+
 ## [0.6.4] - 2026-09-27
 
 ### Added

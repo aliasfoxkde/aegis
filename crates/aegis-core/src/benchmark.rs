@@ -113,7 +113,7 @@ mod tests {
         let config = BenchmarkConfig::default();
         assert_eq!(config.path, ".");
         assert!(!config.include_disabled);
-        assert!(config.categories.is_empty());
+        assert_eq!(config.categories, [] as [String; 0]);
     }
 
     #[test]

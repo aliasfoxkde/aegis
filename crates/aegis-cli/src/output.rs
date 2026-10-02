@@ -470,7 +470,7 @@ mod tests {
     #[test]
     fn test_output_new() {
         let output = Output::new(OutputFormat::Human, false);
-        assert!(output.buffer.is_empty());
+        assert_eq!(output.buffer, "");
     }
 
     #[test]
@@ -482,7 +482,7 @@ mod tests {
 
         let result = output.write_findings(&[finding], &stats, &risk);
         assert!(result.is_ok());
-        assert!(!output.buffer.is_empty());
+        assert_ne!(output.buffer, "");
     }
 
     #[test]
@@ -786,7 +786,7 @@ mod tests {
 
         // Display impl should return the buffer
         let display_str = format!("{output}");
-        assert!(!display_str.is_empty());
+        assert_ne!(display_str, "");
     }
 
     #[test]

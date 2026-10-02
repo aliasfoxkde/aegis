@@ -167,10 +167,10 @@ mod tests {
         let findings: Vec<WasmFinding> =
             serde_json::from_str(&json).expect("scan_content emits a finding array");
         let f = &findings[0];
-        assert!(!f.pattern.is_empty());
-        assert!(!f.category.is_empty());
-        assert!(!f.severity.is_empty());
-        assert!(!f.description.is_empty());
+        assert_ne!(f.pattern, "");
+        assert_ne!(f.category, "");
+        assert_ne!(f.severity, "");
+        assert_ne!(f.description, "");
         assert_eq!(f.location.line, 1);
     }
 }

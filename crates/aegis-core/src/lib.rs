@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn test_constants() {
         assert_eq!(DEFAULT_MAX_FILE_SIZE, 10 * 1024 * 1024);
-        assert!(!VERSION.is_empty());
+        assert_ne!(VERSION, "");
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_version_not_empty() {
-        assert!(!VERSION.is_empty());
+        assert_ne!(VERSION, "");
         assert!(VERSION.len() >= 5); // At least x.y.z format
     }
 
