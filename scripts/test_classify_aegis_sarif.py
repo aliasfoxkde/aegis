@@ -250,10 +250,15 @@ class MalformedReportTests(unittest.TestCase):
         self.assertBlocked(json.dumps({"hello": "world"}))
 
     def test_unknown_exit_codes_block(self):
+        # classify_report() raises for an invalid protocol input; main()
+        # catches that error and prints BLOCKED, which the malformed-report
+        # entrypoint tests below verify.
         report = sarif_report([ledger_unit("analyzed")])
         for exit_code in ("2", "3", "130", "-1", "abc", ""):
             with self.subTest(exit_code=exit_code):
-                self.assertEqual(helper.classify_report(report, exit_code), "BLOCKED")
+                with self.assertRaises(helper.MalformedReport):
+                    helper.classify_report(report, exit_code)
+                self.assertBlocked(report, exit_code)
 
 
 class JsonReportShapeTests(unittest.TestCase):
