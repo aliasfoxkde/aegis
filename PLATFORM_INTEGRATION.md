@@ -101,11 +101,11 @@ Aegis makes no network calls during a deterministic scan. It does not call Amort
 
 `aegis` exit codes are coarse and must not be read alone:
 
-- `0` — scan completed with no surviving findings.
+- `0` — scan completed with no surviving findings and nothing failed inspection: `stats.files_failed` is zero and every required `inspection_ledger` unit finished as `Analyzed` or `Suppressed` (the required-unit rule of `InspectionLedger::allows_safe`).
 - `1` — scan completed with findings.
-- `1` — the scan itself failed (for example an unreadable or nonexistent path).
+- `1` — the scan itself failed (for example an unreadable or nonexistent path), including a partial scan whose `stats.files_failed` is nonzero, and a scan where a required `inspection_ledger` unit recorded any status other than `Analyzed`/`Suppressed` without incrementing that counter (the core records tree-sitter parse errors as `Failed` only when its optional feature is enabled; the default CLI build does not enable it; a size limit is `Skipped`, a binary `Unsupported`). Optional units and out-of-scope exclusions (`Excluded`) never gate. Current content-based modes record a synthetic analyzed unit; an empty ledger does not independently fail the CLI predicate.
 
-Because findings and scan errors share exit code 1, a CI integration must distinguish SAFE, FINDINGS, and BLOCKED by writing `--output-file` and then checking that the file exists, is non-empty, and parses. This is exactly what `.github/workflows/aegis-scan.yml` does.
+Because findings and scan errors share exit code 1, the exit code alone separates only a clean pass (`0`) from everything else. A partial scan still completes and renders its report, so a written, non-empty, parseable `--output-file` does not distinguish FINDINGS from BLOCKED — an incomplete scan passes every parseability check. Classifying an exit 1 further requires the report body: `stats.files_failed` and the required units of `stats.inspection_ledger`.
 
 ### Result Payloads
 

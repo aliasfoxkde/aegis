@@ -3,8 +3,8 @@
 use crate::output::Output;
 use crate::OutputFormat;
 use aegis_core::{
-    Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt, ScanStats,
-    Scanner,
+    Finding, InspectionStatus, PatternDefinition, RiskScore, ScanOptions as CoreOptions,
+    ScanReceipt, ScanStats, Scanner,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -306,7 +306,11 @@ pub struct ScanResult {
     pub stats: ScanStats,
     /// Rendered report, exactly as it is echoed to stdout.
     pub output: String,
-    /// Whether any finding survived; it becomes the process exit code.
+    /// Whether any non-info finding survived. It drives the process exit
+    /// code unless the scan also failed to inspect a required unit — an
+    /// unreadable file, or a required ledger unit whose status is anything
+    /// but `Analyzed`/`Suppressed` — which fails the exit code regardless
+    /// (see `scan_exit_code`).
     pub has_findings: bool,
     /// Provenance receipt persisted to `AEGIS_RECEIPT_FILE` when set.
     pub receipt: ScanReceipt,
@@ -394,12 +398,67 @@ fn finish(opts: &ScanOptions, findings: Vec<Finding>, stats: ScanStats) -> Resul
     })
 }
 
+/// The only ledger statuses that count as a completed inspection for a
+/// required unit, mirroring the per-unit rule of
+/// `InspectionLedger::allows_safe`: the analysis either ran (`Analyzed`)
+/// or its findings were withheld by an approved suppression
+/// (`Suppressed`).
+fn required_status_is_safe(status: InspectionStatus) -> bool {
+    matches!(
+        status,
+        InspectionStatus::Analyzed | InspectionStatus::Suppressed
+    )
+}
+
+/// True when any required inspection-ledger unit recorded a status other
+/// than `Analyzed` or `Suppressed`: a failed analysis (`Failed`, including
+/// tree-sitter parse errors when that optional core feature is enabled), a
+/// policy skip (`Skipped`, `file_size_limit`), a unit no analyzer covers
+/// (`Unsupported`, binary files), or one still pending (`Discovered`).
+/// This applies the required-unit rule of `InspectionLedger::allows_safe`
+/// to the exit code for the statuses the `files_failed` counter cannot
+/// see. Optional units never gate.
+///
+/// An empty ledger also gates nothing: unlike `allows_safe`, its
+/// "at least one inspected unit" conjunct is deliberately not adopted
+/// here, preserving the CLI's clean-pass behavior for any future scan path
+/// that legitimately has no ledger units. Current content-based scan paths
+/// record a synthetic analyzed unit.
+fn has_unsafe_required_unit(stats: &ScanStats) -> bool {
+    stats
+        .inspection_ledger
+        .units
+        .iter()
+        .any(|unit| unit.required && !required_status_is_safe(unit.status))
+}
+
+/// Decide the process exit code for a completed scan report.
+///
+/// Fail closed: `ScanStats::files_failed` counts required files that could
+/// not be inspected at all, so a partial scan is a scan failure and shares
+/// the documented scan-failure exit code rather than passing as clean. The
+/// inspection ledger fails the scan the same way when any required unit
+/// recorded a status other than `Analyzed` or `Suppressed` — the per-unit
+/// rule of `InspectionLedger::allows_safe` — covering the statuses the
+/// counters cannot see: a tree-sitter parse error (`Failed`), a size-limit
+/// skip (`Skipped`), and a binary file (`Unsupported`) all gate. Only
+/// out-of-scope units (`Excluded`, ignore rules) and optional units are
+/// non-gating. Otherwise findings drive the exit code, and info-only
+/// observations never fail the run (`has_findings`).
+fn scan_exit_code(result: &ScanResult) -> i32 {
+    if result.stats.files_failed > 0 || has_unsafe_required_unit(&result.stats) {
+        return 1;
+    }
+    i32::from(result.has_findings)
+}
+
 /// Run scan with I/O handling (not fully testable due to async stdin and process::exit)
 ///
 /// # Errors
 ///
 /// Returns an error when the scan fails; exits the process with the
-/// findings exit code when it is non-zero.
+/// computed exit code (findings or an incomplete scan, see
+/// `scan_exit_code`) when it is non-zero.
 pub async fn run_scan(opts: ScanOptions) -> Result<()> {
     let exit_code = run_scan_and_get_exit_code(opts).await?;
     if exit_code != 0 {
@@ -420,6 +479,14 @@ fn retire_receipt_if_configured() {
 }
 
 /// Run scan and return exit code (testable async wrapper)
+///
+/// Exit code 1 reports findings (info-only observations excluded) or an
+/// incomplete scan — `ScanStats::files_failed` counts required files that
+/// could not be inspected, and any required inspection-ledger unit whose
+/// status is not `Analyzed` or `Suppressed` (the AST analyzer records a
+/// tree-sitter parse error as `Failed`, a size limit as `Skipped`, and a
+/// binary as `Unsupported`) fails the scan the same way; neither ever
+/// passes as clean. See `scan_exit_code` for the decision.
 ///
 /// # Errors
 ///
@@ -447,8 +514,9 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
         std::fs::write(path, result.output)?;
     }
 
-    // Return exit code based on findings
-    Ok(i32::from(result.has_findings))
+    // Exit code: findings, or a scan that could not inspect every
+    // required unit (fail closed).
+    Ok(scan_exit_code(&result))
 }
 
 /// Read stdin content (extracted for testing)
@@ -1084,6 +1152,217 @@ mod tests {
         let expected_exit = i32::from(result.has_findings);
         assert!(expected_exit == 0 || expected_exit == 1);
         std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Directory-scan options rooted at `path`, the shape shared by the
+    /// exit-code tests.
+    fn dir_scan_opts(path: PathBuf) -> ScanOptions {
+        ScanOptions {
+            path,
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            staged: false,
+            detect_clones: false,
+            anomaly_detectors: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        }
+    }
+
+    /// Fail-closed regression: `scan_dir` returns `Ok` with
+    /// `stats.files_failed > 0` when a required file could not be
+    /// inspected (a partial scan), and that must not pass as a clean pass
+    /// even when no finding survived. The injected stats mirror what the
+    /// engine records for an unreadable required file.
+    #[test]
+    fn failed_required_files_fail_the_exit_code_without_findings() {
+        let scan_path = scan_fixture_path();
+        let mut result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert_eq!(
+            scan_exit_code(&result),
+            0,
+            "precondition: the readable fixture is a clean pass"
+        );
+
+        result.stats.files_failed = 1;
+        assert_eq!(
+            scan_exit_code(&result),
+            1,
+            "an incomplete scan must not exit 0 without findings"
+        );
+        // More failures stay inside the one documented failure code.
+        result.stats.files_failed = 7;
+        assert_eq!(scan_exit_code(&result), 1);
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Fail-closed regression: a required inspection-ledger unit recorded
+    /// `Failed` must fail the exit code even though `files_failed` stays 0.
+    /// This exercises the exit predicate against the required-unit ledger
+    /// contract. The CLI's default `aegis-core` dependency does not enable
+    /// its optional `tree-sitter` feature, so this synthetic ledger record
+    /// does not claim that the default CLI currently emits parser failures.
+    #[test]
+    fn failed_required_ledger_unit_fails_the_exit_code_without_findings() {
+        let scan_path = scan_fixture_path();
+        let mut result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert_eq!(
+            scan_exit_code(&result),
+            0,
+            "precondition: the readable fixture is a clean pass"
+        );
+
+        // A required failed analysis must gate even when the aggregate
+        // unreadable-file counter did not increment.
+        let failed_unit_id = format!("{}#analysis", scan_path.join("clean.rs").display());
+        result.stats.inspection_ledger.record(
+            failed_unit_id.clone(),
+            InspectionStatus::Failed,
+            true,
+            Some("analysis_failure".to_string()),
+        );
+        assert_eq!(
+            scan_exit_code(&result),
+            1,
+            "a failed required ledger unit must not exit 0 without findings"
+        );
+
+        // The same failure on an optional unit changes nothing: only
+        // required units gate the exit code.
+        let mut optional = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        optional.stats.inspection_ledger.record(
+            failed_unit_id,
+            InspectionStatus::Failed,
+            false,
+            Some("analysis_failure".to_string()),
+        );
+        assert_eq!(
+            scan_exit_code(&optional),
+            0,
+            "an optional failed unit must not flip the exit code"
+        );
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Fail-closed regression: the ledger statuses the `files_failed`
+    /// counter cannot see must gate too. Core records a size-limit skip
+    /// as a required `Skipped` unit and a binary as a required
+    /// `Unsupported` unit, and the required-unit rule of
+    /// `InspectionLedger::allows_safe` accepts only `Analyzed` or
+    /// `Suppressed` — so both must fail the exit code, while the same
+    /// statuses on optional units stay non-gating.
+    #[test]
+    fn required_skipped_and_unsupported_units_fail_the_exit_code() {
+        let scan_path = scan_fixture_path();
+
+        // A required `Skipped` unit (`file_size_limit`, the exact shape
+        // `scan_file` records for an over-limit file) must fail the scan.
+        let mut skipped = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert_eq!(
+            scan_exit_code(&skipped),
+            0,
+            "precondition: the readable fixture is a clean pass"
+        );
+        skipped.stats.inspection_ledger.record(
+            scan_path.join("large.bin").to_string_lossy(),
+            InspectionStatus::Skipped,
+            true,
+            Some("file_size_limit".to_string()),
+        );
+        assert_eq!(
+            scan_exit_code(&skipped),
+            1,
+            "a required skipped unit must not exit 0 without findings"
+        );
+
+        // A required `Unsupported` unit (`binary_file`, the exact shape
+        // `scan_file` records for a NUL-sniffed blob) must fail the scan.
+        let mut unsupported = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        unsupported.stats.inspection_ledger.record(
+            scan_path.join("logo.png").to_string_lossy(),
+            InspectionStatus::Unsupported,
+            true,
+            Some("binary_file".to_string()),
+        );
+        assert_eq!(
+            scan_exit_code(&unsupported),
+            1,
+            "a required unsupported unit must not exit 0 without findings"
+        );
+
+        // The same statuses on optional units change nothing: only
+        // required units gate the exit code.
+        let mut optional = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        optional.stats.inspection_ledger.record(
+            scan_path.join("large.bin").to_string_lossy(),
+            InspectionStatus::Skipped,
+            false,
+            Some("file_size_limit".to_string()),
+        );
+        optional.stats.inspection_ledger.record(
+            scan_path.join("logo.png").to_string_lossy(),
+            InspectionStatus::Unsupported,
+            false,
+            Some("binary_file".to_string()),
+        );
+        assert_eq!(
+            scan_exit_code(&optional),
+            0,
+            "optional skipped/unsupported units must not flip the exit code"
+        );
+
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// `files_skipped` alone does not reveal whether a skipped unit was
+    /// required or excluded. Required-unit status is enforced by the
+    /// inspection ledger; this counter-only state must not independently
+    /// change the exit code.
+    #[test]
+    fn files_skipped_counter_alone_does_not_fail_the_exit_code() {
+        let scan_path = scan_fixture_path();
+        let mut result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert_eq!(scan_exit_code(&result), 0, "precondition: clean pass");
+        result.stats.files_skipped += 3;
+        assert_eq!(
+            scan_exit_code(&result),
+            0,
+            "deliberate skips must not flip the exit code"
+        );
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Findings and scan failures share exit code 1 by the documented
+    /// contract, so a scan that both reported findings and failed required
+    /// files still exits 1 — the coarse "not a clean pass" signal.
+    #[test]
+    fn findings_and_failed_files_share_exit_code_one() {
+        // The debug-log line provably fires a rule (see the stdin stats
+        // regression test).
+        let opts = ScanOptions {
+            scan_stdin: true,
+            ..dir_scan_opts(PathBuf::from("/test"))
+        };
+        let result =
+            execute_scan_with_stdin(&opts, "console.log(\"debug\");\n").expect("scan succeeds");
+        assert!(result.has_findings, "precondition: fixture has findings");
+        assert_eq!(scan_exit_code(&result), 1);
+
+        let mut with_failure = result;
+        with_failure.stats.files_failed = 1;
+        assert_eq!(
+            scan_exit_code(&with_failure),
+            1,
+            "a required-file failure must not change the failure code"
+        );
     }
 
     /// Regression test: a failing scan must not leave a stale receipt.

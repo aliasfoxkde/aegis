@@ -24,6 +24,25 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- CLI scans: a scan that could not inspect every required unit exited 0
+  whenever it reported no findings, so an incomplete scan passed a CI
+  gate as clean. That covers an unreadable file or walk error (counted
+  in `stats.files_failed`) and every required inspection-ledger unit
+  that did not finish as `Analyzed` or `Suppressed` — the same
+  required-unit rule `InspectionLedger::allows_safe` applies. The core can
+  record a tree-sitter parse error as `Failed` when its optional feature is
+  enabled (the default CLI dependency does not enable that feature), a size limit lands as a required
+  `Skipped` unit, and a binary file as a required `Unsupported` unit;
+  the exit code is now fail-closed for all of them: nonzero
+  `stats.files_failed` or any required ledger unit outside
+  `Analyzed`/`Suppressed` exits 1 under the documented scan-failure
+  code. Optional units and out-of-scope exclusions (`Excluded`, ignore
+  rules) stay non-gating. An empty ledger does not independently fail the
+  CLI predicate; current content-based modes record a synthetic analyzed
+  unit. The scan still completes and renders its report, and the receipt it persists
+  records the uninspected units in its inspection ledger. Found by the
+  2026-10-05 audit of `run_scan_and_get_exit_code`.
+
 - Release builds: the tarball mtime pin now reads the tag commit's time
   (`git show -s --format=%ct` on the commit, not the tag — on an
   annotated tag the command prints the whole tag-object display, and

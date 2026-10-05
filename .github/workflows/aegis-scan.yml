@@ -56,6 +56,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Test Aegis report classifier
+        run: python3 scripts/test_classify_aegis_sarif.py
+
       - name: Build Aegis
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
@@ -77,13 +80,14 @@ jobs:
             --output-file aegis-results.sarif
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-results.sarif ]; then
-            status=SAFE
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-results.sarif ]; then
-            status=FINDINGS
-          else
-            status=BLOCKED
-          fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the report.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-results.sarif "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "exit_code=$scan_exit" >> "$GITHUB_OUTPUT"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis scan status: $status (exit=$scan_exit)"
@@ -202,9 +206,14 @@ jobs:
             --output-file aegis-secrets.sarif
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-secrets.sarif ]; then status=SAFE;
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-secrets.sarif ]; then status=FINDINGS;
-          else status=BLOCKED; fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the report.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-secrets.sarif "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis secrets status: $status (exit=$scan_exit)"
 
@@ -264,9 +273,15 @@ jobs:
             --output-file aegis-supply-chain.json
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-supply-chain.json ]; then status=SAFE;
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-supply-chain.json ]; then status=FINDINGS;
-          else status=BLOCKED; fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the JSON report
+          # (stats.inspection_ledger) — same rule as the SARIF shape.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-supply-chain.json "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis supply-chain status: $status (exit=$scan_exit)"
 
