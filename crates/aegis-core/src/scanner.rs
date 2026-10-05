@@ -58,6 +58,56 @@ fn distinct_patterns(findings: &[Finding]) -> usize {
         .len()
 }
 
+/// Undo git's C-style path quoting (`"name"`) into a path string.
+///
+/// Recognizes the escapes git emits — `\\`, `\"`, `\a \b \f \n \r \t \v`,
+/// and three-digit octal escapes for arbitrary bytes (high bytes arrive as
+/// UTF-8 octal pairs under `core.quotepath`) — and requires a real closing
+/// quote; anything after it, such as a timestamp, is dropped. Octal escapes
+/// decode to raw bytes, so multi-byte UTF-8 sequences reassemble into their
+/// original characters. Returns `None` when the input does not open with a
+/// quote, the closing quote is missing, an escape is unknown, or the
+/// decoded bytes are not UTF-8, or an octal value exceeds one byte — the
+/// caller then drops attribution instead of guessing a path.
+fn unquote_c_style(raw: &str) -> Option<String> {
+    let mut out: Vec<u8> = Vec::with_capacity(raw.len());
+    // Consume the opening quote first: the loop treats every `"` as the
+    // closing terminator, so decoding the raw string would return an empty
+    // path on its very first character.
+    let mut chars = raw.strip_prefix('"')?.chars();
+    loop {
+        let c = chars.next()?;
+        match c {
+            '"' => return String::from_utf8(out).ok(),
+            '\\' => {
+                let byte = match chars.next()? {
+                    'a' => 0x07,
+                    'b' => 0x08,
+                    'f' => 0x0c,
+                    'n' => b'\n',
+                    'r' => b'\r',
+                    't' => b'\t',
+                    'v' => 0x0b,
+                    '\\' => b'\\',
+                    '"' => b'"',
+                    first @ '0'..='7' => {
+                        let mid = chars.next()?.to_digit(8)?;
+                        let low = chars.next()?.to_digit(8)?;
+                        let value = (first.to_digit(8)? << 6) | (mid << 3) | low;
+                        u8::try_from(value).ok()?
+                    }
+                    _ => return None,
+                };
+                out.push(byte);
+            }
+            other => {
+                let mut buf = [0u8; 4];
+                out.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
+            }
+        }
+    }
+}
+
 /// Scan options
 ///
 /// The booleans mirror the CLI's flag set one-to-one; a settings enum
@@ -434,131 +484,173 @@ impl Scanner {
         scanners
     }
 
-    /// Parse a diff and return each added line as `(file_path, line_content)`.
+    /// Parse a diff file and extract only the added lines with their
+    /// positions in the target file.
+    ///
+    /// Returns a `(file_path, line_content, line_number)` triple per added
+    /// line. `line_number` is the 1-based line of the target (post-image)
+    /// file, taken from the enclosing hunk's `@@ -a,b +c,d @@` header, so
+    /// findings stay anchored to real file positions across multiple hunks.
+    /// Additions with no header anchor — before any file header, or outside
+    /// every hunk, including the body of a binary patch — are dropped rather
+    /// than reported against a guessed position, as are deleted files
+    /// (`+++ /dev/null`), which have no post-image to attribute to, and
+    /// additions under a `+++` header whose quoted path cannot be decoded.
     #[must_use]
-    pub fn parse_diff(diff_content: &str) -> Vec<(String, String)> {
-        Self::parse_diff_with_line_numbers(diff_content)
-            .into_iter()
-            .map(|(file, _, line)| (file, line))
-            .collect()
-    }
-
-    /// Keep each added line's 1-indexed destination-file line for scan results.
-    fn parse_diff_with_line_numbers(diff_content: &str) -> Vec<(String, usize, String)> {
+    pub fn parse_diff(diff_content: &str) -> Vec<(String, String, usize)> {
         let mut results = Vec::new();
         let mut current_file = String::new();
+        // Hunk state: the target-file line the next added/context body line
+        // sits on, plus how many old/new body lines the header still
+        // accounts for. Additions are only trusted inside this window.
         let mut in_hunk = false;
-        let mut new_line = 1;
-        let mut old_lines_remaining = 0;
-        let mut new_lines_remaining = 0;
+        let mut new_lineno = 0usize;
+        let mut remaining_old = 0usize;
+        let mut remaining_new = 0usize;
 
         for line in diff_content.lines() {
-            if line.starts_with("diff --git ") {
-                current_file.clear();
-                in_hunk = false;
-                continue;
-            }
-
-            if !in_hunk {
-                if let Some(stripped) = line.strip_prefix("+++ ") {
-                    current_file = stripped
-                        .strip_prefix("a/")
-                        .or_else(|| stripped.strip_prefix("b/"))
-                        .unwrap_or(stripped)
-                        .to_string();
-                    if current_file == "/dev/null" {
-                        current_file.clear();
+            if in_hunk {
+                let mut chars = line.chars();
+                match chars.next() {
+                    Some('+') if remaining_new > 0 => {
+                        if !current_file.is_empty() {
+                            results.push((
+                                current_file.clone(),
+                                chars.as_str().to_string(),
+                                new_lineno,
+                            ));
+                        }
+                        new_lineno = new_lineno.saturating_add(1);
+                        remaining_new -= 1;
                     }
-                    continue;
+                    Some(' ') if remaining_new > 0 && remaining_old > 0 => {
+                        new_lineno = new_lineno.saturating_add(1);
+                        remaining_new -= 1;
+                        remaining_old -= 1;
+                    }
+                    Some('-') if remaining_old > 0 => remaining_old -= 1,
+                    // "\ No newline at end of file" annotates the previous
+                    // line and consumes none of the counted body lines.
+                    Some('\\') => {}
+                    // A body line the header cannot account for (count
+                    // overrun, a blank line, or the next file's prologue)
+                    // ends the hunk: nothing after it may be attributed
+                    // until a fresh hunk header re-anchors the state.
+                    _ => in_hunk = false,
                 }
-            }
-
-            if line.starts_with("@@") {
-                let mut ranges = line.split_whitespace();
-                let parsed = ranges
-                    .nth(1)
-                    .and_then(|range| Self::parse_unified_range(range, '-'))
-                    .zip(
-                        ranges
-                            .next()
-                            .and_then(|range| Self::parse_unified_range(range, '+')),
-                    );
-                if let Some(((_, old_count), (start, new_count))) = parsed {
-                    new_line = start;
-                    old_lines_remaining = old_count;
-                    new_lines_remaining = new_count;
-                    in_hunk = true;
-                } else {
+                if in_hunk && remaining_old == 0 && remaining_new == 0 {
                     in_hunk = false;
                 }
                 continue;
             }
-
-            match line.as_bytes().first() {
-                Some(b'+') => {
-                    if !current_file.is_empty() {
-                        results.push((current_file.clone(), new_line, line[1..].to_string()));
-                    }
-                    if in_hunk {
-                        new_lines_remaining = new_lines_remaining.saturating_sub(1);
-                    }
-                    new_line = new_line.saturating_add(1);
+            if let Some(rest) = line.strip_prefix("@@ ") {
+                if let Some((start, old_count, new_count)) = Self::parse_hunk_header(rest) {
+                    new_lineno = start;
+                    remaining_old = old_count;
+                    remaining_new = new_count;
+                    in_hunk = true;
                 }
-                Some(b' ') if in_hunk => {
-                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
-                    new_lines_remaining = new_lines_remaining.saturating_sub(1);
-                    new_line = new_line.saturating_add(1);
-                }
-                Some(b'-') if in_hunk => {
-                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
-                }
-                _ => {}
+            } else if let Some(target) = line.strip_prefix("+++ ") {
+                current_file = Self::header_target_file(target);
             }
-
-            if in_hunk && old_lines_remaining == 0 && new_lines_remaining == 0 {
-                in_hunk = false;
-            }
+            // Removed lines (`-`), context lines, `---` headers, and the
+            // `diff --git`/`index`/`rename` prologue carry no additions.
         }
 
         results
     }
 
-    fn parse_unified_range(range: &str, prefix: char) -> Option<(usize, usize)> {
-        let range = range.strip_prefix(prefix)?;
+    /// Parse the ranges of a hunk header — the text after the leading
+    /// `@@ `, e.g. `-12,5 +12,6 @@ section` — into
+    /// `(newStart, oldCount, newCount)`. A count of one may omit the
+    /// `",1"` suffix. Malformed headers return `None` so the lines after
+    /// them stay unattributed instead of guessed.
+    fn parse_hunk_header(rest: &str) -> Option<(usize, usize, usize)> {
+        let old_range = rest.strip_prefix('-')?;
+        let (old_range, rest) = old_range.split_once(" +")?;
+        let (new_range, _section) = rest.split_once(" @@")?;
+        let (_old_start, old_count) = Self::parse_hunk_range(old_range)?;
+        let (new_start, new_count) = Self::parse_hunk_range(new_range)?;
+        Some((new_start, old_count, new_count))
+    }
+
+    /// Parse one `start[,count]` hunk range; the count defaults to 1.
+    fn parse_hunk_range(range: &str) -> Option<(usize, usize)> {
         let (start, count) = range.split_once(',').unwrap_or((range, "1"));
         Some((start.parse().ok()?, count.parse().ok()?))
     }
 
-    /// Scan added diff lines and map findings back to destination-file locations.
+    /// Resolve the text after a `+++ ` header into the target file path.
+    ///
+    /// Handles git's C-style quoting (used for paths with tabs, quotes,
+    /// backslashes, control characters, or non-ASCII bytes) and the
+    /// tab-separated timestamp that plain `diff -u` output appends after
+    /// the path. A `/dev/null` target — a deleted file with no post-image —
+    /// resolves to an empty path, the same "no current file" state as
+    /// content before any header; a quoted header that fails to decode
+    /// (unterminated quote, unknown escape, non-UTF-8 bytes) resolves to
+    /// that state too rather than attributing additions to a guessed path.
+    fn header_target_file(raw: &str) -> String {
+        let path = if raw.starts_with('"') {
+            unquote_c_style(raw).unwrap_or_default()
+        } else {
+            raw.split('\t').next().unwrap_or(raw).to_string()
+        };
+        let path = path
+            .strip_prefix("a/")
+            .or_else(|| path.strip_prefix("b/"))
+            .unwrap_or(&path);
+        if path == "/dev/null" {
+            String::new()
+        } else {
+            path.to_string()
+        }
+    }
+
+    /// Scan only the added lines of a diff, reporting each finding against
+    /// its real position in the target file.
+    ///
+    /// Baseline filtering is applied exactly once, after remapping: baseline
+    /// fingerprints are keyed by pattern, file, line, and matched content, so
+    /// filtering before the remap would test synthetic joined-text lines
+    /// against real-file baselines — missing baselined findings at their
+    /// true lines while suppressing findings whose synthetic line collides
+    /// with an unrelated baseline entry.
     pub fn scan_diff(&self, diff_content: &str, _source: &str) -> Vec<Finding> {
-        let changed_lines = Self::parse_diff_with_line_numbers(diff_content);
+        let changed_lines = Self::parse_diff(diff_content);
         let mut all_findings = Vec::new();
 
-        // Group by file and scan each file's changed lines
-        let mut by_file: std::collections::HashMap<String, Vec<(usize, String)>> =
-            std::collections::HashMap::new();
-        for (file, line_number, line) in changed_lines {
-            by_file.entry(file).or_default().push((line_number, line));
+        // Group by file in path order so multi-file output is deterministic.
+        let mut by_file: std::collections::BTreeMap<String, Vec<(usize, String)>> =
+            std::collections::BTreeMap::new();
+        for (file, line, lineno) in changed_lines {
+            by_file.entry(file).or_default().push((lineno, line));
         }
 
         for (file, lines) in by_file {
-            let source_lines: Vec<_> = lines.iter().map(|(line, _)| *line).collect();
             let content = lines
-                .into_iter()
-                .map(|(_, line)| line)
+                .iter()
+                .map(|(_, line)| line.as_str())
                 .collect::<Vec<_>>()
                 .join("\n");
-            let mut findings = self.scan_string(&content, &file);
-            // Findings are located within the compacted changed-line text;
-            // restore the 1-indexed line number from the unified diff hunk.
+            let ext = Self::extension_of_source(&file);
+            // Scan without baseline filtering; the joined addition-only text
+            // only has synthetic line numbers, which no baseline was written
+            // against.
+            let (mut findings, _, _) =
+                self.scan_string_with_inspection_ext(&content, &file, ext.as_deref(), false);
             for finding in &mut findings {
                 finding.location.file.clone_from(&file);
-                if let Some(source_line) = source_lines.get(finding.location.line.saturating_sub(1))
-                {
-                    finding.location.line = *source_line;
+                // Map the position inside the joined addition-only text
+                // back to the target-file line the hunk header recorded.
+                if let Some((real_lineno, _)) = lines.get(finding.location.line.saturating_sub(1)) {
+                    finding.location.line = *real_lineno;
                 }
+                finding.recompute_identity();
             }
-            all_findings.extend(findings);
+            // Now that identities reflect real target coordinates, apply the
+            // baseline — the single filtering pass for the diff pipeline.
+            all_findings.extend(self.filter_baseline(findings));
         }
 
         all_findings
@@ -584,7 +676,7 @@ impl Scanner {
         source: &str,
     ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         let ext = Self::extension_of_source(source);
-        self.scan_string_with_inspection_ext(content, source, ext.as_deref())
+        self.scan_string_with_inspection_ext(content, source, ext.as_deref(), true)
     }
 
     fn scan_string_with_inspection_ext(
@@ -592,6 +684,7 @@ impl Scanner {
         content: &str,
         source: &str,
         ext: Option<&str>,
+        apply_baseline: bool,
     ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         // Parse suppressions from content
         let mut suppression_mgr = SuppressionManager::new();
@@ -658,8 +751,14 @@ impl Scanner {
             .filter(|finding| self.passes_post_filters(finding))
             .collect();
 
-        // Filter findings against baseline if configured
-        let findings = self.filter_baseline(findings);
+        // Filter findings against baseline if configured. `scan_diff` opts
+        // out here and filters itself once findings carry real target
+        // coordinates — see [`Scanner::scan_diff`].
+        let findings = if apply_baseline {
+            self.filter_baseline(findings)
+        } else {
+            findings
+        };
 
         // Safety net against duplicate emission: one finding per
         // pattern+file+line+content fingerprint

@@ -7,6 +7,14 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Diff scans now attribute findings to the target file's actual line from
+  each unified-diff hunk, reject additions without a trustworthy file/hunk
+  anchor, correctly decode Git C-quoted paths, and apply baselines only
+  after location identities are remapped. Malformed or out-of-range octal
+  path escapes are rejected rather than truncated into a different path.
+
 ### Added
 
 - New `ai-slop` detection category (7 rules) flagging LLM-prose style
