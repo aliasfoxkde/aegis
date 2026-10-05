@@ -535,18 +535,17 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
 
     persist_receipt_if_configured(&result.receipt)?;
 
+    let exit_code = scan_exit_code(&result.receipt);
+
     // Print to stdout
     println!("{}", result.output);
 
     // Write to file if specified
     if let Some(ref path) = opts.output_file {
-        std::fs::write(path, result.output)?;
+        std::fs::write(path, result.output.as_bytes())?;
     }
 
-    // Fail-closed exit contract: the status must agree with both the
-    // receipt's inspection completeness and the finding policy, decided
-    // from the same receipt a downstream consumer validates.
-    Ok(scan_exit_code(&result.receipt))
+    Ok(exit_code)
 }
 
 /// Read stdin content (extracted for testing)
