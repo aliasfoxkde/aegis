@@ -511,14 +511,16 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     // Print to stdout
     println!("{}", result.output);
 
+    let exit_code = scan_exit_code(&result);
+
     // Write to file if specified
     if let Some(ref path) = opts.output_file {
-        std::fs::write(path, result.output)?;
+        std::fs::write(path, result.output.as_bytes())?;
     }
 
     // Exit code: findings, or a scan that could not inspect every
     // required unit (fail closed).
-    Ok(scan_exit_code(&result))
+    Ok(exit_code)
 }
 
 /// Read stdin content (extracted for testing)
