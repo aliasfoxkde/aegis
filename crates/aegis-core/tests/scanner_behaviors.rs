@@ -429,7 +429,9 @@ fn diff_baseline_at_a_synthetic_line_does_not_suppress_a_different_real_line() {
          whose real target line differs"
     );
     assert!(
-        survivors.iter().all(|f| f.location.file == "config/prod.env" && f.location.line == 4),
+        survivors
+            .iter()
+            .all(|f| f.location.file == "config/prod.env" && f.location.line == 4),
         "the surviving finding must carry real target coordinates, got: {survivors:?}"
     );
 }
