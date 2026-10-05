@@ -203,12 +203,26 @@ for custom patterns exactly as for bundled ones.
 | Code | Description |
 |------|-------------|
 | 0 | Scan completed, no findings |
-| 1 | Scan completed with findings. Also used when a scan itself fails (for example an unreadable scan root or an invalid `.aegis.yml`) |
+| 1 | Findings, or a scan that could not inspect every required unit (`stats.files_failed` or a required ledger status other than `Analyzed`/`Suppressed`). Tree-sitter parse errors record `Failed` only when the optional core feature is enabled; the default CLI build does not enable it. Size limits record `Skipped`; binaries record `Unsupported`. |
 | 2 | Usage error: unknown subcommand or flag, or an invalid value for a global flag such as `--format` |
 
 With `--baseline`, code 1 means the scan produced findings that are not
 in the baseline; findings already recorded there do not affect the exit
-code.
+code. An incomplete scan never passes as clean: required files that
+could not be inspected are counted in `stats.files_failed` and exit 1,
+and every required `inspection_ledger` unit must finish as `Analyzed`
+or `Suppressed` — the same required-unit rule
+`InspectionLedger::allows_safe` applies. A required unit recorded
+`Failed` (the core can record a tree-sitter parse error this way when its
+optional feature is enabled; the default CLI build does not enable it),
+`Skipped` (a size limit),
+or `Unsupported` (a binary file) exits 1 too. Out-of-scope units
+(`Excluded` via ignore rules) and optional units never gate. Current
+content-based modes record a synthetic analyzed unit; an empty ledger, if
+encountered, does not independently fail the CLI predicate. Because a
+partial scan still renders a complete, parseable report, parseability of the output file does not
+distinguish findings from an inspection failure — check `stats` and
+`inspection_ledger` for that.
 
 ## Configuration
 

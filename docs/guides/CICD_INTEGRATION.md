@@ -194,9 +194,23 @@ Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
 
 5. **Exit Codes**: Use for pipeline failure
    - 0: no findings at or above the threshold (`info` observations never
-     trip the exit code)
+     trip the exit code) and every required unit was inspected —
+     `stats.files_failed` is zero and every required `inspection_ledger`
+     unit finished as `Analyzed` or `Suppressed` (the required-unit rule
+     of `InspectionLedger::allows_safe`)
    - 1: findings present (with `--baseline`, only findings that are new
-     relative to the baseline); also used when a scan itself fails
+     relative to the baseline); also used when a scan itself fails,
+     including a partial scan that could not read required files
+     (`stats.files_failed`) or left a required `inspection_ledger` unit
+     with any other status — the core can record a tree-sitter parse error
+     as `Failed` when its optional feature is enabled (the default CLI
+     dependency does not enable it), a size limit records
+     `Skipped`, and a binary records `Unsupported`. Optional units and
+     out-of-scope exclusions (`Excluded`) never gate. Current
+     content-based modes record a synthetic analyzed unit; an empty ledger
+     does not independently fail the CLI predicate. An incomplete scan
+     never exits 0, and it still renders a parseable report, so parseability of the output does not
+     separate findings from an inspection failure
    - 2: usage error (unknown flag or subcommand)
 
 6. **Pin the Version**: Patterns ship inside the binary, so pinning the
