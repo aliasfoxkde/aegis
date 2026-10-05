@@ -25,7 +25,7 @@ fn parse_diff_extracts_only_added_lines_of_tracked_files() {
 diff --git a/src/app.rs b/src/app.rs
 --- a/src/app.rs
 +++ b/src/app.rs
-@@ -1,3 +1,4 @@
+@@ -1,2 +1,2 @@
  context line stays out
 +let token = \"added\";
 -let removed = \"ignored\";
@@ -37,25 +37,197 @@ deleted file mode 100644
 ";
     let changed = Scanner::parse_diff(diff);
 
+    // The addition is the second line of the new file (one context line
+    // precedes it in the hunk); the deleted file has no post-image and
+    // contributes nothing.
     assert_eq!(
         changed,
         vec![(
             "src/app.rs".to_string(),
-            "let token = \"added\";".to_string()
+            "let token = \"added\";".to_string(),
+            2
         )]
     );
 }
 
 #[test]
 fn parse_diff_ignores_additions_before_any_file_header() {
-    let diff = "+orphaned addition\n+++ b/src/late.rs\n+attributed addition\n";
+    let diff = "+orphaned addition\n+++ b/src/late.rs\n@@ -0,0 +1 @@\n+attributed addition\n";
     let changed = Scanner::parse_diff(diff);
 
-    // An addition before any `+++` header has no file to belong to and is
-    // dropped rather than guessed.
+    // An addition is only reported when both a `+++` header (which file)
+    // and an enclosing `@@` hunk (which line) anchor it; the orphaned
+    // addition has neither and is dropped rather than guessed.
     assert_eq!(
         changed,
-        vec![("src/late.rs".to_string(), "attributed addition".to_string())]
+        vec![(
+            "src/late.rs".to_string(),
+            "attributed addition".to_string(),
+            1
+        )]
+    );
+}
+
+#[test]
+fn parse_diff_reports_target_file_lines_across_hunks() {
+    let diff = "\
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -7,3 +7,4 @@
+ unchanged context
++let first = \"inserted\";
+ more context
+ yet more context
+@@ -40,3 +45,4 @@
+ gap context
++let second = \"inserted\";
+ trailing context
+ last context
+";
+    let changed = Scanner::parse_diff(diff);
+
+    // Line numbers must come from each hunk's post-image start (7 and 45),
+    // not from the position within the joined addition-only text (1 and 2).
+    assert_eq!(
+        changed,
+        vec![
+            (
+                "src/app.rs".to_string(),
+                "let first = \"inserted\";".to_string(),
+                8
+            ),
+            (
+                "src/app.rs".to_string(),
+                "let second = \"inserted\";".to_string(),
+                46
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_headers_tolerate_timestamps_quotes_and_spaced_paths() {
+    // Plain `diff -u` appends a tab-separated timestamp after the path;
+    // git C-quotes paths containing quotes, backslashes, control
+    // characters, or non-ASCII bytes (spaces pass through unquoted).
+    let diff = concat!(
+        "--- a/docs/my notes.md\n",
+        "+++ b/docs/my notes.md\t2026-10-04 10:00:00.000000000 +0000\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+timestamped path keeps its spaces\n",
+        "--- a/src/app.rs\n",
+        "+++ \"b/src/caf\\303\\251.rs\"\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+git octal-quoted path decodes\n",
+        "--- a/src/app.rs\n",
+        "+++ \"b/name with \\\"quote\\\".rs\"\t2026-10-04 10:00:00 +0000\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+quoted path drops the closing-quote timestamp\n",
+    );
+    let changed = Scanner::parse_diff(diff);
+
+    // Octal escapes decode to raw bytes, so `caf\303\251` reassembles the
+    // two UTF-8 bytes of `é`; timestamps never leak into the path.
+    assert_eq!(
+        changed,
+        vec![
+            (
+                "docs/my notes.md".to_string(),
+                "timestamped path keeps its spaces".to_string(),
+                2
+            ),
+            (
+                "src/caf\u{e9}.rs".to_string(),
+                "git octal-quoted path decodes".to_string(),
+                2
+            ),
+            (
+                "name with \"quote\".rs".to_string(),
+                "quoted path drops the closing-quote timestamp".to_string(),
+                2
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_drops_additions_under_malformed_quoted_headers() {
+    // A quoted header that never closes, or hides an escape git never
+    // emits, has no trustworthy path: the additions under it are dropped
+    // instead of attributed to a guessed name, and a later well-formed
+    // header recovers attribution.
+    let diff = concat!(
+        "+++ \"b/src/unterminated.rs\n",
+        "@@ -0,0 +1 @@\n",
+        "+orphaned by an unterminated quote\n",
+        "+++ \"b/src/bad\\xescape.rs\"\n",
+        "@@ -0,0 +1 @@\n",
+        "+orphaned by an unknown escape\n",
+        "+++ \"b/src/out-of-range\\400.rs\"\n",
+        "@@ -0,0 +1 @@\n",
+        "+orphaned by an out-of-range octal escape\n",
+        "+++ b/src/recovered.rs\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+attributed after the malformed headers\n",
+    );
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![(
+            "src/recovered.rs".to_string(),
+            "attributed after the malformed headers".to_string(),
+            2
+        )]
+    );
+}
+
+#[test]
+fn parse_diff_never_invents_sources_for_deleted_renamed_or_binary_files() {
+    // The `+`-prefixed line in the last section is a base85 binary-patch
+    // body line (git's alphabet includes `+`); it sits outside any hunk and
+    // must not be attributed to `patch.bin`.
+    let diff = "\
+diff --git a/src/gone.rs b/src/gone.rs
+deleted file mode 100644
+index 1111111..0000000
+--- a/src/gone.rs
++++ /dev/null
+@@ -1,2 +0,0 @@
+-was here
+-gone too
+diff --git a/src/moved.rs b/src/renamed.rs
+similarity index 90%
+rename from src/moved.rs
+rename to src/renamed.rs
+--- a/src/moved.rs
++++ b/src/renamed.rs
+@@ -1 +1,2 @@
+ context of rename
++rename addition lands on the new name
+diff --git a/patch.bin b/patch.bin
+index 3333333..4444444 100644
+--- a/patch.bin
++++ b/patch.bin
+GIT binary patch
+literal 8
++cmZPEeSPk&3v
+";
+    let changed = Scanner::parse_diff(diff);
+
+    // Only the rename's addition survives, on the new path: a deletion has
+    // no post-image, and a binary body never enters a hunk.
+    assert_eq!(
+        changed,
+        vec![(
+            "src/renamed.rs".to_string(),
+            "rename addition lands on the new name".to_string(),
+            2
+        )]
     );
 }
 
@@ -87,6 +259,55 @@ fn scan_diff_attributes_findings_to_the_real_file() {
 }
 
 #[test]
+fn scan_diff_reports_original_line_numbers_across_hunks() {
+    let scanner = bundled_scanner();
+    // Identical credential lines in two hunks: only the attribution can
+    // tell them apart, so the reported lines must be the hunk anchors
+    // (4 and 55), not positions in the joined addition-only text (1 and 2).
+    let added = "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"";
+    let diff = format!(
+        "\
+--- a/config/prod.env
++++ b/config/prod.env
+@@ -3 +3,2 @@
+ existing = \"untouched\"
++{added}
+@@ -50 +54,2 @@
+ later = \"also untouched\"
++{added}
+"
+    );
+    let findings = scanner.scan_diff(&diff, "diff");
+
+    assert!(
+        findings.iter().any(|f| f.pattern == "aws-access-key"),
+        "both added credential lines must be reported, got: {:?}",
+        findings
+            .iter()
+            .map(|f| f.pattern.clone())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        findings
+            .iter()
+            .all(|f| f.location.file == "config/prod.env"),
+        "findings must carry the diff file path"
+    );
+
+    let mut lines: Vec<usize> = findings.iter().map(|f| f.location.line).collect();
+    lines.sort_unstable();
+    lines.dedup();
+    assert!(
+        lines.contains(&4) && lines.contains(&55),
+        "findings must carry the target-file line numbers 4 and 55, got: {lines:?}"
+    );
+    assert!(
+        lines.iter().all(|line| *line >= 4),
+        "no finding may fall back to a position in the joined addition text, got: {lines:?}"
+    );
+}
+
+#[test]
 fn baseline_load_failure_falls_back_to_unfiltered_scan() {
     let temp = TempDir::new().unwrap();
     let broken_baseline = temp.path().join("broken.json");
@@ -104,6 +325,112 @@ fn baseline_load_failure_falls_back_to_unfiltered_scan() {
     assert!(
         findings.iter().any(|f| f.pattern == "aws-access-key"),
         "an unusable baseline must not silence findings"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Diff scanning x baseline ordering
+// ---------------------------------------------------------------------------
+
+/// The credential line the fixtures in this section add.
+const SECRET_LINE: &str = "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"";
+
+/// The four-line post-image the diff adds to: the credential's real target
+/// line is 4, while inside the diff's joined addition-only text it is line 1.
+fn secret_post_image() -> String {
+    format!("a=1\nb=2\nc=3\n{SECRET_LINE}\n")
+}
+
+/// A diff whose single addition lands on target line 4 of `config/prod.env`.
+fn diff_adding_secret_at_target_line_4() -> String {
+    format!(
+        "\
+--- a/config/prod.env
++++ b/config/prod.env
+@@ -1,3 +1,4 @@
+ a=1
+ b=2
+ c=3
++{SECRET_LINE}
+"
+    )
+}
+
+/// Write a baseline file holding `fingerprints` in the bare-array form
+/// `load_baseline_fingerprints` accepts.
+#[allow(clippy::unwrap_used)] // test fixture builder, not a `#[test]` fn
+fn baseline_file(dir: &std::path::Path, fingerprints: &[String]) -> std::path::PathBuf {
+    let path = dir.join("baseline.json");
+    let entries: Vec<serde_json::Value> = fingerprints
+        .iter()
+        .map(|fingerprint| serde_json::json!({ "fingerprint": fingerprint }))
+        .collect();
+    std::fs::write(&path, serde_json::to_string(&entries).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn diff_baseline_at_the_real_target_line_suppresses_the_finding() {
+    let temp = TempDir::new().unwrap();
+
+    // The baseline mirrors a previous full-file scan of the post-image, so
+    // its credential fingerprint sits at the real target line (4).
+    let known = bundled_scanner().scan_string(&secret_post_image(), "config/prod.env");
+    let known_key = known
+        .iter()
+        .find(|f| f.pattern == "aws-access-key" && f.location.line == 4)
+        .expect("fixture must flag the credential at target line 4");
+    let baseline = baseline_file(temp.path(), &[known_key.fingerprint.clone()]);
+
+    let scanner = bundled_scanner().with_options(ScanOptions {
+        baseline: Some(baseline),
+        ..Default::default()
+    });
+
+    let findings = scanner.scan_diff(&diff_adding_secret_at_target_line_4(), "diff");
+    assert!(
+        findings.is_empty(),
+        "a baseline entry recorded at the real target line must suppress \
+         the diff finding, got: {findings:?}"
+    );
+}
+
+#[test]
+fn diff_baseline_at_a_synthetic_line_does_not_suppress_a_different_real_line() {
+    let temp = TempDir::new().unwrap();
+
+    // A fingerprint keyed the way a pre-remap diff finding would carry it:
+    // same pattern, file, and content, but at the synthetic joined-text
+    // line (1). It must not silence a finding whose real target line is 4.
+    let synthetic = bundled_scanner().scan_string(SECRET_LINE, "config/prod.env");
+    let synthetic_key = synthetic
+        .iter()
+        .find(|f| f.pattern == "aws-access-key")
+        .expect("fixture must flag the bare credential line");
+    assert_eq!(
+        synthetic_key.location.line, 1,
+        "fixture precondition: the bare line scans at synthetic line 1"
+    );
+    let baseline = baseline_file(temp.path(), &[synthetic_key.fingerprint.clone()]);
+
+    let scanner = bundled_scanner().with_options(ScanOptions {
+        baseline: Some(baseline),
+        ..Default::default()
+    });
+
+    let findings = scanner.scan_diff(&diff_adding_secret_at_target_line_4(), "diff");
+    let survivors: Vec<&aegis_core::Finding> = findings
+        .iter()
+        .filter(|f| f.pattern == "aws-access-key")
+        .collect();
+    assert!(
+        !survivors.is_empty(),
+        "a baseline keyed at the synthetic line must not suppress a finding \
+         whose real target line differs"
+    );
+    assert!(
+        survivors.iter().all(|f| f.location.file == "config/prod.env" && f.location.line == 4),
+        "the surviving finding must carry real target coordinates, got: {survivors:?}"
     );
 }
 
