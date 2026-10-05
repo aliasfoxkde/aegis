@@ -144,21 +144,8 @@ impl Finding {
         let pattern_str = pattern.into();
         let category_str = category.into();
         let matched_content_str = matched_content.into();
-        let matched_digest = hex::encode(Sha256::digest(matched_content_str.as_bytes()));
-        let fingerprint = format!(
-            "{}:{}:{}:{}",
-            pattern_str, location.file, location.line, matched_digest
-        );
-        let stable_material = format!(
-            "{}|{}|{}|{}|{}",
-            pattern_str, category_str, location.file, location.line, location.column
-        );
-        let stable_id = format!(
-            "aegis-{}",
-            hex::encode(Sha256::digest(stable_material.as_bytes()))
-        );
 
-        Self {
+        let mut finding = Self {
             id: uuid_v4(),
             pattern: pattern_str,
             category: category_str,
@@ -171,9 +158,39 @@ impl Finding {
             remediation: None,
             tags: Vec::new(),
             kind: FindingKind::Pattern,
-            fingerprint,
-            stable_id,
-        }
+            fingerprint: String::new(),
+            stable_id: String::new(),
+        };
+        finding.recompute_identity();
+        finding
+    }
+
+    /// Recompute the derived `fingerprint` and `stable_id` from the current
+    /// pattern, category, and location.
+    ///
+    /// Both identities are pure functions of those fields, so a caller that
+    /// rewrites a location after creation — the diff scanner maps positions
+    /// inside its joined addition-only text back to target-file lines — must
+    /// refresh them to keep the correlation keys in step with what is
+    /// reported.
+    pub fn recompute_identity(&mut self) {
+        let matched_digest = hex::encode(Sha256::digest(self.matched_content.as_bytes()));
+        self.fingerprint = format!(
+            "{}:{}:{}:{}",
+            self.pattern, self.location.file, self.location.line, matched_digest
+        );
+        let stable_material = format!(
+            "{}|{}|{}|{}|{}",
+            self.pattern,
+            self.category,
+            self.location.file,
+            self.location.line,
+            self.location.column
+        );
+        self.stable_id = format!(
+            "aegis-{}",
+            hex::encode(Sha256::digest(stable_material.as_bytes()))
+        );
     }
 
     /// Set the reference URL
