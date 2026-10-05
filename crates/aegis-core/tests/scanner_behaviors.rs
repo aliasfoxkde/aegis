@@ -380,7 +380,7 @@ fn diff_baseline_at_the_real_target_line_suppresses_the_finding() {
         .iter()
         .find(|f| f.pattern == "aws-access-key" && f.location.line == 4)
         .expect("fixture must flag the credential at target line 4");
-    let baseline = baseline_file(temp.path(), &[known_key.fingerprint.clone()]);
+    let baseline = baseline_file(temp.path(), std::slice::from_ref(&known_key.fingerprint));
 
     let scanner = bundled_scanner().with_options(ScanOptions {
         baseline: Some(baseline),
@@ -411,7 +411,10 @@ fn diff_baseline_at_a_synthetic_line_does_not_suppress_a_different_real_line() {
         synthetic_key.location.line, 1,
         "fixture precondition: the bare line scans at synthetic line 1"
     );
-    let baseline = baseline_file(temp.path(), &[synthetic_key.fingerprint.clone()]);
+    let baseline = baseline_file(
+        temp.path(),
+        std::slice::from_ref(&synthetic_key.fingerprint),
+    );
 
     let scanner = bundled_scanner().with_options(ScanOptions {
         baseline: Some(baseline),
