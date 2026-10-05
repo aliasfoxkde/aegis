@@ -440,8 +440,9 @@ fn has_unsafe_required_unit(stats: &ScanStats) -> bool {
 /// inspection ledger fails the scan the same way when any required unit
 /// recorded a status other than `Analyzed` or `Suppressed` — the per-unit
 /// rule of `InspectionLedger::allows_safe` — covering the statuses the
-/// counters cannot see: a tree-sitter parse error (`Failed`), a size-limit
-/// skip (`Skipped`), and a binary file (`Unsupported`) all gate. Only
+/// counters cannot see: a tree-sitter parse error (`Failed`) when that
+/// optional core feature is enabled, a size-limit skip (`Skipped`), and a
+/// binary file (`Unsupported`) all gate. Only
 /// out-of-scope units (`Excluded`, ignore rules) and optional units are
 /// non-gating. Otherwise findings drive the exit code, and info-only
 /// observations never fail the run (`has_findings`).
@@ -483,9 +484,10 @@ fn retire_receipt_if_configured() {
 /// Exit code 1 reports findings (info-only observations excluded) or an
 /// incomplete scan — `ScanStats::files_failed` counts required files that
 /// could not be inspected, and any required inspection-ledger unit whose
-/// status is not `Analyzed` or `Suppressed` (the AST analyzer records a
-/// tree-sitter parse error as `Failed`, a size limit as `Skipped`, and a
-/// binary as `Unsupported`) fails the scan the same way; neither ever
+/// status is not `Analyzed` or `Suppressed` (the AST analyzer can record a
+/// tree-sitter parse error as `Failed` when that optional core feature is
+/// enabled, a size limit as `Skipped`, and a binary as `Unsupported`) fails
+/// the scan the same way; neither ever
 /// passes as clean. See `scan_exit_code` for the decision.
 ///
 /// # Errors

@@ -7,14 +7,6 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
-### Fixed
-
-- Diff scans now attribute findings to the target file's actual line from
-  each unified-diff hunk, reject additions without a trustworthy file/hunk
-  anchor, correctly decode Git C-quoted paths, and apply baselines only
-  after location identities are remapped. Malformed or out-of-range octal
-  path escapes are rejected rather than truncated into a different path.
-
 ### Added
 
 - New `ai-slop` detection category (7 rules) flagging LLM-prose style
@@ -32,6 +24,12 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- Diff scans now attribute findings to the target file's actual line from
+  each unified-diff hunk, reject additions without a trustworthy file/hunk
+  anchor, correctly decode Git C-quoted paths, and apply baselines only
+  after location identities are remapped. Malformed or out-of-range octal
+  path escapes are rejected rather than truncated into a different path.
+
 - CLI scans: a scan that could not inspect every required unit exited 0
   whenever it reported no findings, so an incomplete scan passed a CI
   gate as clean. That covers an unreadable file or walk error (counted
@@ -39,16 +37,17 @@ every release are attached to the matching GitHub release.
   that did not finish as `Analyzed` or `Suppressed` — the same
   required-unit rule `InspectionLedger::allows_safe` applies. The core can
   record a tree-sitter parse error as `Failed` when its optional feature is
-  enabled (the default CLI dependency does not enable that feature), a size limit lands as a required
-  `Skipped` unit, and a binary file as a required `Unsupported` unit;
+  enabled (the default CLI dependency does not enable that feature), a
+  size limit lands as a required `Skipped` unit, and a binary file as a
+  required `Unsupported` unit;
   the exit code is now fail-closed for all of them: nonzero
   `stats.files_failed` or any required ledger unit outside
   `Analyzed`/`Suppressed` exits 1 under the documented scan-failure
   code. Optional units and out-of-scope exclusions (`Excluded`, ignore
   rules) stay non-gating. An empty ledger does not independently fail the
   CLI predicate; current content-based modes record a synthetic analyzed
-  unit. The scan still completes and renders its report, and the receipt it persists
-  records the uninspected units in its inspection ledger. Found by the
+  unit. The scan still completes and renders its report, and the receipt
+  it persists records the uninspected units in its inspection ledger. Found by the
   2026-10-05 audit of `run_scan_and_get_exit_code`.
 
 - Release builds: the tarball mtime pin now reads the tag commit's time

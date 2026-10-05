@@ -203,7 +203,7 @@ for custom patterns exactly as for bundled ones.
 | Code | Description |
 |------|-------------|
 | 0 | Scan completed, no findings |
-| 1 | Scan completed with findings. Also used when a scan itself fails (for example an unreadable scan root or an invalid `.aegis.yml`), including a partial scan that could not inspect every required unit — unreadable files are counted in `stats.files_failed`, and any required `stats.inspection_ledger` unit whose status is not `Analyzed` or `Suppressed` fails the scan too: a tree-sitter parse error records `Failed` (without touching `files_failed`), a size limit records `Skipped`, and a binary records `Unsupported` |
+| 1 | Findings, or a scan that could not inspect every required unit (`stats.files_failed` or a required ledger status other than `Analyzed`/`Suppressed`). Tree-sitter parse errors record `Failed` only when the optional core feature is enabled; the default CLI build does not enable it. Size limits record `Skipped`; binaries record `Unsupported`. |
 | 2 | Usage error: unknown subcommand or flag, or an invalid value for a global flag such as `--format` |
 
 With `--baseline`, code 1 means the scan produced findings that are not
