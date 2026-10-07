@@ -4,7 +4,7 @@
 //! Express and Node pitfalls; React, Vue, and Angular injection sinks; Spring
 //! deserialization; and Rust `unwrap`/`unsafe` usage.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Per-framework rules for Python, Ruby, JS/TS, Java, Go, and Rust stacks.
 #[must_use]
@@ -403,7 +403,7 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["rust".to_string(), "secret".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            exclude: Some(DYNAMIC_SECRET_VALUE_EXCLUSION.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {
