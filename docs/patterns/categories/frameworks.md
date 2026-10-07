@@ -658,7 +658,6 @@ regex is suppressed:
 ```regex
 (?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$
 ```
-
 **Input that fires** (verified by the liveness test):
 
 ```text
