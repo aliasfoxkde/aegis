@@ -253,8 +253,8 @@ fn literal_secret_rules_skip_dynamic_shell_credentials() {
             .cloned()
             .map(Into::into)
             .expect("the tested secret rule must exist");
-        let pattern = aegis_core::Pattern::new(definition)
-            .expect("the tested secret rule must compile");
+        let pattern =
+            aegis_core::Pattern::new(definition).expect("the tested secret rule must compile");
         for assignment in assignments.iter().copied() {
             let matches = pattern.find_matches(assignment);
             assert_eq!(
@@ -269,7 +269,11 @@ fn literal_secret_rules_skip_dynamic_shell_credentials() {
         }
         let single_quoted = r#"api_key='$AMORTYX_API_KEY'"#;
         let matches = pattern.find_matches(single_quoted);
-        assert_eq!(matches.len(), 1, "{pattern_name} must match the literal assignment");
+        assert_eq!(
+            matches.len(),
+            1,
+            "{pattern_name} must match the literal assignment"
+        );
         assert!(
             !pattern.is_excluded(matches[0].matched_text),
             "{pattern_name} must not suppress a single-quoted literal"
