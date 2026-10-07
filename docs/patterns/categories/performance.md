@@ -491,7 +491,7 @@ Blocking *Sync() call detected; prefer the async API
 \b\w+Sync\s*\(
 ```
 
-**Reference**: <https://nodejs.org/api/fs.html#synchronous-apis>
+**Reference**: <https://nodejs.org/download/release/latest/docs/api/fs.html#synchronous-api>
 
 **Input that fires** (verified by the liveness test):
 

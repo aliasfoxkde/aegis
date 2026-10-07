@@ -267,7 +267,7 @@ fn literal_secret_rules_skip_dynamic_shell_credentials() {
                 "{pattern_name} must exclude the complete dynamic assignment"
             );
         }
-        let single_quoted = r#"api_key='$AMORTYX_API_KEY'"#;
+        let single_quoted = r"api_key='$AMORTYX_API_KEY'";
         let matches = pattern.find_matches(single_quoted);
         assert_eq!(
             matches.len(),
