@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// assignment-shaped secret heuristics. Bare `$NAME` is deliberately omitted:
 /// these rules scan mixed-language files, where that text can also be a
 /// literal value.
-pub(crate) const DYNAMIC_SECRET_VALUE_EXCLUSION: &str = r#"(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\)|`[^`]*`)"$"#;
+pub(crate) const DYNAMIC_SECRET_VALUE_EXCLUSION: &str = r#"(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$"#;
 
 /// A bundled rule exactly as serialized in the pattern corpus.
 ///
