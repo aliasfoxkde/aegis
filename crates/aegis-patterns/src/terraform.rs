@@ -4,7 +4,7 @@
 //! tasks that run privileged or keep secrets in their definition, and credentials
 //! hardcoded in `.tf` files.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Terraform hardening: public access, unencrypted storage, privileged tasks, secrets.
 #[must_use]
@@ -71,7 +71,7 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["terraform".to_string(), "secrets".to_string(), "aws".to_string(), "hardcoded".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            exclude: Some(DYNAMIC_SECRET_VALUE_EXCLUSION.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

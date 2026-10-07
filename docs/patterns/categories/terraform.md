@@ -66,6 +66,12 @@ Hardcoded secrets detected in Terraform configuration
 (?i)(password\s*=\s*["'][^"']{8,}["']|secret\s*=\s*["'][^"']{8,}["']|api_key\s*=\s*["'][^"']{8,}["']|aws_access_key\s*=\s*["'][^"']{8,}["']|aws_secret_key\s*=\s*["'][^"']{8,}["'])
 ```
 
+**Exclude pattern** — a match span that also matches this
+regex is suppressed:
+
+```regex
+(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$
+```
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
 `crates/aegis-patterns/src/examples.rs`):

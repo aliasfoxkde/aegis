@@ -233,6 +233,77 @@ fn extension_scoped_patterns_skip_extensionless_files() {
     );
 }
 
+/// Literal-assignment secret rules must suppress complete shell expansions
+/// after matching them, rather than passing because their matchers stopped
+/// recognizing the assignment.
+#[test]
+fn literal_secret_rules_skip_dynamic_shell_credentials() {
+    let scanner = scanner();
+    let assignments = [
+        r#"api_key="${AMORTYX_API_KEY:-}""#,
+        r#"api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}""#,
+        r#"api_key="$(read_router_key)""#,
+        r#"api_key="`read_router_key`""#,
+    ];
+    let definitions = aegis_patterns::all_patterns();
+    for pattern_name in ["hardcoded-tf-secrets", "rust-hardcoded-secret"] {
+        let definition: aegis_core::PatternDefinition = definitions
+            .iter()
+            .find(|pattern| pattern.name == pattern_name)
+            .cloned()
+            .map(Into::into)
+            .expect("the tested secret rule must exist");
+        let pattern =
+            aegis_core::Pattern::new(definition).expect("the tested secret rule must compile");
+        for assignment in assignments.iter().copied() {
+            let matches = pattern.find_matches(assignment);
+            assert_eq!(
+                matches.len(),
+                1,
+                "{pattern_name} must match the dynamic assignment before exclusion"
+            );
+            assert!(
+                pattern.is_excluded(matches[0].matched_text),
+                "{pattern_name} must exclude dynamic assignment {assignment:?} (matched {:?})",
+                matches[0].matched_text
+            );
+        }
+        let single_quoted = r"api_key='$AMORTYX_API_KEY'";
+        let matches = pattern.find_matches(single_quoted);
+        assert_eq!(
+            matches.len(),
+            1,
+            "{pattern_name} must match the literal assignment"
+        );
+        assert!(
+            !pattern.is_excluded(matches[0].matched_text),
+            "{pattern_name} must not suppress a single-quoted literal"
+        );
+    }
+
+    let shell = r#"
+api_key="${AMORTYX_API_KEY:-}"
+api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}"
+api_key="$(read_router_key)"
+api_key="`read_router_key`"
+"#;
+    let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
+    let scoped_secret_findings: Vec<_> = fs
+        .iter()
+        .filter(|finding| {
+            matches!(
+                finding.pattern.as_str(),
+                "hardcoded-tf-secrets" | "rust-hardcoded-secret"
+            )
+        })
+        .map(|finding| finding.pattern.as_str())
+        .collect();
+    assert!(
+        scoped_secret_findings.is_empty(),
+        "dynamic shell lookups must not be reported as hardcoded secrets"
+    );
+}
+
 /// Correct API-integration usage must never be flagged. The original
 /// api-integration pack fired on `Authorization: Bearer` headers and
 /// try/catch around fetch, labeling good code as leaked secrets.
