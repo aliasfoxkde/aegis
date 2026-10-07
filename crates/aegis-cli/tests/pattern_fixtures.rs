@@ -300,7 +300,7 @@ api_key="`read_router_key`"
         .collect();
     assert!(
         scoped_secret_findings.is_empty(),
-        "dynamic shell lookups must not be reported as hardcoded secrets: {scoped_secret_findings:?}"
+        "dynamic shell lookups must not be reported as hardcoded secrets"
     );
 }
 
