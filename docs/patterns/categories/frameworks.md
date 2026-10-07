@@ -652,6 +652,13 @@ Hardcoded secret detected in Rust code.
 (api_key|apiKey|secret|password|token|credential)\s*[:=]\s*["\'][^"\'\s]{8,}["\']
 ```
 
+**Exclude pattern** — a match span that also matches this
+regex is suppressed:
+
+```regex
+(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$
+```
+
 **Input that fires** (verified by the liveness test):
 
 ```text
