@@ -99,17 +99,28 @@ fn scan_diff_maps_findings_through_context_deletions_and_later_hunks() {
 @@ -50,1 +51,2 @@
  context between hunks
 +aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+--- a/config/other.env
++++ b/config/other.env
+@@ -0,0 +1 @@
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
 ";
 
-    let mut finding_lines: Vec<_> = scanner
+    let mut findings: Vec<_> = scanner
         .scan_diff(diff, "diff")
         .into_iter()
         .filter(|finding| finding.pattern == "aws-access-key")
-        .map(|finding| finding.location.line)
+        .map(|finding| (finding.location.file, finding.location.line))
         .collect();
-    finding_lines.sort_unstable();
+    findings.sort_unstable();
 
-    assert_eq!(finding_lines, vec![2, 52]);
+    assert_eq!(
+        findings,
+        vec![
+            ("config/other.env".to_string(), 1),
+            ("config/prod.env".to_string(), 2),
+            ("config/prod.env".to_string(), 52),
+        ]
+    );
 }
 
 #[test]

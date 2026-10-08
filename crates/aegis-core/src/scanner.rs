@@ -449,6 +449,8 @@ impl Scanner {
         let mut current_file = String::new();
         let mut in_hunk = false;
         let mut new_line = 1;
+        let mut old_lines_remaining = 0;
+        let mut new_lines_remaining = 0;
 
         for line in diff_content.lines() {
             if line.starts_with("diff --git ") {
@@ -472,14 +474,19 @@ impl Scanner {
             }
 
             if line.starts_with("@@") {
-                if let Some(start) = line
-                    .split_whitespace()
-                    .nth(2)
-                    .and_then(|range| range.strip_prefix('+'))
-                    .and_then(|range| range.split(',').next())
-                    .and_then(|start| start.parse::<usize>().ok())
-                {
+                let mut ranges = line.split_whitespace();
+                let parsed = ranges
+                    .nth(1)
+                    .and_then(|range| Self::parse_unified_range(range, '-'))
+                    .zip(
+                        ranges
+                            .next()
+                            .and_then(|range| Self::parse_unified_range(range, '+')),
+                    );
+                if let Some(((_, old_count), (start, new_count))) = parsed {
                     new_line = start;
+                    old_lines_remaining = old_count;
+                    new_lines_remaining = new_count;
                     in_hunk = true;
                 } else {
                     in_hunk = false;
@@ -488,17 +495,38 @@ impl Scanner {
             }
 
             match line.as_bytes().first() {
-                Some(b'+') if !current_file.is_empty() => {
-                    results.push((current_file.clone(), new_line, line[1..].to_string()));
+                Some(b'+') => {
+                    if !current_file.is_empty() {
+                        results.push((current_file.clone(), new_line, line[1..].to_string()));
+                    }
+                    if in_hunk {
+                        new_lines_remaining = new_lines_remaining.saturating_sub(1);
+                    }
                     new_line = new_line.saturating_add(1);
                 }
-                Some(b' ') if in_hunk => new_line = new_line.saturating_add(1),
-                Some(b'-') if in_hunk => {}
+                Some(b' ') if in_hunk => {
+                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
+                    new_lines_remaining = new_lines_remaining.saturating_sub(1);
+                    new_line = new_line.saturating_add(1);
+                }
+                Some(b'-') if in_hunk => {
+                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
+                }
                 _ => {}
+            }
+
+            if in_hunk && old_lines_remaining == 0 && new_lines_remaining == 0 {
+                in_hunk = false;
             }
         }
 
         results
+    }
+
+    fn parse_unified_range(range: &str, prefix: char) -> Option<(usize, usize)> {
+        let range = range.strip_prefix(prefix)?;
+        let (start, count) = range.split_once(',').unwrap_or((range, "1"));
+        Some((start.parse().ok()?, count.parse().ok()?))
     }
 
     /// Scan added diff lines and map findings back to destination-file locations.
