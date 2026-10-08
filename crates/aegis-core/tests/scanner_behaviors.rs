@@ -87,6 +87,32 @@ fn scan_diff_attributes_findings_to_the_real_file() {
 }
 
 #[test]
+fn scan_diff_maps_findings_through_context_deletions_and_later_hunks() {
+    let scanner = bundled_scanner();
+    let diff = "\
+--- a/config/prod.env
++++ b/config/prod.env
+@@ -1,2 +1,2 @@
+ context before
+-removed content
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+@@ -50,1 +51,2 @@
+ context between hunks
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+
+    let mut finding_lines: Vec<_> = scanner
+        .scan_diff(diff, "diff")
+        .into_iter()
+        .filter(|finding| finding.pattern == "aws-access-key")
+        .map(|finding| finding.location.line)
+        .collect();
+    finding_lines.sort_unstable();
+
+    assert_eq!(finding_lines, vec![2, 52]);
+}
+
+#[test]
 fn baseline_load_failure_falls_back_to_unfiltered_scan() {
     let temp = TempDir::new().unwrap();
     let broken_baseline = temp.path().join("broken.json");

@@ -434,58 +434,101 @@ impl Scanner {
         scanners
     }
 
-    /// Parse a diff file and extract only the changed lines
-    /// Returns a tuple of (file_path, line_content) for each added line
-    #[allow(clippy::collapsible_if)]
+    /// Parse a diff and return each added line as `(file_path, line_content)`.
     #[must_use]
     pub fn parse_diff(diff_content: &str) -> Vec<(String, String)> {
+        Self::parse_diff_with_line_numbers(diff_content)
+            .into_iter()
+            .map(|(file, _, line)| (file, line))
+            .collect()
+    }
+
+    /// Keep each added line's 1-indexed destination-file line for scan results.
+    fn parse_diff_with_line_numbers(diff_content: &str) -> Vec<(String, usize, String)> {
         let mut results = Vec::new();
         let mut current_file = String::new();
+        let mut in_hunk = false;
+        let mut new_line = 1;
 
         for line in diff_content.lines() {
-            // Track file changes
-            if let Some(stripped) = line.strip_prefix("+++ ") {
-                current_file = stripped.to_string();
-                if current_file.starts_with("a/") || current_file.starts_with("b/") {
-                    if let Some(s) = current_file.strip_prefix("a/") {
-                        current_file = s.to_string();
-                    } else if let Some(s) = current_file.strip_prefix("b/") {
-                        current_file = s.to_string();
+            if line.starts_with("diff --git ") {
+                current_file.clear();
+                in_hunk = false;
+                continue;
+            }
+
+            if !in_hunk {
+                if let Some(stripped) = line.strip_prefix("+++ ") {
+                    current_file = stripped
+                        .strip_prefix("a/")
+                        .or_else(|| stripped.strip_prefix("b/"))
+                        .unwrap_or(stripped)
+                        .to_string();
+                    if current_file == "/dev/null" {
+                        current_file.clear();
                     }
-                }
-                if current_file == "/dev/null" {
-                    current_file = String::new();
-                }
-            } else if let Some(added) = line.strip_prefix('+') {
-                // Added line
-                if !current_file.is_empty() {
-                    results.push((current_file.clone(), added.to_string()));
+                    continue;
                 }
             }
-            // Note: We skip removed lines (-) and context lines
+
+            if line.starts_with("@@") {
+                if let Some(start) = line
+                    .split_whitespace()
+                    .nth(2)
+                    .and_then(|range| range.strip_prefix('+'))
+                    .and_then(|range| range.split(',').next())
+                    .and_then(|start| start.parse::<usize>().ok())
+                {
+                    new_line = start;
+                    in_hunk = true;
+                } else {
+                    in_hunk = false;
+                }
+                continue;
+            }
+
+            match line.as_bytes().first() {
+                Some(b'+') if !current_file.is_empty() => {
+                    results.push((current_file.clone(), new_line, line[1..].to_string()));
+                    new_line = new_line.saturating_add(1);
+                }
+                Some(b' ') if in_hunk => new_line = new_line.saturating_add(1),
+                Some(b'-') if in_hunk => {}
+                _ => {}
+            }
         }
 
         results
     }
 
-    /// Scan only the changed lines from a diff file
+    /// Scan added diff lines and map findings back to destination-file locations.
     pub fn scan_diff(&self, diff_content: &str, _source: &str) -> Vec<Finding> {
-        let changed_lines = Self::parse_diff(diff_content);
+        let changed_lines = Self::parse_diff_with_line_numbers(diff_content);
         let mut all_findings = Vec::new();
 
         // Group by file and scan each file's changed lines
-        let mut by_file: std::collections::HashMap<String, Vec<String>> =
+        let mut by_file: std::collections::HashMap<String, Vec<(usize, String)>> =
             std::collections::HashMap::new();
-        for (file, line) in changed_lines {
-            by_file.entry(file).or_default().push(line);
+        for (file, line_number, line) in changed_lines {
+            by_file.entry(file).or_default().push((line_number, line));
         }
 
         for (file, lines) in by_file {
-            let content = lines.join("\n");
+            let source_lines: Vec<_> = lines.iter().map(|(line, _)| *line).collect();
+            let content = lines
+                .into_iter()
+                .map(|(_, line)| line)
+                .collect::<Vec<_>>()
+                .join("\n");
             let mut findings = self.scan_string(&content, &file);
-            // Update source to reflect the actual file
+            // Findings are located within the compacted changed-line text;
+            // restore the 1-indexed line number from the unified diff hunk.
             for finding in &mut findings {
                 finding.location.file.clone_from(&file);
+                if let Some(source_line) = source_lines.get(finding.location.line.saturating_sub(1))
+                {
+                    finding.location.line = *source_line;
+                }
             }
             all_findings.extend(findings);
         }
