@@ -304,6 +304,73 @@ api_key="`read_router_key`"
     );
 }
 
+/// A non-empty literal fallback inside a braced expansion is a committed
+/// credential, not a runtime lookup: the exclusion must leave it reported.
+/// Fixture payloads are assembled with `concat!` (as in `examples.rs`) so
+/// the source text never carries a complete quoted credential.
+#[test]
+fn literal_fallback_in_expansion_stays_reported() {
+    let scanner = scanner();
+    let definitions = aegis_patterns::all_patterns();
+    let assignments = [
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY:-st4"#,
+            r#"tic-fallback}""#
+        ),
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY-singledash"#,
+            r#"-fb}""#
+        ),
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY:-${MINIMAX_API_KEY:-st4"#,
+            r#"tic-fallback}}""#
+        ),
+    ];
+    for pattern_name in ["hardcoded-tf-secrets", "rust-hardcoded-secret"] {
+        let definition: aegis_core::PatternDefinition = definitions
+            .iter()
+            .find(|pattern| pattern.name == pattern_name)
+            .cloned()
+            .map(Into::into)
+            .expect("the tested secret rule must exist");
+        let pattern =
+            aegis_core::Pattern::new(definition).expect("the tested secret rule must compile");
+        for assignment in assignments.iter().copied() {
+            let matches = pattern.find_matches(assignment);
+            assert_eq!(
+                matches.len(),
+                1,
+                "{pattern_name} must match the assignment before exclusion"
+            );
+            assert!(
+                !pattern.is_excluded(matches[0].matched_text),
+                "{pattern_name} must report a literal fallback in {assignment:?}"
+            );
+        }
+    }
+
+    let shell = concat!(
+        r#"api_key"#,
+        r#"="${"#,
+        r#"AMORTYX_API_KEY:-st4"#,
+        r#"tic-fallback}"#,
+    );
+    let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
+    assert!(
+        fs.iter().any(|finding| matches!(
+            finding.pattern.as_str(),
+            "hardcoded-tf-secrets" | "rust-hardcoded-secret"
+        )),
+        "a literal fallback credential must reach the scanner's findings"
+    );
+}
+
 /// Correct API-integration usage must never be flagged. The original
 /// api-integration pack fired on `Authorization: Bearer` headers and
 /// try/catch around fetch, labeling good code as leaked secrets.
