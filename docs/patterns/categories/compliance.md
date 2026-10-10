@@ -146,7 +146,7 @@ COPPA reference detected
 (?i)coppa|children['\s]+online\s*privacy\s*protection
 ```
 
-**Reference**: <https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa>
+**Reference**: <https://www.ecfr.gov/current/title-16/chapter-I/subchapter-C/part-312>
 
 **Input that fires** (verified by the liveness test):
 
@@ -412,7 +412,7 @@ GLBA (Gramm-Leach-Bliley Act) reference detected
 (?i)glba|gramm[-_]?leach[-_]?bliley
 ```
 
-**Reference**: <https://www.ftc.gov/business-guidance/privacy-security/gramm-leach-bliley-act>
+**Reference**: <https://www.congress.gov/106/plaws/publ102/PLAW-106publ102.pdf>
 
 **Input that fires** (verified by the liveness test):
 
