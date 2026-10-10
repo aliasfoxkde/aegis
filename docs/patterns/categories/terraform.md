@@ -70,7 +70,7 @@ Hardcoded secrets detected in Terraform configuration
 regex is suppressed:
 
 ```regex
-(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{(?:[^{}]|\{[^{}]*\})*\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$
+(?i)^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$[a-zA-Z_][a-zA-Z0-9_]*|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`)*|:\d+(?::\d+)?)?\}|\$[a-zA-Z_][a-zA-Z0-9_]*|\$\((?:[^()]|\([^()]*\))*\)|`[^`]*`)*|:\d+(?::\d+)?)?\}|\((?:[^()]|\([^()]*\))*\))|`[^`]*`)"$
 ```
 **Input that fires** (verified by the liveness test; long
 token-shaped runs are elided here — the exact input is compiled into
