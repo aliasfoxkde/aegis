@@ -359,7 +359,7 @@ fn literal_fallback_in_expansion_stays_reported() {
         r#"api_key"#,
         r#"="${"#,
         r#"AMORTYX_API_KEY:-st4"#,
-        r#"tic-fallback}"#,
+        r#"tic-fallback}""#,
     );
     let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
     assert!(
