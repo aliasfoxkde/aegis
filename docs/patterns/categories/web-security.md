@@ -486,7 +486,7 @@ JWT with 'none' algorithm detected
 (?i)\balg(?:orithm)?\s*["']?\s*[:=]\s*["']?\s*none\b
 ```
 
-**Reference**: <https://github.com/OWASP/wstg/blob/master/document/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens.md>
+**Reference**: <https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens/>
 
 **Input that fires** (verified by the liveness test):
 
