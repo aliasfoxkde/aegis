@@ -4,13 +4,22 @@ use std::path::{Path, PathBuf};
 
 /// Check if a path is safe (within allowed boundaries).
 ///
-/// Containment is enforced against the fully resolved form: any path that
-/// exists is `canonicalize`d first, so symlinks (and `..` chains through
-/// symlinked directories) that lead outside the working directory are
-/// rejected no matter how they are spelled. Only paths that do not exist
-/// fall back to the lexical check in [`lexical_contains`], where there is
-/// no file to read; a nonexistent path is accepted only when its
-/// normalized spelling stays inside the working directory.
+/// A path is admitted only when one of two conditions holds:
+///
+/// 1. It `canonicalize`s to a location inside the canonicalized working
+///    directory. Symlinks and `..` chains are fully resolved first, so a
+///    path that resolves to an existing file or directory outside the
+///    working directory is rejected no matter how it is spelled.
+/// 2. `canonicalize` fails and its lexically normalized spelling stays
+///    inside the working directory (the [`lexical_contains`] fallback).
+///    That failure is not limited to a nonexistent final component:
+///    unreadable components (`EACCES`), symlink cycles (`ELOOP`),
+///    non-directory components (`ENOTDIR`), and overlong names all fail
+///    the same way. What those cases share is that the path cannot be
+///    resolved at all, so nothing can be read through it at check time;
+///    containment rests on the spelling, and a read of that same spelling
+///    either stays inside the working directory or fails to resolve for
+///    the same reason.
 pub fn is_path_safe(path: &PathBuf) -> bool {
     // Get current working directory and resolve it to an absolute, canonical path
     let Ok(cwd) = std::env::current_dir() else {
@@ -40,7 +49,9 @@ pub fn is_path_safe(path: &PathBuf) -> bool {
 
 /// Report whether `candidate` sits at or below `root`, resolved lexically.
 ///
-/// Used when the candidate cannot be canonicalized (it does not exist yet).
+/// Used when the candidate cannot be canonicalized at all — most often
+/// because it does not exist, but any other resolution failure (unreadable
+/// component, symlink cycle, non-directory component) lands here too.
 /// Both sides are compared as forward-slash component stacks so the check
 /// keeps working on Windows, where `canonicalize` yields verbatim
 /// (`\\?\C:\...`) paths while joined user input stays plain (`C:\...`) and
@@ -130,9 +141,10 @@ mod tests {
 
     #[test]
     fn is_path_safe_accepts_nonexistent_paths_inside_cwd() {
-        // A nonexistent path that would land inside cwd is allowed so scans
-        // can reject it with a clean "not found" error instead of a sandbox
-        // violation.
+        // A nonexistent path that would land inside cwd is allowed so the
+        // scan, not the sandbox, reports it: a missing file surfaces as an
+        // InternalError carrying the not-found I/O message, never as the
+        // sandbox violation (InvalidParams).
         let cwd = std::env::current_dir().unwrap();
         let safe_nonexistent = cwd.join("this-does-not-exist").join("file.txt");
         assert!(is_path_safe(&safe_nonexistent));
@@ -184,9 +196,10 @@ mod tests {
         // A symlinked directory plus a NONEXISTENT final component cannot be
         // canonicalized, so the lexical fallback judges the spelling. The
         // spelling is inside cwd, the path is allowed — but only because
-        // nothing exists to read there; the scan surfaces a clean not-found.
-        // (The existing-target variants of the same shapes are refused by
-        // is_path_safe_rejects_symlinked_targets_outside_cwd.)
+        // nothing exists to read there; the scan then fails with
+        // InternalError (the underlying not-found I/O error), not
+        // InvalidParams. (The existing-target variants of the same shapes
+        // are refused by is_path_safe_rejects_symlinked_targets_outside_cwd.)
         let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
         let outside_dir = tempfile::tempdir_in(cwd.parent().unwrap()).unwrap();
 
