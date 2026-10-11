@@ -151,18 +151,20 @@ mod tests {
         // indirection is spelled. `canonicalize` resolves the full symlink
         // chain, so the containment check sees the real location.
         let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
-        let outside_dir = std::env::temp_dir().join("aegis-sandbox-outside-existing");
-        std::fs::create_dir_all(outside_dir.join("sub")).unwrap();
-        std::fs::write(outside_dir.join("target.txt"), "probe fixture").unwrap();
+        // Both fixtures are TempDir-owned and uniquely named per run: the
+        // symlinks must sit inside cwd for containment to apply, and the
+        // probed target must sit outside it — the parent of cwd is the
+        // nearest such spot. RAII removes only these run-owned directories,
+        // so nothing shared or fixed is ever written or deleted.
+        let outside_dir = tempfile::tempdir_in(cwd.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(outside_dir.path().join("sub")).unwrap();
+        std::fs::write(outside_dir.path().join("target.txt"), "probe fixture").unwrap();
 
-        let fixture = cwd.join("temp").join("path-sandbox-existing");
-        std::fs::create_dir_all(&fixture).unwrap();
-        let link_dir = fixture.join("link-dir");
-        let link_file = fixture.join("link-file");
-        let _removed = std::fs::remove_file(&link_dir);
-        let _removed = std::fs::remove_file(&link_file);
-        std::os::unix::fs::symlink(&outside_dir, &link_dir).unwrap();
-        std::os::unix::fs::symlink(outside_dir.join("target.txt"), &link_file).unwrap();
+        let fixture = tempfile::tempdir_in(&cwd).unwrap();
+        let link_dir = fixture.path().join("link-dir");
+        let link_file = fixture.path().join("link-file");
+        std::os::unix::fs::symlink(outside_dir.path(), &link_dir).unwrap();
+        std::os::unix::fs::symlink(outside_dir.path().join("target.txt"), &link_file).unwrap();
 
         // Symlink file pointing directly at an existing outside file.
         assert!(!is_path_safe(&link_file));
@@ -174,11 +176,6 @@ mod tests {
         assert!(!is_path_safe(
             &link_dir.join("sub").join("..").join("target.txt")
         ));
-
-        let _removed = std::fs::remove_file(&link_dir);
-        let _removed = std::fs::remove_file(&link_file);
-        let _removed = std::fs::remove_dir_all(&fixture);
-        let _removed = std::fs::remove_dir_all(&outside_dir);
     }
 
     #[cfg(unix)]
@@ -191,22 +188,15 @@ mod tests {
         // (The existing-target variants of the same shapes are refused by
         // is_path_safe_rejects_symlinked_targets_outside_cwd.)
         let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
-        let outside_dir = std::env::temp_dir().join("aegis-sandbox-outside-absent");
-        std::fs::create_dir_all(&outside_dir).unwrap();
+        let outside_dir = tempfile::tempdir_in(cwd.parent().unwrap()).unwrap();
 
-        let fixture = cwd.join("temp").join("path-sandbox-absent");
-        std::fs::create_dir_all(&fixture).unwrap();
-        let link_dir = fixture.join("link-dir");
-        let _removed = std::fs::remove_file(&link_dir);
-        std::os::unix::fs::symlink(&outside_dir, &link_dir).unwrap();
+        let fixture = tempfile::tempdir_in(&cwd).unwrap();
+        let link_dir = fixture.path().join("link-dir");
+        std::os::unix::fs::symlink(outside_dir.path(), &link_dir).unwrap();
 
         let absent_through_link = link_dir.join("absent.txt");
         assert!(!absent_through_link.exists());
         assert!(is_path_safe(&absent_through_link));
-
-        let _removed = std::fs::remove_file(&link_dir);
-        let _removed = std::fs::remove_dir_all(&fixture);
-        let _removed = std::fs::remove_dir_all(&outside_dir);
     }
 
     #[test]

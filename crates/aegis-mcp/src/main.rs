@@ -878,13 +878,19 @@ mod tests {
         // outside it: the guard canonicalizes the resolved target, so the
         // call must fail as a sandbox violation (InvalidParams), not as an
         // ordinary scan error.
-        let outside = tempfile::tempdir().expect("create outside temp dir");
+        // TempDir-owned fixtures, uniquely named per run: the link lives
+        // inside cwd so containment applies, the probed target lives
+        // outside it (the parent of cwd). RAII removes both.
+        let cwd = std::env::current_dir()
+            .expect("read cwd")
+            .canonicalize()
+            .expect("canonicalize cwd");
+        let outside = tempfile::tempdir_in(cwd.parent().expect("cwd has a parent"))
+            .expect("create outside temp dir");
         let target = outside.path().join("target.txt");
         std::fs::write(&target, "probe fixture").expect("write target");
 
-        let fixture_parent = PathBuf::from("temp");
-        std::fs::create_dir_all(&fixture_parent).expect("create fixture parent");
-        let fixture_dir = tempfile::tempdir_in(&fixture_parent).expect("create fixture temp dir");
+        let fixture_dir = tempfile::tempdir_in(&cwd).expect("create fixture temp dir");
         let link = fixture_dir.path().join("leak-link");
         std::os::unix::fs::symlink(&target, &link).expect("symlink target");
 
@@ -900,12 +906,15 @@ mod tests {
     async fn scan_dir_via_symlink_escape_is_rejected() {
         // Same invariant for directory scans: a symlinked directory inside
         // cwd that resolves outside must be refused before any walking.
-        let outside = tempfile::tempdir().expect("create outside temp dir");
+        let cwd = std::env::current_dir()
+            .expect("read cwd")
+            .canonicalize()
+            .expect("canonicalize cwd");
+        let outside = tempfile::tempdir_in(cwd.parent().expect("cwd has a parent"))
+            .expect("create outside temp dir");
         std::fs::write(outside.path().join("target.txt"), "probe fixture").expect("write target");
 
-        let fixture_parent = PathBuf::from("temp");
-        std::fs::create_dir_all(&fixture_parent).expect("create fixture parent");
-        let fixture_dir = tempfile::tempdir_in(&fixture_parent).expect("create fixture temp dir");
+        let fixture_dir = tempfile::tempdir_in(&cwd).expect("create fixture temp dir");
         let link = fixture_dir.path().join("leak-dir");
         std::os::unix::fs::symlink(outside.path(), &link).expect("symlink dir");
 
