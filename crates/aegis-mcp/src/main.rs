@@ -878,22 +878,18 @@ mod tests {
         // outside it: the guard canonicalizes the resolved target, so the
         // call must fail as a sandbox violation (InvalidParams), not as an
         // ordinary scan error.
-        let outside = std::env::temp_dir().join("aegis-mcp-symlink-escape");
-        std::fs::create_dir_all(&outside).expect("create outside dir");
-        std::fs::write(outside.join("target.txt"), "probe fixture").expect("write target");
+        let outside = tempfile::tempdir().expect("create outside temp dir");
+        let target = outside.path().join("target.txt");
+        std::fs::write(&target, "probe fixture").expect("write target");
 
-        let fixture_dir = PathBuf::from("temp/mcp-symlink-fixture");
-        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
-        let link = fixture_dir.join("leak-link");
-        let _removed = std::fs::remove_file(&link);
-        std::os::unix::fs::symlink(outside.join("target.txt"), &link).expect("symlink target");
+        let fixture_parent = PathBuf::from("temp");
+        std::fs::create_dir_all(&fixture_parent).expect("create fixture parent");
+        let fixture_dir = tempfile::tempdir_in(&fixture_parent).expect("create fixture temp dir");
+        let link = fixture_dir.path().join("leak-link");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink target");
 
         let rpc = AegisRpcImpl::new(ready_state().await);
         let error = rpc.scan_file(link.to_string_lossy().into_owned()).await;
-
-        let _removed = std::fs::remove_file(&link);
-        let _removed = std::fs::remove_dir_all(&fixture_dir);
-        let _removed = std::fs::remove_dir_all(&outside);
 
         let error = error.expect_err("sandbox must refuse symlinked targets outside cwd");
         assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
@@ -904,25 +900,20 @@ mod tests {
     async fn scan_dir_via_symlink_escape_is_rejected() {
         // Same invariant for directory scans: a symlinked directory inside
         // cwd that resolves outside must be refused before any walking.
-        let outside = std::env::temp_dir().join("aegis-mcp-symlink-escape-dir");
-        std::fs::create_dir_all(&outside).expect("create outside dir");
-        std::fs::write(outside.join("target.txt"), "probe fixture").expect("write target");
+        let outside = tempfile::tempdir().expect("create outside temp dir");
+        std::fs::write(outside.path().join("target.txt"), "probe fixture").expect("write target");
 
-        let fixture_dir = PathBuf::from("temp/mcp-symlink-dir-fixture");
-        std::fs::create_dir_all(&fixture_dir).expect("create fixture dir");
-        let link = fixture_dir.join("leak-dir");
-        let _removed = std::fs::remove_file(&link);
-        std::os::unix::fs::symlink(&outside, &link).expect("symlink dir");
+        let fixture_parent = PathBuf::from("temp");
+        std::fs::create_dir_all(&fixture_parent).expect("create fixture parent");
+        let fixture_dir = tempfile::tempdir_in(&fixture_parent).expect("create fixture temp dir");
+        let link = fixture_dir.path().join("leak-dir");
+        std::os::unix::fs::symlink(outside.path(), &link).expect("symlink dir");
 
         let rpc = AegisRpcImpl::new(ready_state().await);
         let error = rpc
             .scan_dir(link.to_string_lossy().into_owned())
             .await
             .expect_err("sandbox must refuse symlinked directories outside cwd");
-
-        let _removed = std::fs::remove_file(&link);
-        let _removed = std::fs::remove_dir_all(&fixture_dir);
-        let _removed = std::fs::remove_dir_all(&outside);
 
         assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
     }
