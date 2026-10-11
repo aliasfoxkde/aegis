@@ -513,16 +513,21 @@ impl Scanner {
     /// to a known file, in diff order.
     ///
     /// Hunk parsing fails closed: additions are only trusted while the
-    /// hunk header still counts unaccounted body lines. A file or hunk
-    /// header arriving before those counts are exhausted — the signature
-    /// of a truncated or malformed diff — ends the hunk and is then
-    /// parsed as the header it is, so it is never attributed to the
-    /// previous file as source, and the next file's first hunk stays with
-    /// the next file. The one ambiguity this accepts — a body line whose
-    /// own content starts with `--- ` or `+++ ` — resolves the same
-    /// fail-closed way: the line is not attributed, and only the
-    /// remainder of that overstated hunk is lost until the next header
-    /// re-anchors.
+    /// hunk header still counts unaccounted body lines. A `@@ ` or
+    /// `diff --git ` header arriving before those counts are exhausted —
+    /// the signature of a truncated or malformed diff — ends the hunk and
+    /// is then parsed as the header it is, so it is never attributed to
+    /// the previous file as source, and the next file's first hunk stays
+    /// with the next file. `--- `/`+++ ` shapes need more care: a body
+    /// line whose source text itself starts with `-- `/`++ ` diffs to
+    /// exactly that shape, so ending the hunk on every such line would
+    /// drop the hunk's remaining additions and hand a `+++ ` body line to
+    /// `header_target_file` as a phantom path. Those shapes are therefore
+    /// read as headers only when the header grammar (a `+++ ` partner
+    /// after a `--- `, a header follower after a `+++ `) and the hunk's
+    /// counts agree — see `is_file_header_in_hunk`. Every shape the
+    /// counts cannot account for as body still fails closed to the
+    /// header reading.
     fn parse_diff_hunks(diff_content: &str) -> Vec<(String, Vec<(usize, String)>)> {
         // Flush the hunk under construction; hunks that added nothing to
         // a known file are dropped.
@@ -551,17 +556,29 @@ impl Scanner {
         let mut remaining_old = 0usize;
         let mut remaining_new = 0usize;
 
-        for line in diff_content.lines() {
+        let mut diff_lines = diff_content.lines().peekable();
+        while let Some(line) = diff_lines.next() {
             if in_hunk {
-                // Body lines always carry a `+`/`-`/space prefix, so a raw
-                // header-shaped line can only be a real file or hunk header.
+                // `@@ ` and `diff --git ` cannot be body lines — body lines
+                // always carry a `+`/`-`/space/`\` prefix — so those shapes
+                // are real headers even while the counts still claim body.
                 // Fail closed: end the hunk and fall through so the line is
                 // parsed as the header it is — never as the previous file's
-                // source — even when the header's counts still claim body.
-                if line.starts_with("--- ")
-                    || line.starts_with("+++ ")
-                    || line.starts_with("@@ ")
+                // source — and the next file's first hunk stays with the
+                // next file. `--- `/`+++ ` shapes are not self-evident: a
+                // body line whose source text itself starts with `-- `/`++ `
+                // diffs to exactly that shape, so `is_file_header_in_hunk`
+                // reads them as headers only when the header grammar and
+                // the hunk's counts agree; otherwise they are counted body
+                // and the hunk survives them.
+                if line.starts_with("@@ ")
                     || line.starts_with("diff --git ")
+                    || Self::is_file_header_in_hunk(
+                        line,
+                        diff_lines.peek().copied(),
+                        remaining_old,
+                        remaining_new,
+                    )
                 {
                     in_hunk = false;
                 } else {
@@ -617,6 +634,55 @@ impl Scanner {
         flush_hunk(&mut hunks, &mut open_hunk);
 
         hunks
+    }
+
+    /// Decide whether a `--- `- or `+++ `-shaped line inside an open hunk
+    /// is a real file header rather than a body line.
+    ///
+    /// Source text starting with `-- `/`++ ` diffs to exactly these shapes
+    /// (deleting `-- comment` yields `--- comment`, adding `++ setup`
+    /// yields `+++ setup`), so shape alone cannot decide. Two grammar
+    /// facts do most of the work: a real `--- ` header is always
+    /// immediately followed by its `+++ ` partner, and a real `+++ `
+    /// header is always followed by the new file's first `@@ ` header, the
+    /// next `diff --git `, or the end of the diff. The hunk counts settle
+    /// the rest: a well-formed diff never places a file header while the
+    /// open hunk's counts still expect body, so the header reading only
+    /// wins when the body reading cannot be accounted for at all — a
+    /// `--- `/`+++ ` pair with no deletion and no addition left to spend,
+    /// or a `+++ ` whose header-follower arrives while counting the line
+    /// as the hunk's final addition would still leave the counts
+    /// unfulfilled. When the counts do account for the body reading —
+    /// including the exact case where the line completes the hunk — it
+    /// wins, keeping hunks that replace a `-- ` line with a `++ ` line
+    /// lossless. The residue this accepts: a truncated diff whose
+    /// over-counted hunk happens to sit exactly one old and one new line
+    /// above its true end at the next file's header pair is textually
+    /// identical to that well-formed reading, and the count-consistent
+    /// interpretation is the strongest evidence available at this layer.
+    fn is_file_header_in_hunk(
+        line: &str,
+        next_line: Option<&str>,
+        remaining_old: usize,
+        remaining_new: usize,
+    ) -> bool {
+        if line.starts_with("--- ") {
+            matches!(next_line, Some(follow) if follow.starts_with("+++ "))
+                && (remaining_old == 0 || remaining_new == 0)
+        } else if line.starts_with("+++ ") {
+            match next_line {
+                Some(follow) if follow.starts_with("@@ ") || follow.starts_with("diff --git ") => {
+                    remaining_new != 1 || remaining_old != 0
+                }
+                // Anything else after the line disqualifies the header
+                // reading: a real `+++ ` header is always followed by a
+                // hunk header, the next file entry, or nothing.
+                _ => false,
+            }
+        } else {
+            // Plain body shapes (`+`, `-`, space, `\`) are never headers.
+            false
+        }
     }
 
     /// Parse the ranges of a hunk header — the text after the leading

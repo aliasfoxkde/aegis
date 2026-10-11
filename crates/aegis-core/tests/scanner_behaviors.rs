@@ -274,6 +274,175 @@ fn parse_diff_fails_closed_when_a_hunk_header_overstates_its_body() {
 }
 
 #[test]
+fn parse_diff_keeps_additions_after_a_deleted_dash_dash_source_line() {
+    // A deleted line whose source text starts with `-- ` diffs as `--- `:
+    // that shape is body, not a file header (a real `--- ` header is
+    // always paired with a following `+++ `). The hunk must survive it so
+    // the sensitive addition after it is still attributed, at its real
+    // target line.
+    let diff = "\
+--- a/config/settings.lua
++++ b/config/settings.lua
+@@ -1,2 +1,2 @@
+ local config = {}
+--- old key = hk2
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![(
+            "config/settings.lua".to_string(),
+            "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+            2
+        )]
+    );
+}
+
+#[test]
+fn parse_diff_keeps_an_added_plus_plus_line_and_its_hunk_attribution() {
+    // An added line whose source text starts with `++ ` diffs as `+++ `:
+    // that shape is body, not a target-file header (a real `+++ ` header
+    // is always followed by a `@@ ` hunk header). The line itself is
+    // attributed as source, and the following hunk stays anchored on the
+    // hunk's own file instead of the invented `setup` path.
+    let diff = "\
+--- a/deploy/run.sh
++++ b/deploy/run.sh
+@@ -1,1 +1,3 @@
+ set -euo pipefail
++++ setup
++aws_secret_access_key = \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"
+@@ -9,1 +10,2 @@
+ export PATH=\"$PATH\"
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            ("deploy/run.sh".to_string(), "++ setup".to_string(), 2),
+            (
+                "deploy/run.sh".to_string(),
+                "aws_secret_access_key = \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"".to_string(),
+                3
+            ),
+            (
+                "deploy/run.sh".to_string(),
+                "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+                11
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_keeps_a_plus_plus_body_line_that_completes_its_hunk() {
+    // The harsher `++ ` shape: the added line is the hunk's last counted
+    // new line, so a real header could never follow it except as the next
+    // hunk's `@@`. Counting it as body completes the hunk exactly, so it
+    // is kept as source and the next hunk is never re-anchored onto a
+    // phantom `bootstrap` file.
+    let diff = "\
+--- a/scripts/gen.sh
++++ b/scripts/gen.sh
+@@ -1,1 +1,2 @@
+ set -euo pipefail
++++ bootstrap
+@@ -9,1 +10,2 @@
+ export PATH=\"$PATH\"
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            ("scripts/gen.sh".to_string(), "++ bootstrap".to_string(), 2),
+            (
+                "scripts/gen.sh".to_string(),
+                "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+                11
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_reanchors_the_next_file_after_a_body_dash_dash_shape() {
+    // A genuine `---`/`+++` header pair must still open the next file —
+    // even though the previous hunk contains a `--- `-shaped deletion body
+    // line. The hunk survives its body shape, its addition is attributed,
+    // and the real pair re-anchors the following hunk on the new file.
+    let diff = "\
+--- a/config/settings.lua
++++ b/config/settings.lua
+@@ -1,2 +1,2 @@
+ local config = {}
+--- old key = hk2
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+--- a/config/other.lua
++++ b/config/other.lua
+@@ -1 +1,2 @@
+ anchor
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            (
+                "config/settings.lua".to_string(),
+                "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+                2
+            ),
+            (
+                "config/other.lua".to_string(),
+                "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+                2
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_still_fails_closed_on_a_header_pair_the_counts_cannot_claim() {
+    // The hunk claims additions only (old count 0), so a following
+    // `---`/`+++` pair can never be body — there is no deletion left to
+    // account for the `--- `. The pair must be parsed as the header it is,
+    // never swallowed as source, and the next file's hunk must stay with
+    // the next file.
+    let diff = "\
+--- a/src/one.rs
++++ b/src/one.rs
+@@ -0,0 +1,3 @@
++const one = 1;
++const two = 2;
+--- a/src/two.rs
++++ b/src/two.rs
+@@ -0,0 +1 @@
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            ("src/one.rs".to_string(), "const one = 1;".to_string(), 1),
+            ("src/one.rs".to_string(), "const two = 2;".to_string(), 2),
+            (
+                "src/two.rs".to_string(),
+                "aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"".to_string(),
+                1
+            ),
+        ]
+    );
+}
+
+#[test]
 fn parse_diff_strips_only_the_git_target_prefix() {
     // The `+++` header is the post-image side: git's prefix there is `b/`,
     // and a leading `a/` is a real path component — plain `diff -u` output
@@ -459,6 +628,44 @@ fn scan_diff_recovers_the_next_file_after_a_truncated_hunk() {
             .iter()
             .all(|f| f.location.file == "src/later.env" && f.location.line == 1),
         "the finding must carry the next file's real coordinates, got: {:?}",
+        findings
+            .iter()
+            .map(|f| (f.location.file.clone(), f.location.line))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn scan_diff_finds_additions_after_a_deleted_dash_dash_source_line() {
+    let scanner = bundled_scanner();
+    // Deleting a `-- ` comment produces a `--- `-shaped body line; the
+    // sensitive addition after it sits in the same hunk and must be
+    // scanned on the hunk's own file at its real target line — not
+    // dropped because the shape resembled a file header.
+    let diff = "\
+--- a/config/settings.lua
++++ b/config/settings.lua
+@@ -1,2 +1,2 @@
+ local config = {}
+--- old key = hk2
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+
+    let findings: Vec<_> = scanner
+        .scan_diff(diff, "diff")
+        .into_iter()
+        .filter(|finding| finding.pattern == "aws-access-key")
+        .collect();
+
+    assert!(
+        !findings.is_empty(),
+        "the credential added after the `--- `-shaped deletion must still be found"
+    );
+    assert!(
+        findings
+            .iter()
+            .all(|f| f.location.file == "config/settings.lua" && f.location.line == 2),
+        "the finding must carry the hunk's real coordinates, got: {:?}",
         findings
             .iter()
             .map(|f| (f.location.file.clone(), f.location.line))
