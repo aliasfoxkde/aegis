@@ -394,7 +394,8 @@ mod tests {
         assert!(!patterns.is_empty());
     }
 
-    /// Whole-value dynamic expansions must stay suppressed: empty defaults,
+    /// Whole-value dynamic expansions must stay suppressed: empty defaults
+    /// (both the `:-` form and the empty single-dash fallbacks `-`/`=`),
     /// nested empty/dynamic fallbacks, variable paths (including hyphenated
     /// non-initial HCL segments), command substitution, backticks, and
     /// numeric substring offsets. Fixture lines are assembled with `concat!`
@@ -405,6 +406,8 @@ mod tests {
         let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
         let excluded = [
             concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY=}""#),
             concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-${BACKUP_KEY:-}}""#),
             concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-$BACKUP_KEY}""#),
             concat!(
@@ -428,6 +431,38 @@ mod tests {
             ),
             concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-`read_secret`}""#),
             concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:0:8}""#),
+        ];
+        for line in excluded {
+            assert!(re.is_match(line), "must exclude {line}");
+        }
+    }
+
+    /// Empty fallbacks under every operator the exclusion accepts must stay
+    /// suppressed: an empty fallback (`${VAR-}`, `${VAR=}`, `${VAR?}`,
+    /// `${VAR+}`, and the `:`-prefixed forms) carries nothing that could be
+    /// a committed credential, so the introducing operator must not matter.
+    /// `:-` is pinned in the sibling test above; this pins the rest of the
+    /// accepted operator surface, including a nested empty single-dash
+    /// fallback. Fixture lines are assembled with `concat!` (as in
+    /// `examples.rs`) so the source text never carries a complete quoted
+    /// credential assignment.
+    #[test]
+    fn test_dynamic_exclusion_suppresses_empty_fallback_operators() {
+        let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
+        let excluded = [
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY=}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY+}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY?}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:=}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:+}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:?}""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY-${"#,
+                r#"BACKUP_KEY-}}""#
+            ),
         ];
         for line in excluded {
             assert!(re.is_match(line), "must exclude {line}");

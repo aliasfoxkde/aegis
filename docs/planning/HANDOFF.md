@@ -215,7 +215,31 @@ shape:
 Fixture payloads in tests are assembled with `concat!` so the repo's own
 source never carries a complete quoted credential assignment; scanner-level
 tests pin the **complete** finding set for their fixtures (not a filtered
-subset).
+subset). A test-only follow-up (2026-10-10) also pins the suppression
+direction for empty fallbacks under every accepted operator (`-`, `=`,
+`+`, `?`, `:=`, `:+`, `:?` — not just `:-`) at the regex level
+(`test_dynamic_exclusion_suppresses_empty_fallback_operators`) and the
+`-`/`=` forms at the scanner level (whole-set-empty assertion,
+rule-agnostic).
+
+Closeout evidence (2026-10-10, worktree
+`aegis-pattern-scope-repair-20261011`, branch
+`codex/aegis-pattern-scope-20261007`): two proven corrections during the
+focused run — (1) the new test's nested fixture
+`${SERVICE_KEY-${BACKUP_KEY-}}` shipped one closing brace short, and the
+regex correctly refused the unclosed expansion; fixed to `}}` to match
+the sibling `:-` nested fixture. (2) The upgraded exact-set assertion
+caught `env-credential-assignment` reporting the literal fallback
+alongside `hardcoded-tf-secrets`/`rust-hardcoded-secret` — a true
+positive (the fallback value is committed text; the rule's `\$\{`
+exclude cannot fire because its match span starts *after* the `${`), so
+the expectation was corrected to the three-rule set rather than the
+pattern narrowed. Focused gates, exact results: `cargo test -p
+aegis-patterns --lib` → 30 passed/0 failed; `cargo test -p aegis-cli
+--test pattern_fixtures` → 12 passed/0 failed; `cargo clippy -p
+aegis-patterns -p aegis-cli --all-targets -- -D warnings` → clean;
+`cargo fmt -p aegis-patterns -p aegis-cli -- --check` → clean. Full
+workspace suite intentionally not run in the worktree closeout.
 
 ---
 

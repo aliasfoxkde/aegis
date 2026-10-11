@@ -235,12 +235,16 @@ fn extension_scoped_patterns_skip_extensionless_files() {
 
 /// Literal-assignment secret rules must suppress complete shell expansions
 /// after matching them, rather than passing because their matchers stopped
-/// recognizing the assignment.
+/// recognizing the assignment. Empty fallbacks are pinned in both accepted
+/// operator families: the `:-` default and the empty single-dash fallbacks
+/// `-`/`=` (`${V-}`, `${V=}`).
 #[test]
 fn literal_secret_rules_skip_dynamic_shell_credentials() {
     let scanner = scanner();
     let assignments = [
         r#"api_key="${AMORTYX_API_KEY:-}""#,
+        r#"api_key="${AMORTYX_API_KEY-}""#,
+        r#"api_key="${AMORTYX_API_KEY=}""#,
         r#"api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}""#,
         r#"api_key="$(read_router_key)""#,
         r#"api_key="`read_router_key`""#,
@@ -283,13 +287,15 @@ fn literal_secret_rules_skip_dynamic_shell_credentials() {
 
     let shell = r#"
 api_key="${AMORTYX_API_KEY:-}"
+api_key="${AMORTYX_API_KEY-}"
+api_key="${AMORTYX_API_KEY=}"
 api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}"
 api_key="$(read_router_key)"
 api_key="`read_router_key`"
 "#;
     let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
     // Complete finding set, not a filtered subset: anything firing on these
-    // four lines is a regression, whatever rule produced it.
+    // six lines is a regression, whatever rule produced it.
     assert!(
         fs.is_empty(),
         "dynamic shell lookups must not be reported at all, got: {:?}",
@@ -299,8 +305,11 @@ api_key="`read_router_key`"
 
 /// A non-empty literal fallback inside a braced expansion is a committed
 /// credential, not a runtime lookup: the exclusion must leave it reported.
-/// Fixture payloads are assembled with `concat!` (as in `examples.rs`) so
-/// the source text never carries a complete quoted credential.
+/// The scanner-level assertion pins the COMPLETE finding set — each rule
+/// by name and line — so a rule that stops (or starts) firing here fails
+/// loudly instead of hiding behind an existence check. Fixture payloads
+/// are assembled with `concat!` (as in `examples.rs`) so the source text
+/// never carries a complete quoted credential.
 #[test]
 fn literal_fallback_in_expansion_stays_reported() {
     let scanner = scanner();
@@ -355,12 +364,18 @@ fn literal_fallback_in_expansion_stays_reported() {
         r#"tic-fallback}""#,
     );
     let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
-    assert!(
-        fs.iter().any(|finding| matches!(
-            finding.pattern.as_str(),
-            "hardcoded-tf-secrets" | "rust-hardcoded-secret"
-        )),
-        "a literal fallback credential must reach the scanner's findings"
+    let actual: Vec<(&str, usize)> = fs
+        .iter()
+        .map(|finding| (finding.pattern.as_str(), finding.location.line))
+        .collect();
+    let expected: Vec<(&str, usize)> = vec![
+        ("env-credential-assignment", 1),
+        ("hardcoded-tf-secrets", 1),
+        ("rust-hardcoded-secret", 1),
+    ];
+    assert_eq!(
+        actual, expected,
+        "each matching assignment rule must report the literal fallback, and nothing else may fire"
     );
 }
 

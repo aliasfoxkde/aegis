@@ -64,7 +64,19 @@ every release are attached to the matching GitHub release.
   (their spans used to end mid-value, which defeated even
   `password-field`'s own placeholder exclude). The exclusion's
   case-insensitive flag is scoped (`(?i:...)`) so Python-based tooling
-  accepts the combined regexes.
+  accepts the combined regexes. Regression tests added in the same
+  cycle pin empty fallbacks under every accepted operator (`-`, `=`,
+  `+`, `?`, `:=`, `:+`, `:?`) in the suppression direction, and the
+  scanner fixtures pin exact per-rule finding sets instead of
+  existence checks. Closing the 2026-10-10 follow-up: the nested
+  single-dash fixture was one closing brace short (`${A-${B-}}` needs
+  two; the regex correctly rejected the unclosed expansion), and the
+  exact-set assertion surfaced `env-credential-assignment` correctly
+  reporting a literal fallback the expectation omitted — one line, one
+  verdict from all three matching rules. Focused suites green:
+  `aegis-patterns` lib 30 passed/0 failed, `aegis-cli`
+  `pattern_fixtures` 12 passed/0 failed; scoped clippy `-D warnings`
+  and fmt clean on both crates.
 
 ## [0.6.4] - 2026-09-27
 
