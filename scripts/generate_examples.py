@@ -69,6 +69,11 @@ OVERRIDES: dict[str, str] = {
     ),
     "ssh-private-key": "-----BEGIN OPENSSH PRIVATE KEY-----",
     "pgp-private-key": "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+    # Closing quote is part of the match now; keep the example well-formed
+    # (same quote character on both sides) instead of the synthesizer's
+    # mixed-quote output.
+    "hardcoded-credential": "username = 'CiXXMh-p8Fj4X'",
+    "password-field": "password : 'j4zRQT'",
 }
 
 

@@ -19,7 +19,10 @@ pub fn get() -> Vec<Pattern> {
             confidence: "medium".to_string(),
             min_entropy: None,
             description: "Blocking *Sync() call detected; prefer the async API".to_string(),
-            reference: Some("https://nodejs.org/api/fs.html#synchronous-apis".to_string()),
+            reference: Some(
+                "https://nodejs.org/download/release/v26.8.1/docs/api/fs.html#synchronous-api"
+                    .to_string(),
+            ),
             tags: vec![
                 "performance".to_string(),
                 "async".to_string(),

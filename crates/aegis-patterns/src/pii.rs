@@ -5,7 +5,7 @@
 //! ones (names, street addresses) carry reduced confidence because format alone
 //! cannot disambiguate them.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Personal data identifier formats, from SSN and IBAN to names and street addresses.
 #[must_use]
@@ -552,7 +552,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "password-field".to_string(),
             category: "pii".to_string(),
-            match_pattern: r#"(?i)(password|passwd|pwd|secret)\s*[:=]\s*['\"][^'\"]{3,}"#.to_string(),
+            match_pattern: r#"(?i)(password|passwd|pwd|secret)\s*[:=]\s*['\"][^'\"]{3,}['\"]"#.to_string(),
             enabled: true,
             severity: "high".to_string(),
             confidence: "high".to_string(),
@@ -564,7 +564,14 @@ pub fn get() -> Vec<Pattern> {
             binary: false,
             // Suppress documented placeholder values; the value sits inside
             // the matched span so the exclude can see it.
-            exclude: Some(r#"(?i)['\"](example|placeholder|changeme|change-me|dummy|sample|test|testing|redacted|password|not-a-real-?password|\$\{[^}]*\}|<[^>]*>|\*\*\*)['\"]"#.to_string()),
+            // The shared dynamic exclusion (same as the other
+            // assignment-shaped secret rules) keeps variable and
+            // command-substitution lookups consistent across rules.
+            exclude: Some(format!(
+                "{}|{}",
+                DYNAMIC_SECRET_VALUE_EXCLUSION,
+                r#"(?i:['\"](example|placeholder|changeme|change-me|dummy|sample|test|testing|redacted|password|not-a-real-?password|\$\{[^}]*\}|<[^>]*>|\*\*\*)['\"])"#
+            )),
             file_extensions: Vec::new(),
         },
         Pattern {

@@ -4,6 +4,30 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Suppress unambiguously dynamic, whole-value shell/HCL expansions in
+/// assignment-shaped secret heuristics. Bare `$NAME` is deliberately omitted:
+/// these rules scan mixed-language files, where that text can also be a
+/// literal value.
+///
+/// Inside `${...}` only shapes that cannot smuggle a committed credential are
+/// suppressed: a variable path (`var.db_password`, `DB_PASSWORD`; dotted
+/// segments may contain hyphens, the first may not, so a single-dash shell
+/// default never parses as a path), an optional shell operator (`:-`, `-`,
+/// `:=`, `=`, `:?`, `?`, `:+`, `+`) followed by nothing or by further
+/// expansions only (variable references, command substitution, backticks) —
+/// never a non-empty literal fallback such as `${DB_PASSWORD:-sup3rs3cret}`
+/// — or numeric substring offsets (`${VAR:0:8}`). Brace nesting is followed
+/// one level deep under the same rule; deeper expansions re-flag. Command
+/// substitution and backtick values stay suppressed only when argument-free
+/// — a single command word (`$(read_router_key)`, `` `read_router_key` ``).
+/// Anything else inside (arguments, pipes, redirections, quoting — e.g.
+/// `$(cat<<<literal)`) cannot be told apart from a runtime lookup by a
+/// regular expression, so the assignment stays reported: a false positive
+/// is preferred over hiding a committed literal. The flag is scoped
+/// (`(?i:...)`) so combinations with other excludes stay valid in both the
+/// scanner engine and the Python-based example generator.
+pub(crate) const DYNAMIC_SECRET_VALUE_EXCLUSION: &str = r#"(?i:^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\))|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)"$)"#;
+
 /// A bundled rule exactly as serialized in the pattern corpus.
 ///
 /// The field set mirrors [`aegis_core::PatternDefinition`]; [`From`] below is
@@ -368,5 +392,173 @@ mod tests {
     fn test_by_category_git_ops() {
         let patterns = by_category("git-ops");
         assert!(!patterns.is_empty());
+    }
+
+    /// Whole-value dynamic expansions must stay suppressed: empty defaults
+    /// (both the `:-` form and the empty single-dash fallbacks `-`/`=`),
+    /// nested empty/dynamic fallbacks, variable paths (including hyphenated
+    /// non-initial HCL segments), command substitution, backticks, and
+    /// numeric substring offsets. Fixture lines are assembled with `concat!`
+    /// (as in `examples.rs`) so the source text never carries a complete
+    /// quoted credential assignment.
+    #[test]
+    fn test_dynamic_exclusion_suppresses_dynamic_expansions() {
+        let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
+        let excluded = [
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY=}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-${BACKUP_KEY:-}}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-$BACKUP_KEY}""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-${var.fallback_key}}""#
+            ),
+            concat!(r#"api_key"#, r#"="${"#, r#"var.service_credential}""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"aws_db_instance.my-db.credential}""#
+            ),
+            concat!(r#"api_key"#, r#"="$("#, r#"read_secret)""#),
+            concat!(r#"api_key"#, r#"=""#, r#"`read_secret`""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-$("#,
+                r#"read_secret)}""#
+            ),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:-`read_secret`}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:0:8}""#),
+        ];
+        for line in excluded {
+            assert!(re.is_match(line), "must exclude {line}");
+        }
+    }
+
+    /// Empty fallbacks under every operator the exclusion accepts must stay
+    /// suppressed: an empty fallback (`${VAR-}`, `${VAR=}`, `${VAR?}`,
+    /// `${VAR+}`, and the `:`-prefixed forms) carries nothing that could be
+    /// a committed credential, so the introducing operator must not matter.
+    /// `:-` is pinned in the sibling test above; this pins the rest of the
+    /// accepted operator surface, including a nested empty single-dash
+    /// fallback. Fixture lines are assembled with `concat!` (as in
+    /// `examples.rs`) so the source text never carries a complete quoted
+    /// credential assignment.
+    #[test]
+    fn test_dynamic_exclusion_suppresses_empty_fallback_operators() {
+        let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
+        let excluded = [
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY-}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY=}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY+}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY?}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:=}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:+}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"SERVICE_KEY:?}""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY-${"#,
+                r#"BACKUP_KEY-}}""#
+            ),
+        ];
+        for line in excluded {
+            assert!(re.is_match(line), "must exclude {line}");
+        }
+    }
+
+    /// A committed literal inside command substitution or backticks is not a
+    /// runtime lookup: the exclusion must leave it reported (regression — the
+    /// `$(...)`/backtick alternatives used to be excluded wholesale). Only an
+    /// argument-free single command word is provably dynamic; anything else
+    /// (arguments, pipes, redirections, quoting) re-flags. Payloads are
+    /// assembled with `concat!` (as in `examples.rs`) so the source text
+    /// never carries a complete quoted credential assignment.
+    #[test]
+    fn test_dynamic_exclusion_never_suppresses_substitution_literals() {
+        let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
+        let reported = [
+            concat!(r#"api_key"#, r#"="$("#, r#"cat<<<sup"#, r#"3rs3cret)""#),
+            concat!(r#"api_key"#, r#"=""#, r#"`cat<<<hunter"#, r#"2pass`""#),
+            concat!(r#"api_key"#, r#"="$(echo sup"#, r#"3rs3cret)""#),
+            concat!(r#"api_key"#, r#"="$(read_key "#, r#"--vault)""#),
+            concat!(r#"api_key"#, r#"=""#, r#"`cat creds"#, r#".txt`""#),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-$("#,
+                r#"cat<<<sup"#,
+                r#"3rs3cret)}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-`cat<<<hunter"#,
+                r#"2pass`}""#
+            ),
+        ];
+        for line in reported {
+            assert!(!re.is_match(line), "must not exclude {line}");
+        }
+    }
+
+    /// A non-empty literal fallback (at any brace depth, under any shell
+    /// operator) is a committed credential, not a runtime lookup. The
+    /// exclusion must never swallow it, nor mixed dynamic+literal values.
+    #[test]
+    fn test_dynamic_exclusion_never_suppresses_literal_fallback() {
+        let re = regex::Regex::new(DYNAMIC_SECRET_VALUE_EXCLUSION).unwrap();
+        let reported = [
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-sup"#,
+                r#"3rs3cret}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY-singledash"#,
+                r#"-fb}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:=sup"#,
+                r#"3rs3cret}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:+sup"#,
+                r#"3rs3cret}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:?sup"#,
+                r#"3rs3cret}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-${BACKUP_KEY:-sup"#,
+                r#"3rs3cret}}""#
+            ),
+            concat!(
+                r#"api_key"#,
+                r#"="${"#,
+                r#"SERVICE_KEY:-$BACKUP_KEY-lit"#,
+                r#"3ral}""#
+            ),
+            concat!(r#"api_key"#, r#"="prefix-${"#, r#"SERVICE_KEY}""#),
+            concat!(r#"api_key"#, r#"="${"#, r#"my-db.cred"#, r#"ential}""#),
+            concat!(r#"api_key"#, r#" = "su"#, r#"p3rs3cret-literal!""#),
+        ];
+        for line in reported {
+            assert!(!re.is_match(line), "must not exclude {line}");
+        }
     }
 }
