@@ -21,6 +21,9 @@ anyhow = { workspace = true }
 # JSON-RPC
 jsonrpc-core = "18.0"
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [[bin]]
 name = "aegis-mcp"
 path = "src/main.rs"
