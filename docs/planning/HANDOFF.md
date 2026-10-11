@@ -1,6 +1,6 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-09-24
+**Last Updated:** 2026-10-10
 **Status:** 🔄 Active — v0.6.2 released (first release whose assets were
 actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
 checksums verified at publish); full gate set green (`--locked` fmt /
@@ -171,6 +171,51 @@ collects `artifacts/` (5 platform tarballs, wasm, source archives,
 against the runner receipt before uploading. Two lane-shape rules the run
 enforced: test steps must omit `--all-targets` (criterion benches reject
 `--test-threads`), and the build step refuses non-tag HEADs by design.
+
+---
+
+## Dynamic secret-value exclusion — state after PR #166 (2026-10-10)
+
+`DYNAMIC_SECRET_VALUE_EXCLUSION` (aegis-patterns/src/lib.rs) suppresses
+whole-value dynamic assignments in five rules: `hardcoded-password`,
+`hardcoded-credential`, `password-field`, `hardcoded-tf-secrets`,
+`rust-hardcoded-secret`. Two external review findings drove the current
+shape:
+
+1. Command substitution and backtick values are suppressed **only when
+   argument-free** — a single command word (`$(read_router_key)`,
+   `` `read_router_key` ``). Anything else inside (arguments, pipes,
+   redirections, quoting — e.g. a heredoc feeding a literal) stays
+   reported; the regex cannot distinguish those from a runtime lookup,
+   and a false positive is preferred over a missed credential.
+2. All five rules above share the exclusion, so one assignment line gets
+   one verdict from every rule that matches it. `hardcoded-credential`
+   and `password-field` also gained the closing quote in their match
+   regex — their spans previously ended mid-value, which defeated even
+   `password-field`'s own placeholder exclude.
+
+**Exact residual limitations:**
+
+- Path-style argument-free substitutions (`$(./get_key.sh)`,
+  `$(/usr/local/bin/vault …)` with args) are **reported** — false
+  positives by design; widening requires corpus evidence.
+- A bare command name that is itself the secret (`$(sup3rs3cret)`) is
+  still suppressed — not expressible as a regex distinction.
+- Only double-quoted, single-line values are excluded (unchanged):
+  single-quoted and unquoted dynamic values were never excluded; bare
+  `$NAME` is omitted deliberately (mixed-language files).
+- Nested `${...}` expansion is followed one level deep; deeper levels
+  re-flag (unchanged).
+- `hardcoded-credential`/`password-field` no longer match values whose
+  closing quote sits on a later line.
+- The exclusion's flag is scoped (`(?i:...)`) — a second global inline
+  flag mid-pattern is rejected by Python (3.11+) tooling, so combined
+  excludes must keep every branch's flag scoped.
+
+Fixture payloads in tests are assembled with `concat!` so the repo's own
+source never carries a complete quoted credential assignment; scanner-level
+tests pin the **complete** finding set for their fixtures (not a filtered
+subset).
 
 ---
 

@@ -288,19 +288,12 @@ api_key="$(read_router_key)"
 api_key="`read_router_key`"
 "#;
     let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
-    let scoped_secret_findings: Vec<_> = fs
-        .iter()
-        .filter(|finding| {
-            matches!(
-                finding.pattern.as_str(),
-                "hardcoded-tf-secrets" | "rust-hardcoded-secret"
-            )
-        })
-        .map(|finding| finding.pattern.as_str())
-        .collect();
+    // Complete finding set, not a filtered subset: anything firing on these
+    // four lines is a regression, whatever rule produced it.
     assert!(
-        scoped_secret_findings.is_empty(),
-        "dynamic shell lookups must not be reported as hardcoded secrets"
+        fs.is_empty(),
+        "dynamic shell lookups must not be reported at all, got: {:?}",
+        pattern_names(&fs)
     );
 }
 
@@ -368,6 +361,55 @@ fn literal_fallback_in_expansion_stays_reported() {
             "hardcoded-tf-secrets" | "rust-hardcoded-secret"
         )),
         "a literal fallback credential must reach the scanner's findings"
+    );
+}
+
+/// Literal payloads inside command substitution or backticks are committed
+/// credentials, not runtime lookups: every assignment-shaped secret rule
+/// that matches the line must report it, and an argument-free single
+/// command word stays suppressed. All five rules that match these shapes
+/// (`hardcoded-password`, `hardcoded-credential`, `password-field`,
+/// `hardcoded-tf-secrets`, `rust-hardcoded-secret`) share the dynamic
+/// exclusion, so one line gets one verdict. The final assertion pins the
+/// COMPLETE finding set for the fixture — a rule that starts or stops
+/// firing here fails loudly instead of hiding behind a filtered subset.
+/// Payload lines are assembled with `concat!` (as in `examples.rs`) so the
+/// test source never carries a complete quoted credential assignment.
+#[test]
+fn substitution_literals_get_one_verdict_from_every_assignment_rule() {
+    let scanner = scanner();
+    let fixture = [
+        // Dynamic variable reference: suppressed by every aligned rule.
+        concat!(r#"password"#, r#"="${"#, r#"DB_PASSWORD}""#),
+        // Committed literal inside a substitution/backtick: reported.
+        concat!(r#"api_key"#, r#"="$("#, r#"cat<<<st4"#, r#"tic-literal)""#),
+        concat!(r#"api_key"#, r#"=""#, r#"`cat<<<st4"#, r#"tic-literal`""#),
+        concat!(r#"password"#, r#"="$("#, r#"cat<<<st4"#, r#"tic-literal)""#),
+        // Argument-free single command word: suppressed.
+        r#"api_key="$(read_router_key)""#,
+        r#"api_key="`read_router_key`""#,
+    ]
+    .join("\n");
+    let fs = findings(&scanner, &fixture, "scripts/verify_amortyx_batch.sh");
+
+    let actual: Vec<(&str, usize)> = fs
+        .iter()
+        .map(|finding| (finding.pattern.as_str(), finding.location.line))
+        .collect();
+    let expected: Vec<(&str, usize)> = vec![
+        ("hardcoded-credential", 4),
+        ("hardcoded-password", 4),
+        ("hardcoded-tf-secrets", 2),
+        ("hardcoded-tf-secrets", 3),
+        ("hardcoded-tf-secrets", 4),
+        ("password-field", 4),
+        ("rust-hardcoded-secret", 2),
+        ("rust-hardcoded-secret", 3),
+        ("rust-hardcoded-secret", 4),
+    ];
+    assert_eq!(
+        actual, expected,
+        "finding set must be exactly the committed substitution literals"
     );
 }
 

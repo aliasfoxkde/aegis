@@ -664,6 +664,12 @@ Hardcoded password detected
 (?i)(password|passwd|pwd|secret)\s*[:=]\s*['"][^'"]{3,}['"]
 ```
 
+**Exclude pattern** — a match span that also matches this
+regex is suppressed:
+
+```regex
+(?i:^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\))|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)"$)
+```
 **Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test):

@@ -859,19 +859,19 @@ Password field with value detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(password|passwd|pwd|secret)\s*[:=]\s*['\"][^'\"]{3,}
+(?i)(password|passwd|pwd|secret)\s*[:=]\s*['\"][^'\"]{3,}['\"]
 ```
 
 **Exclude pattern** — a match span that also matches this
 regex is suppressed:
 
 ```regex
-(?i)['\"](example|placeholder|changeme|change-me|dummy|sample|test|testing|redacted|password|not-a-real-?password|\$\{[^}]*\}|<[^>]*>|\*\*\*)['\"]
+(?i:^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\))|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)"$)|(?i:['\"](example|placeholder|changeme|change-me|dummy|sample|test|testing|redacted|password|not-a-real-?password|\$\{[^}]*\}|<[^>]*>|\*\*\*)['\"])
 ```
 **Input that fires** (verified by the liveness test):
 
 ```text
-password : 'j4zRQT
+password : 'j4zRQT'
 ```
 
 ### phone-number

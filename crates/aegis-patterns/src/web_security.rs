@@ -4,7 +4,7 @@
 //! traversal, insecure deserialization, missing security headers, and broken
 //! authentication.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Core vulnerability rules: XSS, injection, SSRF, CSRF, deserialization, headers, auth.
 #[must_use]
@@ -318,7 +318,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hardcoded-credential".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}"#.to_string(),
+            match_pattern: r#"(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}['\"]"#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -328,7 +328,10 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["credential".to_string(), "security".to_string(), "hardcoded".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            // Same whole-value dynamic exclusion as the other assignment-shaped
+            // secret rules, so one assignment line gets one verdict from every
+            // rule that matches it.
+            exclude: Some(DYNAMIC_SECRET_VALUE_EXCLUSION.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

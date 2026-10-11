@@ -398,9 +398,15 @@ Hardcoded credential detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}
+(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}['\"]
 ```
 
+**Exclude pattern** — a match span that also matches this
+regex is suppressed:
+
+```regex
+(?i:^[a-z_][a-z0-9_-]*\s*[:=]\s*"(?:\$(?:\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$\{[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_][a-zA-Z0-9_-]*)*(?:(?:[:][-=?+]|[-=+?])(?:\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\$[a-zA-Z_][a-zA-Z0-9_]*|\$\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\)|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)*|:\d+(?::\d+)?)?\}|\(\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*\))|`\s*[a-zA-Z_][a-zA-Z0-9_.-]*\s*`)"$)
+```
 **Reference**: <https://owasp.org/Top10/A02_2021-Cryptographic_Failures/>
 
 **Input that fires** (verified by the liveness test; long
@@ -408,7 +414,7 @@ token-shaped runs are elided here — the exact input is compiled into
 `crates/aegis-patterns/src/examples.rs`):
 
 ```text
-username = 'CiXXMh-p…4X
+username = 'CiXXMh-p…4X'
 ```
 
 ### hsts-missing
