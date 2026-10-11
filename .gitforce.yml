@@ -26,21 +26,31 @@ jobs:
     image: aegis-builder:1
     timeout: 360m
     steps:
+      # Every cargo invocation builds into CARGO_TARGET_DIR=/tmp/ci-target
+      # (container-local disk), never /workspace/target. The job's working
+      # directory lives on the runner's network-mounted workspace share, and
+      # cargo's incremental target directory there is unreliable: one run
+      # failed reading clippy.toml with EPERM, the next with E0786 "found
+      # invalid metadata files" for freshly written dependency rlibs. This
+      # mirrors GitForge's own pipeline, which pins the same variable on the
+      # same runner for exactly this reason. The `build assets` step keeps
+      # build.sh's target/ layout (the release build re-verification depends
+      # on it) and only executes on tag runs.
       - name: format
-        run: cargo fmt --all -- --check
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo fmt --all -- --check
       - name: clippy
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo clippy --locked --workspace --all-targets -- -D warnings
       # Test steps deliberately omit --all-targets: that selector runs bench
       # binaries too, and criterion rejects --test-threads ("unexpected
       # argument"), failing the step after every real test has passed.
       # Default `cargo test` runs unit + integration + doc tests.
       - name: core tests
-        run: cargo test --locked -p aegis-core -- --test-threads=1
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --locked -p aegis-core -- --test-threads=1
       - name: cli tests
-        run: cargo test --locked -p aegis-cli -- --test-threads=1
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --locked -p aegis-cli -- --test-threads=1
       - name: pattern tests
-        run: cargo test --locked -p aegis-patterns -- --test-threads=1
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --locked -p aegis-patterns -- --test-threads=1
       - name: support crate tests
-        run: cargo test --locked -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm -- --test-threads=1
+        run: CARGO_TARGET_DIR=/tmp/ci-target cargo test --locked -p aegis-bundler -p aegis-daemon -p aegis-mcp -p aegis-wasm -- --test-threads=1
       - name: build assets
         run: scripts/release/pipeline.sh
