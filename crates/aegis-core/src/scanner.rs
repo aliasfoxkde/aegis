@@ -498,8 +498,51 @@ impl Scanner {
     /// additions under a `+++` header whose quoted path cannot be decoded.
     #[must_use]
     pub fn parse_diff(diff_content: &str) -> Vec<(String, String, usize)> {
-        let mut results = Vec::new();
+        Self::parse_diff_hunks(diff_content)
+            .into_iter()
+            .flat_map(|(file, lines)| {
+                lines
+                    .into_iter()
+                    .map(move |(lineno, line)| (file.clone(), line, lineno))
+            })
+            .collect()
+    }
+
+    /// Parse a diff into the added lines of each hunk: one
+    /// `(file, [(target line, line)])` entry per hunk that added anything
+    /// to a known file, in diff order.
+    ///
+    /// Hunk parsing fails closed: additions are only trusted while the
+    /// hunk header still counts unaccounted body lines. A file or hunk
+    /// header arriving before those counts are exhausted — the signature
+    /// of a truncated or malformed diff — ends the hunk and is then
+    /// parsed as the header it is, so it is never attributed to the
+    /// previous file as source, and the next file's first hunk stays with
+    /// the next file. The one ambiguity this accepts — a body line whose
+    /// own content starts with `--- ` or `+++ ` — resolves the same
+    /// fail-closed way: the line is not attributed, and only the
+    /// remainder of that overstated hunk is lost until the next header
+    /// re-anchors.
+    fn parse_diff_hunks(diff_content: &str) -> Vec<(String, Vec<(usize, String)>)> {
+        // Flush the hunk under construction; hunks that added nothing to
+        // a known file are dropped.
+        fn flush_hunk(
+            hunks: &mut Vec<(String, Vec<(usize, String)>)>,
+            open_hunk: &mut Option<(String, Vec<(usize, String)>)>,
+        ) {
+            if let Some((file, lines)) = open_hunk.take() {
+                if !file.is_empty() && !lines.is_empty() {
+                    hunks.push((file, lines));
+                }
+            }
+        }
+
+        let mut hunks: Vec<(String, Vec<(usize, String)>)> = Vec::new();
         let mut current_file = String::new();
+        // The hunk under construction: its target path, captured at open
+        // so a later `+++` header can never re-attribute its lines, plus
+        // the additions so far.
+        let mut open_hunk: Option<(String, Vec<(usize, String)>)> = None;
         // Hunk state: the target-file line the next added/context body line
         // sits on, plus how many old/new body lines the header still
         // accounts for. Additions are only trusted inside this window.
@@ -510,46 +553,59 @@ impl Scanner {
 
         for line in diff_content.lines() {
             if in_hunk {
-                let mut chars = line.chars();
-                match chars.next() {
-                    Some('+') if remaining_new > 0 => {
-                        if !current_file.is_empty() {
-                            results.push((
-                                current_file.clone(),
-                                chars.as_str().to_string(),
-                                new_lineno,
-                            ));
-                        }
-                        new_lineno = new_lineno.saturating_add(1);
-                        remaining_new -= 1;
-                    }
-                    Some(' ') if remaining_new > 0 && remaining_old > 0 => {
-                        new_lineno = new_lineno.saturating_add(1);
-                        remaining_new -= 1;
-                        remaining_old -= 1;
-                    }
-                    Some('-') if remaining_old > 0 => remaining_old -= 1,
-                    // "\ No newline at end of file" annotates the previous
-                    // line and consumes none of the counted body lines.
-                    Some('\\') => {}
-                    // A body line the header cannot account for (count
-                    // overrun, a blank line, or the next file's prologue)
-                    // ends the hunk: nothing after it may be attributed
-                    // until a fresh hunk header re-anchors the state.
-                    _ => in_hunk = false,
-                }
-                if in_hunk && remaining_old == 0 && remaining_new == 0 {
+                // Body lines always carry a `+`/`-`/space prefix, so a raw
+                // header-shaped line can only be a real file or hunk header.
+                // Fail closed: end the hunk and fall through so the line is
+                // parsed as the header it is — never as the previous file's
+                // source — even when the header's counts still claim body.
+                if line.starts_with("--- ")
+                    || line.starts_with("+++ ")
+                    || line.starts_with("@@ ")
+                    || line.starts_with("diff --git ")
+                {
                     in_hunk = false;
+                } else {
+                    let mut chars = line.chars();
+                    match chars.next() {
+                        Some('+') if remaining_new > 0 => {
+                            if let Some((_, lines)) = open_hunk.as_mut() {
+                                lines.push((new_lineno, chars.as_str().to_string()));
+                            }
+                            new_lineno = new_lineno.saturating_add(1);
+                            remaining_new -= 1;
+                        }
+                        Some(' ') if remaining_new > 0 && remaining_old > 0 => {
+                            new_lineno = new_lineno.saturating_add(1);
+                            remaining_new -= 1;
+                            remaining_old -= 1;
+                        }
+                        Some('-') if remaining_old > 0 => remaining_old -= 1,
+                        // "\ No newline at end of file" annotates the previous
+                        // line and consumes none of the counted body lines.
+                        Some('\\') => {}
+                        // A body line the header cannot account for (count
+                        // overrun or a blank line) ends the hunk: nothing
+                        // after it may be attributed until a fresh hunk
+                        // header re-anchors the state.
+                        _ => in_hunk = false,
+                    }
+                    if in_hunk && remaining_old == 0 && remaining_new == 0 {
+                        in_hunk = false;
+                    }
+                    continue;
                 }
-                continue;
             }
 
             if let Some(rest) = line.strip_prefix("@@ ") {
                 if let Some((start, old_count, new_count)) = Self::parse_hunk_header(rest) {
+                    // Flush the previous hunk so the parsed hunks keep
+                    // diff order.
+                    flush_hunk(&mut hunks, &mut open_hunk);
                     new_lineno = start;
                     remaining_old = old_count;
                     remaining_new = new_count;
                     in_hunk = true;
+                    open_hunk = Some((current_file.clone(), Vec::new()));
                 }
             } else if let Some(target) = line.strip_prefix("+++ ") {
                 current_file = Self::header_target_file(target);
@@ -558,7 +614,9 @@ impl Scanner {
             // `diff --git`/`index`/`rename` prologue carry no additions.
         }
 
-        results
+        flush_hunk(&mut hunks, &mut open_hunk);
+
+        hunks
     }
 
     /// Parse the ranges of a hunk header — the text after the leading
@@ -586,9 +644,13 @@ impl Scanner {
     /// Handles git's C-style quoting (used for paths with tabs, quotes,
     /// backslashes, control characters, or non-ASCII bytes) and the
     /// tab-separated timestamp that plain `diff -u` output appends after
-    /// the path. A `/dev/null` target — a deleted file with no post-image —
-    /// resolves to an empty path, the same "no current file" state as
-    /// content before any header; a quoted header that fails to decode
+    /// the path. Only git's target-side prefix `b/` is stripped: this is
+    /// the post-image side, so a leading `a/` here is a real path
+    /// component — plain unified diffs carry no prefixes at all, and
+    /// stripping one would corrupt a target genuinely named `a/...`. A
+    /// `/dev/null` target — a deleted file with no post-image — resolves
+    /// to an empty path, the same "no current file" state as content
+    /// before any header; a quoted header that fails to decode
     /// (unterminated quote, unknown escape, non-UTF-8 bytes) resolves to
     /// that state too rather than attributing additions to a guessed path.
     fn header_target_file(raw: &str) -> String {
@@ -597,10 +659,7 @@ impl Scanner {
         } else {
             raw.split('\t').next().unwrap_or(raw).to_string()
         };
-        let path = path
-            .strip_prefix("a/")
-            .or_else(|| path.strip_prefix("b/"))
-            .unwrap_or(&path);
+        let path = path.strip_prefix("b/").unwrap_or(&path);
         if path == "/dev/null" {
             String::new()
         } else {
@@ -611,6 +670,14 @@ impl Scanner {
     /// Scan only the added lines of a diff, reporting each finding against
     /// its real position in the target file.
     ///
+    /// Each hunk's additions are scanned on their own: a file's hunks can
+    /// sit far apart in the target, so joining them into one buffer would
+    /// let a multiline pattern match an adjacency the target file never
+    /// has — two unrelated hunk-boundary lines rendered consecutive — and
+    /// manufacture a finding absent from the source. Only lines that are
+    /// consecutive within one hunk are ever joined, so a multiline match
+    /// spans added lines the diff itself holds adjacent.
+    ///
     /// Baseline filtering is applied exactly once, after remapping: baseline
     /// fingerprints are keyed by pattern, file, line, and matched content, so
     /// filtering before the remap would test synthetic joined-text lines
@@ -618,40 +685,45 @@ impl Scanner {
     /// true lines while suppressing findings whose synthetic line collides
     /// with an unrelated baseline entry.
     pub fn scan_diff(&self, diff_content: &str, _source: &str) -> Vec<Finding> {
-        let changed_lines = Self::parse_diff(diff_content);
         let mut all_findings = Vec::new();
 
-        // Group by file in path order so multi-file output is deterministic.
-        let mut by_file: std::collections::BTreeMap<String, Vec<(usize, String)>> =
+        // Group by file in path order so multi-file output is deterministic;
+        // within a file, hunks keep their diff order.
+        let mut by_file: std::collections::BTreeMap<String, Vec<Vec<(usize, String)>>> =
             std::collections::BTreeMap::new();
-        for (file, line, lineno) in changed_lines {
-            by_file.entry(file).or_default().push((lineno, line));
+        for (file, lines) in Self::parse_diff_hunks(diff_content) {
+            by_file.entry(file).or_default().push(lines);
         }
 
-        for (file, lines) in by_file {
-            let content = lines
-                .iter()
-                .map(|(_, line)| line.as_str())
-                .collect::<Vec<_>>()
-                .join("\n");
+        for (file, hunks) in by_file {
             let ext = Self::extension_of_source(&file);
-            // Scan without baseline filtering; the joined addition-only text
-            // only has synthetic line numbers, which no baseline was written
-            // against.
-            let (mut findings, _, _) =
-                self.scan_string_with_inspection_ext(&content, &file, ext.as_deref(), false);
-            for finding in &mut findings {
-                finding.location.file.clone_from(&file);
-                // Map the position inside the joined addition-only text
-                // back to the target-file line the hunk header recorded.
-                if let Some((real_lineno, _)) = lines.get(finding.location.line.saturating_sub(1)) {
-                    finding.location.line = *real_lineno;
+            for lines in hunks {
+                let content = lines
+                    .iter()
+                    .map(|(_, line)| line.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                // Scan without baseline filtering; the addition-only text
+                // only has synthetic line numbers, which no baseline was
+                // written against.
+                let (mut findings, _, _) =
+                    self.scan_string_with_inspection_ext(&content, &file, ext.as_deref(), false);
+                for finding in &mut findings {
+                    finding.location.file.clone_from(&file);
+                    // Map the position inside the hunk's addition-only text
+                    // back to the target-file line the hunk header recorded.
+                    if let Some((real_lineno, _)) =
+                        lines.get(finding.location.line.saturating_sub(1))
+                    {
+                        finding.location.line = *real_lineno;
+                    }
+                    finding.recompute_identity();
                 }
-                finding.recompute_identity();
+                // Now that identities reflect real target coordinates, apply
+                // the baseline — the single filtering pass for the diff
+                // pipeline.
+                all_findings.extend(self.filter_baseline(findings));
             }
-            // Now that identities reflect real target coordinates, apply the
-            // baseline — the single filtering pass for the diff pipeline.
-            all_findings.extend(self.filter_baseline(findings));
         }
 
         all_findings
