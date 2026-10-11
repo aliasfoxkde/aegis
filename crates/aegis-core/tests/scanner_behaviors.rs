@@ -235,9 +235,11 @@ literal 8
 fn parse_diff_fails_closed_when_a_hunk_header_overstates_its_body() {
     // The first hunk claims 5 added lines but carries only 2, so the next
     // file's `---`/`+++` headers arrive while the count still expects body.
-    // They must be parsed as headers — never as `src/x.rs` source — and
-    // `src/y.rs`'s first hunk must be re-anchored on `src/y.rs`, not
-    // swallowed by the truncated hunk.
+    // The `--- ` member is counted as a phantom deletion the hunk never
+    // reports; the `+++ ` member is what ends the hunk, read as the header
+    // its `@@ ` follower and the unfulfillable counts prove — so neither
+    // line becomes `src/x.rs` source, and `src/y.rs`'s first hunk re-anchors
+    // on `src/y.rs` instead of being swallowed by the truncated hunk.
     let diff = "\
 --- a/src/x.rs
 +++ b/src/x.rs
@@ -271,6 +273,27 @@ fn parse_diff_fails_closed_when_a_hunk_header_overstates_its_body() {
             ),
         ]
     );
+}
+
+#[test]
+fn parse_diff_fails_closed_when_a_truncated_hunk_ends_on_a_target_header() {
+    // A hunk claiming more body than the diff carries can end on the next
+    // file's `+++ ` header with nothing after it. The end of the diff is a
+    // header follower — a real `+++ ` header may close the diff — and
+    // counting the line as the hunk's final addition cannot complete the
+    // counts while body is still owed, so the header reading wins: the
+    // truncated hunk ends and the candidate header is never recorded as
+    // `src/keep.rs` source.
+    let diff = "\
+--- a/src/keep.rs
++++ b/src/keep.rs
+@@ -1,3 +1,3 @@
+ let kept = 1;
++++ b/src/next.rs
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(changed, vec![]);
 }
 
 #[test]
@@ -367,6 +390,28 @@ fn parse_diff_keeps_a_plus_plus_body_line_that_completes_its_hunk() {
                 11
             ),
         ]
+    );
+}
+
+#[test]
+fn parse_diff_keeps_a_final_plus_plus_body_line_that_completes_the_diff() {
+    // The end-of-diff counterpart of the completing `++ ` body line: with
+    // one addition left and no deletions owed, counting the line as body
+    // completes the hunk exactly at EOF, so it is kept as source. Reading
+    // it as a phantom `setup` header instead would end the hunk and drop
+    // the line it carries.
+    let diff = "\
+--- a/deploy/run.sh
++++ b/deploy/run.sh
+@@ -1,1 +1,2 @@
+ set -euo pipefail
++++ setup
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![("deploy/run.sh".to_string(), "++ setup".to_string(), 2)]
     );
 }
 
