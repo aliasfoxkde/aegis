@@ -232,6 +232,86 @@ literal 8
 }
 
 #[test]
+fn parse_diff_fails_closed_when_a_hunk_header_overstates_its_body() {
+    // The first hunk claims 5 added lines but carries only 2, so the next
+    // file's `---`/`+++` headers arrive while the count still expects body.
+    // They must be parsed as headers — never as `src/x.rs` source — and
+    // `src/y.rs`'s first hunk must be re-anchored on `src/y.rs`, not
+    // swallowed by the truncated hunk.
+    let diff = "\
+--- a/src/x.rs
++++ b/src/x.rs
+@@ -1,5 +1,5 @@
++let first = \"kept\";
++let second = \"kept\";
+--- a/src/y.rs
++++ b/src/y.rs
+@@ -1,2 +1,2 @@
++let third = \"attributed to y\";
+";
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            (
+                "src/x.rs".to_string(),
+                "let first = \"kept\";".to_string(),
+                1
+            ),
+            (
+                "src/x.rs".to_string(),
+                "let second = \"kept\";".to_string(),
+                2
+            ),
+            (
+                "src/y.rs".to_string(),
+                "let third = \"attributed to y\";".to_string(),
+                1
+            ),
+        ]
+    );
+}
+
+#[test]
+fn parse_diff_strips_only_the_git_target_prefix() {
+    // The `+++` header is the post-image side: git's prefix there is `b/`,
+    // and a leading `a/` is a real path component — plain `diff -u` output
+    // carries no prefixes at all. A plain target named `a/app.rs` must
+    // survive verbatim, while a git target whose file genuinely lives under
+    // an `a/` directory keeps it after `b/` strips.
+    let diff = concat!(
+        "--- a/app.rs\n",
+        "+++ a/app.rs\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+plain target keeps its leading a directory\n",
+        "--- a/a/inner/tool.rs\n",
+        "+++ b/a/inner/tool.rs\n",
+        "@@ -1 +1,2 @@\n",
+        " anchor\n",
+        "+git target strips only the b prefix\n",
+    );
+    let changed = Scanner::parse_diff(diff);
+
+    assert_eq!(
+        changed,
+        vec![
+            (
+                "a/app.rs".to_string(),
+                "plain target keeps its leading a directory".to_string(),
+                2
+            ),
+            (
+                "a/inner/tool.rs".to_string(),
+                "git target strips only the b prefix".to_string(),
+                2
+            ),
+        ]
+    );
+}
+
+#[test]
 fn scan_diff_attributes_findings_to_the_real_file() {
     let scanner = bundled_scanner();
     let diff = "\
@@ -306,6 +386,127 @@ fn scan_diff_reports_original_line_numbers_across_hunks() {
         "no finding may fall back to a position in the joined addition text, got: {lines:?}"
     );
     );
+}
+
+#[test]
+fn scan_diff_recovers_the_next_file_after_a_truncated_hunk() {
+    let scanner = bundled_scanner();
+    // The first hunk claims 5 added lines but carries only 2; the `---`
+    // and `+++` headers of `src/later.env` arrive while the count still
+    // expects body. The truncated hunk must not swallow them as source:
+    // the credential `src/later.env` adds must be found on `src/later.env`
+    // at its real line, and nothing may be attributed to `src/keep.rs`.
+    let diff = "\
+--- a/src/keep.rs
++++ b/src/keep.rs
+@@ -1,5 +1,5 @@
++const first = 1;
++const second = 2;
+--- a/src/later.env
++++ b/src/later.env
+@@ -0,0 +1 @@
++aws_access_key_id = \"AKIAIOSFODNN7EXAMPLE\"
+";
+
+    let findings: Vec<_> = scanner
+        .scan_diff(diff, "diff")
+        .into_iter()
+        .filter(|finding| finding.pattern == "aws-access-key")
+        .collect();
+
+    assert!(
+        !findings.is_empty(),
+        "the credential added after the truncated hunk must still be found"
+    );
+    assert!(
+        findings
+            .iter()
+            .all(|f| f.location.file == "src/later.env" && f.location.line == 1),
+        "the finding must carry the next file's real coordinates, got: {:?}",
+        findings
+            .iter()
+            .map(|f| (f.location.file.clone(), f.location.line))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn scan_diff_does_not_join_added_lines_across_hunk_boundaries() {
+    let scanner = bundled_scanner();
+    // `bearer-token-logged` matches `logger` followed (across whitespace)
+    // by `.debug(authorization...`. The target holds these lines in two
+    // well-formed hunks hundreds of lines apart, so the adjacency exists
+    // only in a joined addition-only buffer — it must never manufacture a
+    // finding.
+    let diff = "\
+--- a/src/app.js
++++ b/src/app.js
+@@ -1 +1,2 @@
+ existing context
++const audit = logger
+@@ -900 +900,2 @@
+ gap context
++.debug(authorization = header)
+";
+
+    // The parse stage saw both hunks' additions at their real lines, so a
+    // zero-finding result below is a scan-semantic outcome, not a parse
+    // failure.
+    assert_eq!(
+        Scanner::parse_diff(diff),
+        vec![
+            (
+                "src/app.js".to_string(),
+                "const audit = logger".to_string(),
+                2
+            ),
+            (
+                "src/app.js".to_string(),
+                ".debug(authorization = header)".to_string(),
+                901
+            ),
+        ]
+    );
+
+    let findings: Vec<_> = scanner
+        .scan_diff(diff, "diff")
+        .into_iter()
+        .filter(|finding| finding.pattern == "bearer-token-logged")
+        .collect();
+
+    assert!(
+        findings.is_empty(),
+        "separate hunks must not manufacture a multiline finding, got: {findings:?}"
+    );
+}
+
+#[test]
+fn scan_diff_still_maps_multiline_matches_inside_one_hunk() {
+    let scanner = bundled_scanner();
+    // Positive control for the cross-hunk join guard: the same two lines,
+    // genuinely consecutive inside a single well-formed hunk, are a real
+    // adjacency and must still be found, remapped to the hunk's target-file
+    // line.
+    let diff = "\
+--- a/src/app.js
++++ b/src/app.js
+@@ -10 +10,3 @@
+ existing context
++const audit = logger
++.debug(authorization = header)
+";
+
+    let findings: Vec<_> = scanner
+        .scan_diff(diff, "diff")
+        .into_iter()
+        .filter(|finding| finding.pattern == "bearer-token-logged")
+        .collect();
+
+    assert_eq!(findings.len(), 1, "got: {findings:?}");
+    assert_eq!(findings[0].location.file, "src/app.js");
+    // The match starts on the `logger` line: target line 11 (one context
+    // line precedes it in the hunk's post-image).
+    assert_eq!(findings[0].location.line, 11);
 }
 
 #[test]
