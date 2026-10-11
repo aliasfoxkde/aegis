@@ -673,9 +673,17 @@ impl Scanner {
                 Some(follow) if follow.starts_with("@@ ") || follow.starts_with("diff --git ") => {
                     remaining_new != 1 || remaining_old != 0
                 }
-                // Anything else after the line disqualifies the header
-                // reading: a real `+++ ` header is always followed by a
-                // hunk header, the next file entry, or nothing.
+                // The end of the diff is a header follower too: a real
+                // `+++ ` header may close the diff outright. The same
+                // count predicate decides — the body reading only wins
+                // when the line is the hunk's final addition and
+                // completes the counts exactly; a truncated hunk that
+                // still owes body loses the line to the header reading
+                // instead of recording the next file's path as source.
+                None => remaining_new != 1 || remaining_old != 0,
+                // Any other line after it disqualifies the header
+                // reading: a real `+++ ` header is never followed by
+                // other diff content.
                 _ => false,
             }
         } else {
