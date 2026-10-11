@@ -192,8 +192,8 @@ All rows carry citations. "Aegis" = this tree @ `5c86a06`; "Atheon" =
 | Aspect | Aegis | Atheon |
 |---|---|---|
 | Subcommands | `scan`, `list`, `enable <pat>`, `disable <pat>`, `update`, `benchmark` (`crates/aegis-cli/src/main.rs:40-163`) | positional `<path>`, `update`, `enable`, `disable`, `list [categories]`, `help` (`cmd/atheon/commands.go:25-247`) |
-| Global flags | `-v/--verbose`, `-f/--format` (top-level only), `-c/--config`, `-q/--quiet` (`main.rs:15-37`) | `--quiet/-q`, `--json`/`--sarif` (**must be argv[1]**, `commands.go:30-31`), `--version`, `--completion[=bash\|zsh\|fish]`, `--shell-complete` (`cmd/atheon/flags.go:140-158`) |
-| Scan flags (shared intent) | `--file`, `--env`, `--stdin`, `--follow-symlinks`, `--categories`, `--severity-threshold`, `--output-file`, `--baseline`, `--all`, `--diff`, `--staged`, `--anomaly-detectors`, `--no-anomalies`, `--detect-clones` (`main.rs:43-109`) | `--env`, `--stdin`, `--file`, `--no-follow-symlinks`, `--categories=`, `--severity-threshold=`, `--output-file=`, `--baseline=`, `--diff=`, `--all`, `--config=` (`flags.go:82-174`) |
+| Global flags | `-v/--verbose`, `-f/--format` (top-level only), `-c/--config`, `-q/--quiet` (`crates/aegis-cli/src/main.rs:15-37`) | `--quiet/-q`, `--json`/`--sarif` (**must be argv[1]**, `commands.go:30-31`), `--version`, `--completion[=bash\|zsh\|fish]`, `--shell-complete` (`cmd/atheon/flags.go:140-158`) |
+| Scan flags (shared intent) | `--file`, `--env`, `--stdin`, `--follow-symlinks`, `--categories`, `--severity-threshold`, `--output-file`, `--baseline`, `--all`, `--diff`, `--staged`, `--anomaly-detectors`, `--no-anomalies`, `--detect-clones` (`crates/aegis-cli/src/main.rs:43-109`) | `--env`, `--stdin`, `--file`, `--no-follow-symlinks`, `--categories=`, `--severity-threshold=`, `--output-file=`, `--baseline=`, `--diff=`, `--all`, `--config=` (`flags.go:82-174`) |
 | Aegis-only | `--staged` (git-index pre-commit mode), `--detect-clones`, anomaly-detector layer | — |
 | Atheon-only | — | `--completion`, `--shell-complete`, `--version` (Aegis: clap-derive emits `--version`/`--help` by default — INFERRED from clap v4 derive semantics; `--completion` machinery NOT FOUND in Aegis sweep) |
 | Config files | Explicit `-c <preset-or-path>` only; **no auto-discovery** (`crates/aegis-cli/src/config.rs:45-61`; `rg AEGIS_CONFIG` → none). Presets: 4 shipped profiles kept in sync by test `builtin_presets_match_shipped_profile_files` (`crates/aegis-core/src/config/mod.rs:190-216`) | `~/.atheon/config.json` + `--config=`; **parsed then discarded** — the result is dropped on the floor (`cmd/atheon/commands.go:62`); the 4 shipped `config/profiles/*.json` are not auto-loaded either. **All 20 `ConfigProfile` fields are inert** (VERIFIED) |
@@ -208,9 +208,9 @@ baseline is "flags + ignore files + pattern state", not "profiles".
 
 | Aspect | Aegis | Atheon |
 |---|---|---|
-| Count / source of truth | 677 shipped / 35 categories; Rust source modules (`crates/aegis-patterns/src/*.rs`, `all_patterns()` at `lib.rs:150-188`); docs generated + freshness-tested (`crates/aegis-patterns/tests/registry_hygiene.rs:245-303`, test `pattern_docs_are_fresh`) | 409 / 28 categories; YAML one-file-per-pattern under `community/<category>/`; compiled to gzip bundle; counting script `scripts/pattern-count.sh` |
+| Count / source of truth | 677 shipped / 35 categories; Rust source modules (`crates/aegis-patterns/src/*.rs`, `all_patterns()` at `crates/aegis-patterns/src/lib.rs:150-188`); docs generated + freshness-tested (`crates/aegis-patterns/tests/registry_hygiene.rs:245-303`, test `pattern_docs_are_fresh`) | 409 / 28 categories; YAML one-file-per-pattern under `community/<category>/`; compiled to gzip bundle; counting script `scripts/pattern-count.sh` |
 | Severity model | critical/high/medium/low + **info** (`crates/aegis-core/src/pattern.rs:23`); weights 40/25/10/3 (`crates/aegis-patterns/src/lib.rs:47-50`) | low/medium/high/critical, no info (`core/bundle.go:65`); 183h/117m/84l/25c distribution |
-| Confidence model | high/medium/low, ×1.0/0.7/0.4 (`lib.rs:47-50`) | high/medium/low (`core/bundle.go:123-127`); **only 1 of 409** bundle patterns sets `confidence` or `minEntropy` (VERIFIED count) |
+| Confidence model | high/medium/low, ×1.0/0.7/0.4 (`crates/aegis-patterns/src/lib.rs:47-50`) | high/medium/low (`core/bundle.go:123-127`); **only 1 of 409** bundle patterns sets `confidence` or `minEntropy` (VERIFIED count) |
 | Entropy gate | Per-pattern `min_entropy`, Shannon (`crates/aegis-core/src/entropy.rs`) | Shannon with LRU cache (`core/entropy.go:13-30`); effectively unused (1/409 sets it) |
 | Custom user rules | `.aegis.yml`/`.aegis.yaml` at scan root, fail-loud validation (`crates/aegis-core/src/user_patterns.rs:24,109-114,166+`) | none user-facing (`core.Register()` is a Go API only) |
 | Rule updates | `aegis update` reports the compiled-in set; **no download** (`README.md:80-82`) | `atheon update` downloads bundle from release URL, SHA-256 + SSRF guards, 100 MiB cap (`core/bundle.go:524,549,569,602`) |
@@ -223,23 +223,23 @@ baseline is "flags + ignore files + pattern state", not "profiles".
 |---|---|---|
 | Ignore files | `.gitignore` then `.aegisignore` (aegis `!` rules can re-include); **`.atheonignore` accepted as legacy fallback** (`crates/aegis-core/src/ignore.rs:71-89`) — a deliberate migration bridge | `.atheonignore` + `.gitignore`, root only (`core/runner.go:70-79`) |
 | Hard-coded skips | `node_modules`, `target`, `.git`, `.aegis` (`ignore.rs:120-125`) | 12 dirs: `.git node_modules vendor .terraform dist build __pycache__ .idea .vscode .svn .hg .cache` (`core/runner.go:18-22`), extensible via `ATHEON_SKIP_DIRS` |
-| Binary skip | NUL-sniff 8 KiB window (`scanner.rs:1282-1300`); opt-in `scan_binary` (lib API only) | Extension **blocklist** (`.png .jpg … .dylib`, `runner.go:24-28`) + 8 KiB NUL sniff + UTF-16 BOM rejection (`runner.go:309-333`), extensible via `ATHEON_BINARY_EXTS` |
-| Size cap | 10 MiB default, `ScanOptions` only — **no CLI flag** (`scanner.rs:113`, `lib.rs:80`) | 10 MiB, `readFileCapped` with `EvalSymlinks` TOCTOU guard (`runner.go:56,101-120`) |
-| Symlinks | **Not followed by default**; `--follow-symlinks` opts in (`scanner.rs:71,1086-1090`) | **Followed by default**; `--no-follow-symlinks` opts out (`runner.go:231-237`) |
+| Binary skip | NUL-sniff 8 KiB window (`crates/aegis-core/src/scanner.rs:1282-1300`); opt-in `scan_binary` (lib API only) | Extension **blocklist** (`.png .jpg … .dylib`, `runner.go:24-28`) + 8 KiB NUL sniff + UTF-16 BOM rejection (`runner.go:309-333`), extensible via `ATHEON_BINARY_EXTS` |
+| Size cap | 10 MiB default, `ScanOptions` only — **no CLI flag** (`crates/aegis-core/src/scanner.rs:113`, `crates/aegis-core/src/lib.rs:80`) | 10 MiB, `readFileCapped` with `EvalSymlinks` TOCTOU guard (`runner.go:56,101-120`) |
+| Symlinks | **Not followed by default**; `--follow-symlinks` opts in (`crates/aegis-core/src/scanner.rs:71,1086-1090`) | **Followed by default**; `--no-follow-symlinks` opts out (`runner.go:231-237`) |
 | Hidden files | No special filter; ignore rules decide (sweep: 0 hits for `hidden`) | No special filter (NOT FOUND) |
-| Walk errors | Counted, `files_failed += 1`, ledger records; walk continues (`scanner.rs:1130-1142`) | Collected into `Stats.Errors`; walk continues (`runner.go:213-222`) — **but see exit-code divergence D-01** |
-| Concurrency | rayon pool, `ScanOptions::workers` default = cores (`scanner.rs:1153-1158,120`) | goroutines `min(max(NumCPU()*2,4),64)` (`runner.go:279`) — **contradicts the "configurable, default 256" claim** in `docs/ARCHITECTURE.md:202` |
+| Walk errors | Counted, `files_failed += 1`, ledger records; walk continues (`crates/aegis-core/src/scanner.rs:1130-1142`) | Collected into `Stats.Errors`; walk continues (`runner.go:213-222`) — **but see exit-code divergence D-01** |
+| Concurrency | rayon pool, `ScanOptions::workers` default = cores (`crates/aegis-core/src/scanner.rs:1153-1158,120`) | goroutines `min(max(NumCPU()*2,4),64)` (`runner.go:279`) — **contradicts the "configurable, default 256" claim** in `docs/ARCHITECTURE.md:202` |
 
 ### 3.5 Secrets / policy / suppression
 
 | Aspect | Aegis | Atheon |
 |---|---|---|
 | Inline suppression | Directive family: `aegis:ignore:<p1,p2>` (line), `aegis:ignore-start/-end` (nesting), `aegis:ignore-file`, optional `-- reason` (`crates/aegis-core/src/suppression.rs:7-17,131-234`) | Substring `atheon:ignore`, line-scoped only (`core/runner.go:456`) — no ranges, no file, no reason |
-| Baseline | `--baseline <json>`: machine output of a prior `--format json` run; SHA-256 fingerprints, commit-safe; baseline file excluded from its own scan (`scanner.rs:196-237,1098-1126`) | YAML baseline at `.atheon-baseline.yaml|.atheon/baseline.yaml`, auto-discovered (`core/suppression.go:123-143`); `CreateBaselineFile` (`:146`) |
-| Severity threshold gating | `--severity-threshold` with 5-level validation incl. `info` (`scanner.rs:148-157,678-702`) | `--severity-threshold=` with 4-level rank (`cmd/atheon/flags.go:14-19`) |
+| Baseline | `--baseline <json>`: machine output of a prior `--format json` run; SHA-256 fingerprints, commit-safe; baseline file excluded from its own scan (`crates/aegis-core/src/scanner.rs:196-237,1098-1126`) | YAML baseline at `.atheon-baseline.yaml|.atheon/baseline.yaml`, auto-discovered (`core/suppression.go:123-143`); `CreateBaselineFile` (`:146`) |
+| Severity threshold gating | `--severity-threshold` with 5-level validation incl. `info` (`crates/aegis-core/src/scanner.rs:148-157,678-702`) | `--severity-threshold=` with 4-level rank (`cmd/atheon/flags.go:14-19`) |
 | Policy engine | None as such; six mechanisms (threshold, risk score (report-only), baseline, inline directives, pattern-state, transport admission) — sweep VERIFIED NOT FOUND for a policy-file engine | None as such; same-shaped scatter (threshold, baseline, ignore, pattern state) |
 | Receipts / evidence | Versioned redacted `ScanReceipt` (schema v1) on CLI/MCP/daemon paths; fail-closed receipt deletion (`PLATFORM_INTEGRATION.md:116-118`; `crates/aegis-cli/src/scanner.rs:413-431`) | None found |
-| Inspection ledger | Per-unit `InspectionStatus` (analyzed/excluded/failed) embedded in JSON + SARIF; `AllRequiredFilesFailed` fail-closed error (`scanner.rs:1368-1378`) | None found (only `Stats.Errors`) |
+| Inspection ledger | Per-unit `InspectionStatus` (analyzed/excluded/failed) embedded in JSON + SARIF; `AllRequiredFilesFailed` fail-closed error (`crates/aegis-core/src/scanner.rs:1368-1378`) | None found (only `Stats.Errors`) |
 
 ### 3.6 Output formats & payload contracts
 
@@ -262,7 +262,7 @@ an exit-code enum):
 - Aegis: exit = `i32::from(has_findings)` where a finding is any
   non-`info` severity (`crates/aegis-cli/src/scanner.rs:378,450-451`);
   any `Err` bubbles out of `anyhow::Result` → exit 1
-  (`main.rs:166`). Documented contract including the SAFE/FINDINGS/BLOCKED
+  (`crates/aegis-cli/src/main.rs:166`). Documented contract including the SAFE/FINDINGS/BLOCKED
   `--output-file` protocol: `PLATFORM_INTEGRATION.md:100-108`.
 - Atheon: `0` clean, `1` findings **or any error**, plus `1` when
   `scanErrorsPresent(stats)` (`cmd/atheon/commands.go:94-205`;
@@ -275,12 +275,12 @@ Verified divergences with gating consequences:
   (`scanErrorsPresent`, cited above). Aegis exits **0** with per-file
   failures recorded in the ledger — unless *all* required files failed,
   which raises `ScanError::AllRequiredFilesFailed`
-  (`scanner.rs:1130-1142,1368-1378`). Migrating Atheon CI consumers
+  (`crates/aegis-core/src/scanner.rs:1130-1142,1368-1378`). Migrating Atheon CI consumers
   naively would silently downgrade partial failures from "blocked" to
   "clean". Must be decided + documented + tested before any canary wave
   (task S3/C-6).
 - **D-02 (P0).** `info`-severity findings exist only in Aegis and never
-  flip the exit code (`scanner.rs:378`; test
+  flip the exit code (`crates/aegis-cli/src/scanner.rs:378`; test
   `test_info_findings_never_fail_the_exit_code`,
   `crates/aegis-cli/src/scanner.rs:1565,1615`). Atheon has no info
   level. Threshold mappings must be explicit per wave.
@@ -405,7 +405,8 @@ Roles used by every task:
 - **infra-operator** — GitForge/GitHub lane and runner changes.
 
 Dependency chain: S0 → S1 → (S2 → S3 → S4) → S5 → S6 → S7, with S8
-(GitForge lane) needed by S4–S6 and S0–S1 independent of it.
+(GitForge lane) required by S4 (reproducible bench evidence, §8) and
+recommended before S5–S6; S0–S1 independent of it.
 
 ### S0 — Baseline & governance (this document)
 
@@ -543,8 +544,8 @@ discipline (`docs/planning/HANDOFF.md:215-218`).
 | C-1 | CLI invocation matrix | ~25 mapped invocations (scan path/file/env/stdin, categories, threshold, baseline, staged-n/a, diff, output-file; list/enable/disable/update) × both binaries; expected exit + output-shape per row; D-01/D-02 rows explicit | `scripts/parity/cli_conformance.sh` against pinned release builds of both | 100% rows mapped-exact; any drift fails the suite |
 | C-2 | JSON payload map | Atheon `--json` vs Aegis `--format json` field-by-field table, executed not just written (parse both, assert map completeness); resolves UNKNOWN §3.12-3 | `scripts/parity/json_map.py` | Every Aegis field mapped or explicitly `unmapped+reasoned` |
 | C-3 | SARIF consumer check | Both SARIF outputs validate as SARIF 2.1.0; D-11 CWE/security-severity delta measured | `scripts/parity/sarif_check.py` | Deltas enumerated; decision recorded |
-| C-4 | MCP wire conformance | The existing Aegis fixture replay (`crates/aegis-mcp/tests/mcp_wire_conformance.rs`, 5 tests) extended to drive `atheon-mcp` with the same client script; resolves D-18 | fixture replay + client script | Same 7 tools answer identically-shaped responses for identical inputs |
-| C-5 | Daemon wire conformance | Same approach with `crates/aegis-daemon/tests/daemon_wire_conformance.rs` (4 tests) vs `atheon-daemon` | fixture replay | Parity or documented difference |
+| C-4 | MCP wire conformance | The existing Aegis fixture replay (`crates/aegis-mcp/tests/mcp_wire_conformance.rs`, 4 tests; fixture floor `cases.len() >= 8`) extended to drive `atheon-mcp` with the same client script; resolves D-18 | fixture replay + client script | Same 7 tools answer identically-shaped responses for identical inputs |
+| C-5 | Daemon wire conformance | Same approach with `crates/aegis-daemon/tests/daemon_wire_conformance.rs` (3 tests; fixture floor `cases.len() >= 10`) vs `atheon-daemon` | fixture replay | Parity or documented difference |
 | C-6 | Exit-semantics unit pins | D-01: Aegis behavior on partial failure (ledger present, exit 0) pinned by test; Atheon's `scanErrorsPresent` behavior pinned on the Atheon side; both documented in `docs/parities/` | `cargo test -p aegis-core --test scanner_behaviors` extensions + Atheon-side Go test (in Atheon's tree — requires operator-approved write there, else pinned by scripted observation in C-1) | Decision implemented + tested |
 
 C-4/C-5 require no product changes — they reuse the existing fixture
@@ -820,7 +821,8 @@ one gate step, not a project.
   Codebase-memory index for this worktree:
   `home-mkinney-worktrees-aegis-atheon-parity-handoff-20261011`
   (3,247 nodes / 13,053 edges, re-indexed 2026-10-11 from the stale
-  `nas-Temp-repos-aegis` index which predated `5c86a06`).
+  `nas-Temp-repos-aegis` index which predated `5c86a06` — an indexer
+  snapshot, tool output rather than a source-tree fact).
 - Atheon-Enhanced: `/nas/Temp/repos/Atheon-Enhanced` @
   `bc42edf2563df9618b9c8ff429f0bacd19dd4e15` = tag `v1.5.4-enhanced`
   (2026-08-04). `/nas/Temp/repos/Atheon-Scanner` is a **different
