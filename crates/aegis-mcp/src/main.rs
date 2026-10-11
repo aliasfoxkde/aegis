@@ -927,6 +927,40 @@ mod tests {
         assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn update_bundle_via_symlink_escape_is_rejected() {
+        // Same invariant for bundle updates: a symlink inside cwd that
+        // resolves to an existing file outside must be refused by the guard
+        // before `Bundle::load` is ever reached — InvalidParams (sandbox),
+        // not InternalError (load failure). The target deliberately is not
+        // a valid bundle, so dropping the guard would flip this test's
+        // error code.
+        // TempDir-owned fixtures, uniquely named per run: the link lives
+        // inside cwd so containment applies, the probed target lives
+        // outside it (the parent of cwd). RAII removes both.
+        let cwd = std::env::current_dir()
+            .expect("read cwd")
+            .canonicalize()
+            .expect("canonicalize cwd");
+        let outside = tempfile::tempdir_in(cwd.parent().expect("cwd has a parent"))
+            .expect("create outside temp dir");
+        let target = outside.path().join("target-bundle.txt");
+        std::fs::write(&target, "probe fixture").expect("write target");
+
+        let fixture_dir = tempfile::tempdir_in(&cwd).expect("create fixture temp dir");
+        let link = fixture_dir.path().join("leak-bundle-link");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink target");
+
+        let rpc = AegisRpcImpl::new(ready_state().await);
+        let error = rpc
+            .update_bundle(Some(link.to_string_lossy().into_owned()), false)
+            .await
+            .expect_err("sandbox must refuse symlinked bundle paths outside cwd");
+
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InvalidParams);
+    }
+
     #[tokio::test]
     async fn scan_file_inside_cwd_reports_findings_and_stats() {
         let rpc = AegisRpcImpl::new(ready_state().await);
