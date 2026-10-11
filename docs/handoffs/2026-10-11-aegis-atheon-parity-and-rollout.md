@@ -159,8 +159,8 @@ rollback posture in §11 keeps Atheon gating until then.
   stale** at authoring time (2026-10-11). No file in the pinned tree
   mentions Aegis; nothing there records its own supersession
   (case-insensitive sweep at the pin: zero hits for "aegis").
-- Test suite: 1577 `func Test` declarations across 111 `*_test.go`
-  files (112 counting `cmd/atheon/main_test_main.go`, which holds
+- Test suite: 1577 `func Test` declarations across 116 `*_test.go`
+  files (117 counting `cmd/atheon/main_test_main.go`, which holds
   `TestMain`) — but a large fraction exist to hit coverage percentages
   (12 sequential `coverage_phaseN_test.go` files, phases 2-13, in
   `core/` alone). **Do not read test counts as a quality comparison**
@@ -371,7 +371,10 @@ Measured input sizes recorded for later benchmark use (VERIFIED
 2026-10-11, commands in §13). **Scope matters:** Aegis figures are for
 the base tree `5c86a06` = 246 tracked files / 2,887,740 B (`git
 ls-tree -r -l`); this branch adds only this document, so the branch
-tree measures 247 files / 2,946,993 B. Atheon figures are for the pin
+tree measures 247 files / 2,955,199 B (measured at `ddf5992`, the
+branch head at re-measurement — the byte total tracks this
+document's own size, so the figure is pinned to that revision).
+Atheon figures are for the pin
 `bc42edf` = 706 tracked files / 2,766,557 B (`ls-tree -r -l` at a
 clean checkout), superseding the earlier ≈2,748,140 B figure, which
 was measured across the drifting local working copy (uncommitted
@@ -640,7 +643,7 @@ git clone --branch v1.5.4-enhanced \
 
 | ID | Input | Pinned at | Tracked files / bytes |
 |---|---|---|---|
-| I-1 | aegis repo | base `5c86a06` (the branch tree adds only this document: 247 / 2,946,993 B) | 246 / 2,887,740 B at base (measured) |
+| I-1 | aegis repo | base `5c86a06` (the branch tree adds only this document: 247 / 2,955,199 B at `ddf5992`) | 246 / 2,887,740 B at base (measured) |
 | I-2 | Atheon-Enhanced repo | `bc42edf` / `v1.5.4-enhanced` (= `v1.5.5-enhanced`) | 706 / 2,766,557 B (`ls-tree` at clean checkout; the earlier ≈2,748,140 B figure was measured across the dirty working copy — clone fresh) |
 | I-3 | large real repo (≥ 10⁴ files) | SHA recorded at execution | measured at execution |
 
@@ -916,11 +919,15 @@ git ls-tree -r bc42edf --name-only | grep -c '^community/[^/]*/.*\.yaml$'  # 409
 gunzip -c core/patterns.bundle | grep -o '"name":' | wc -l              # 406 at the pin
 #   (the dirty local checkout's rebuilt bundle reports 409 — that is what the
 #    original draft quoted; the pin is 406 vs 409 YAML, delta unattributed)
+git ls-tree -r bc42edf --name-only | grep -c '_test\.go$'              # 116 (original draft said 111; 117 counting
+#   cmd/atheon/main_test_main.go, which holds TestMain but does not match the *_test.go suffix)
 
 # Input sizes (for §7) — scope: pinned trees, not working copies
 git ls-tree -r -l 5c86a06 | awk '{s+=$4} END {print s}'                  # 2,887,740 B / 246 files (aegis base)
 git -C <clean bc42edf checkout> ls-tree -r -l HEAD | awk '{s+=$4} END {print s}'  # 2,766,557 B / 706 files (atheon pin)
-# aegis branch tree (base + this document): 247 files / 2,946,993 B
+git ls-tree -r -l ddf5992 | awk '{f++; s+=$4} END {print f, s}'   # 247 files / 2,955,199 B (branch tree at review head ddf5992;
+#   the total tracks this document's own size — the superseded 2,946,993 B was
+#   measured at 91ab20b, before the two review-cite commits grew this document)
 # Superseded: ≈2,748,140 B for atheon was measured across the drifting working copy:
 #   git -C /nas/Temp/repos/Atheon-Enhanced status --porcelain | awk '{print $1}' | sort | uniq -c
 #   → 32 M, 3 D (renamed lowercase), 16 ?? — incl. five untracked cmd/atheon/*.go
