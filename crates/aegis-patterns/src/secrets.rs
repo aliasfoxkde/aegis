@@ -9,7 +9,7 @@
 //! regardless of the flag, so clearing the flag never weakens env
 //! coverage.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Credential shapes; `env_var: true` rules never run against file contents.
 #[must_use]
@@ -389,7 +389,10 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["password".to_string(), "hardcoded".to_string(), "credential".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            // Same whole-value dynamic exclusion as `hardcoded-tf-secrets`
+            // and `rust-hardcoded-secret`, so one assignment line gets one
+            // verdict from every rule that matches it.
+            exclude: Some(DYNAMIC_SECRET_VALUE_EXCLUSION.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {

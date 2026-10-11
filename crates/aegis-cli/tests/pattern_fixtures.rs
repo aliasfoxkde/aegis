@@ -233,6 +233,201 @@ fn extension_scoped_patterns_skip_extensionless_files() {
     );
 }
 
+/// Literal-assignment secret rules must suppress complete shell expansions
+/// after matching them, rather than passing because their matchers stopped
+/// recognizing the assignment. Empty fallbacks are pinned in both accepted
+/// operator families: the `:-` default and the empty single-dash fallbacks
+/// `-`/`=` (`${V-}`, `${V=}`).
+#[test]
+fn literal_secret_rules_skip_dynamic_shell_credentials() {
+    let scanner = scanner();
+    let assignments = [
+        r#"api_key="${AMORTYX_API_KEY:-}""#,
+        r#"api_key="${AMORTYX_API_KEY-}""#,
+        r#"api_key="${AMORTYX_API_KEY=}""#,
+        r#"api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}""#,
+        r#"api_key="$(read_router_key)""#,
+        r#"api_key="`read_router_key`""#,
+    ];
+    let definitions = aegis_patterns::all_patterns();
+    for pattern_name in ["hardcoded-tf-secrets", "rust-hardcoded-secret"] {
+        let definition: aegis_core::PatternDefinition = definitions
+            .iter()
+            .find(|pattern| pattern.name == pattern_name)
+            .cloned()
+            .map(Into::into)
+            .expect("the tested secret rule must exist");
+        let pattern =
+            aegis_core::Pattern::new(definition).expect("the tested secret rule must compile");
+        for assignment in assignments.iter().copied() {
+            let matches = pattern.find_matches(assignment);
+            assert_eq!(
+                matches.len(),
+                1,
+                "{pattern_name} must match the dynamic assignment before exclusion"
+            );
+            assert!(
+                pattern.is_excluded(matches[0].matched_text),
+                "{pattern_name} must exclude dynamic assignment {assignment:?} (matched {:?})",
+                matches[0].matched_text
+            );
+        }
+        let single_quoted = r"api_key='$AMORTYX_API_KEY'";
+        let matches = pattern.find_matches(single_quoted);
+        assert_eq!(
+            matches.len(),
+            1,
+            "{pattern_name} must match the literal assignment"
+        );
+        assert!(
+            !pattern.is_excluded(matches[0].matched_text),
+            "{pattern_name} must not suppress a single-quoted literal"
+        );
+    }
+
+    let shell = r#"
+api_key="${AMORTYX_API_KEY:-}"
+api_key="${AMORTYX_API_KEY-}"
+api_key="${AMORTYX_API_KEY=}"
+api_key="${AMORTYX_API_KEY:-${MINIMAX_API_KEY:-}}"
+api_key="$(read_router_key)"
+api_key="`read_router_key`"
+"#;
+    let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
+    // Complete finding set, not a filtered subset: anything firing on these
+    // six lines is a regression, whatever rule produced it.
+    assert!(
+        fs.is_empty(),
+        "dynamic shell lookups must not be reported at all, got: {:?}",
+        pattern_names(&fs)
+    );
+}
+
+/// A non-empty literal fallback inside a braced expansion is a committed
+/// credential, not a runtime lookup: the exclusion must leave it reported.
+/// The scanner-level assertion pins the COMPLETE finding set — each rule
+/// by name and line — so a rule that stops (or starts) firing here fails
+/// loudly instead of hiding behind an existence check. Fixture payloads
+/// are assembled with `concat!` (as in `examples.rs`) so the source text
+/// never carries a complete quoted credential.
+#[test]
+fn literal_fallback_in_expansion_stays_reported() {
+    let scanner = scanner();
+    let definitions = aegis_patterns::all_patterns();
+    let assignments = [
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY:-st4"#,
+            r#"tic-fallback}""#
+        ),
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY-singledash"#,
+            r#"-fb}""#
+        ),
+        concat!(
+            r#"api_key"#,
+            r#"="${"#,
+            r#"AMORTYX_API_KEY:-${MINIMAX_API_KEY:-st4"#,
+            r#"tic-fallback}}""#
+        ),
+    ];
+    for pattern_name in ["hardcoded-tf-secrets", "rust-hardcoded-secret"] {
+        let definition: aegis_core::PatternDefinition = definitions
+            .iter()
+            .find(|pattern| pattern.name == pattern_name)
+            .cloned()
+            .map(Into::into)
+            .expect("the tested secret rule must exist");
+        let pattern =
+            aegis_core::Pattern::new(definition).expect("the tested secret rule must compile");
+        for assignment in assignments.iter().copied() {
+            let matches = pattern.find_matches(assignment);
+            assert_eq!(
+                matches.len(),
+                1,
+                "{pattern_name} must match the assignment before exclusion"
+            );
+            assert!(
+                !pattern.is_excluded(matches[0].matched_text),
+                "{pattern_name} must report a literal fallback in {assignment:?}"
+            );
+        }
+    }
+
+    let shell = concat!(
+        r#"api_key"#,
+        r#"="${"#,
+        r#"AMORTYX_API_KEY:-st4"#,
+        r#"tic-fallback}""#,
+    );
+    let fs = findings(&scanner, shell, "scripts/verify_amortyx_batch.sh");
+    let actual: Vec<(&str, usize)> = fs
+        .iter()
+        .map(|finding| (finding.pattern.as_str(), finding.location.line))
+        .collect();
+    let expected: Vec<(&str, usize)> = vec![
+        ("env-credential-assignment", 1),
+        ("hardcoded-tf-secrets", 1),
+        ("rust-hardcoded-secret", 1),
+    ];
+    assert_eq!(
+        actual, expected,
+        "each matching assignment rule must report the literal fallback, and nothing else may fire"
+    );
+}
+
+/// Literal payloads inside command substitution or backticks are committed
+/// credentials, not runtime lookups: every assignment-shaped secret rule
+/// that matches the line must report it, and an argument-free single
+/// command word stays suppressed. All five rules that match these shapes
+/// (`hardcoded-password`, `hardcoded-credential`, `password-field`,
+/// `hardcoded-tf-secrets`, `rust-hardcoded-secret`) share the dynamic
+/// exclusion, so one line gets one verdict. The final assertion pins the
+/// COMPLETE finding set for the fixture — a rule that starts or stops
+/// firing here fails loudly instead of hiding behind a filtered subset.
+/// Payload lines are assembled with `concat!` (as in `examples.rs`) so the
+/// test source never carries a complete quoted credential assignment.
+#[test]
+fn substitution_literals_get_one_verdict_from_every_assignment_rule() {
+    let scanner = scanner();
+    let fixture = [
+        // Dynamic variable reference: suppressed by every aligned rule.
+        concat!(r#"password"#, r#"="${"#, r#"DB_PASSWORD}""#),
+        // Committed literal inside a substitution/backtick: reported.
+        concat!(r#"api_key"#, r#"="$("#, r#"cat<<<st4"#, r#"tic-literal)""#),
+        concat!(r#"api_key"#, r#"=""#, r#"`cat<<<st4"#, r#"tic-literal`""#),
+        concat!(r#"password"#, r#"="$("#, r#"cat<<<st4"#, r#"tic-literal)""#),
+        // Argument-free single command word: suppressed.
+        r#"api_key="$(read_router_key)""#,
+        r#"api_key="`read_router_key`""#,
+    ]
+    .join("\n");
+    let fs = findings(&scanner, &fixture, "scripts/verify_amortyx_batch.sh");
+
+    let actual: Vec<(&str, usize)> = fs
+        .iter()
+        .map(|finding| (finding.pattern.as_str(), finding.location.line))
+        .collect();
+    let expected: Vec<(&str, usize)> = vec![
+        ("hardcoded-credential", 4),
+        ("hardcoded-password", 4),
+        ("hardcoded-tf-secrets", 2),
+        ("hardcoded-tf-secrets", 3),
+        ("hardcoded-tf-secrets", 4),
+        ("password-field", 4),
+        ("rust-hardcoded-secret", 2),
+        ("rust-hardcoded-secret", 3),
+        ("rust-hardcoded-secret", 4),
+    ];
+    assert_eq!(
+        actual, expected,
+        "finding set must be exactly the committed substitution literals"
+    );
+}
+
 /// Correct API-integration usage must never be flagged. The original
 /// api-integration pack fired on `Authorization: Bearer` headers and
 /// try/catch around fetch, labeling good code as leaked secrets.

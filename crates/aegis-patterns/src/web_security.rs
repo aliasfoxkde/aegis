@@ -4,7 +4,7 @@
 //! traversal, insecure deserialization, missing security headers, and broken
 //! authentication.
 
-use crate::Pattern;
+use crate::{Pattern, DYNAMIC_SECRET_VALUE_EXCLUSION};
 
 /// Core vulnerability rules: XSS, injection, SSRF, CSRF, deserialization, headers, auth.
 #[must_use]
@@ -318,7 +318,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "hardcoded-credential".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}"#.to_string(),
+            match_pattern: r#"(?i)(username|password|credential)\s*=\s*['\"][^'\"]{4,}['\"]"#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
@@ -328,7 +328,10 @@ pub fn get() -> Vec<Pattern> {
             tags: vec!["credential".to_string(), "security".to_string(), "hardcoded".to_string()],
             env_var: false,
             binary: false,
-            exclude: None,
+            // Same whole-value dynamic exclusion as the other assignment-shaped
+            // secret rules, so one assignment line gets one verdict from every
+            // rule that matches it.
+            exclude: Some(DYNAMIC_SECRET_VALUE_EXCLUSION.to_string()),
             file_extensions: Vec::new(),
         },
         Pattern {
@@ -356,7 +359,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "high".to_string(),
             min_entropy: None,
             description: "JWT with 'none' algorithm detected".to_string(),
-            reference: Some("https://github.com/OWASP/wstg/blob/master/document/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens.md".to_string()),
+            reference: Some("https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens/".to_string()),
             tags: vec!["jwt".to_string(), "security".to_string(), "algorithm".to_string()],
             env_var: false,
             binary: false,
