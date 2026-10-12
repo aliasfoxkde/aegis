@@ -22,6 +22,27 @@ every release are attached to the matching GitHub release.
   verdicts. A file where several slop rules fire at once is the real
   signal.
 
+### Changed
+
+- Scan exit status now honors both receipt completeness and the finding
+  policy, decided from the scan's own `ScanReceipt` so the exit can never
+  disagree with the evidence a downstream gate validates. A complete scan
+  exits `0` (clean, informational findings excluded) or `1` (blocking
+  findings) as before; a scan whose receipt does not certify that every
+  required inspection completed — an unreadable required file, a
+  size-limit skip, a binary no analyzer covers, or nothing inspected at
+  all — now exits `3` instead of passing as clean with zero findings.
+  Consumers that branch on non-zero fail closed unchanged; exit `3` makes
+  "findings reported" separable from "the scan could not inspect what it
+  was asked to inspect", and `ScanReceipt::allows_safe()` alone still
+  never means clean. `--staged` scans now record the same style of
+  inspection-ledger evidence as every other mode (the index enumeration
+  as a required analyzed unit, per-blob analyzed/excluded/unsupported
+  units), so a pre-commit receipt proves what the pass inspected and a
+  staged binary blob no longer exits as a clean commit. `docs/guides/CLI.md`
+  and `PLATFORM_INTEGRATION.md` document the new code; the GitHub scan
+  workflows already classified any exit beyond `0`/`1` as `BLOCKED`.
+
 ### Fixed
 
 - Release builds: the tarball mtime pin now reads the tag commit's time
