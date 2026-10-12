@@ -99,13 +99,14 @@ Aegis makes no network calls during a deterministic scan. It does not call Amort
 
 ### Exit Codes
 
-`aegis` exit codes are coarse and must not be read alone:
+`aegis` exit codes are decided from the scan's own receipt, so completeness and finding policy stay separable:
 
-- `0` — scan completed with no surviving findings.
-- `1` — scan completed with findings.
-- `1` — the scan itself failed (for example an unreadable or nonexistent path).
+- `0` — complete scan, no blocking findings (informational findings excluded).
+- `1` — complete scan with findings.
+- `1` — the scan itself failed before producing a receipt (for example an unreadable or nonexistent path).
+- `3` — incomplete scan: the receipt does not certify that every required inspection completed (`ScanReceipt::allows_safe()` is false). Findings are still reported and receipted, but the run can never pass as clean.
 
-Because findings and scan errors share exit code 1, a CI integration must distinguish SAFE, FINDINGS, and BLOCKED by writing `--output-file` and then checking that the file exists, is non-empty, and parses. This is exactly what `.github/workflows/aegis-scan.yml` does.
+Because pre-receipt scan failures share exit code 1 with findings, a CI integration must still distinguish FINDINGS from BLOCKED by writing `--output-file` and then checking that the file exists, is non-empty, and parses — and it must treat exit `3` as blocked on the receipt alone. This is exactly what `.github/workflows/aegis-scan.yml` does.
 
 ### Result Payloads
 
@@ -182,7 +183,7 @@ A platform promotion may claim Aegis integration only when all of the following 
 - the deterministic CLI smoke scan returns parseable output;
 - the custom JSON-RPC methods return valid responses;
 - the custom JSON-RPC path returns only machine-readable stdout and keeps diagnostics on stderr;
-- findings and blocked/error states are distinguishable from a clean result, using the output file rather than the exit code alone, since findings and scan errors both exit 1;
+- findings and blocked/error states are distinguishable from a clean result: the CLI exits `3` for an incomplete receipt, and pre-receipt failures (exit `1` with no receipt) are separated from findings via the output file;
 - SARIF output is preserved as an artifact when CI scanning is enabled;
 - GitForge records the Aegis-produced scan receipt and does not treat a transport failure as a clean scan;
 - Control Center displays the scan lifecycle without inventing a success state, and consults `inspection_ledger` rather than assuming an empty finding list means full coverage;
@@ -191,7 +192,7 @@ A platform promotion may claim Aegis integration only when all of the following 
 ## Current Gaps
 
 - [ ] Validate each MCP tool operation through the platform's actual MCP runner.
-- [ ] Validate the GitForge runner's fail-closed handling for `SAFE`, `FINDINGS`, and `BLOCKED` outcomes, given that findings and scan errors share exit code 1.
+- [ ] Validate the GitForge runner's fail-closed handling for `SAFE`, `FINDINGS`, and `BLOCKED` outcomes, given that incomplete scans exit `3` and pre-receipt failures share exit code 1 with findings.
 - [ ] Resolve the divergent `platform-handoff/aegis-w2-03` branch: it holds 23 commits not in `main`, and `main` has moved 43 commits past their merge base. Confirm whether anything unique there still needs promoting.
 - [ ] Run the WASM gate on the Fedora builder and retain its artifact receipt.
 - [ ] Resolve remaining release/CI hardening items identified in the Platform-Architecture Aegis handoff before production promotion.

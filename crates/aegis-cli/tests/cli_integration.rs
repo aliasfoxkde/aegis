@@ -414,3 +414,204 @@ fn test_scan_detect_clones_human_output_lists_pairs() {
     assert!(stdout.contains("Code clones ("), "stdout: {stdout}");
     assert!(stdout.contains("Code clone at"), "stdout: {stdout}");
 }
+
+/// Fail-closed exit matrix (blocked, process level): a directory holding
+/// one unreadable file among readable ones is a partial scan. The process
+/// must exit `3` (incomplete), never `0`, even though nothing was found —
+/// the zero-exit/incomplete regression the exit contract exists for.
+#[cfg(unix)]
+#[test]
+fn test_scan_dir_with_unreadable_file_exits_3_not_0() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cfg = isolated_config();
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(dir.path().join("readable.rs"), "fn main() {}\n").unwrap();
+    let unreadable = dir.path().join("unreadable.txt");
+    std::fs::write(&unreadable, "present but not inspectable\n").unwrap();
+    let original_mode = std::fs::metadata(&unreadable).unwrap().permissions().mode();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o0)).unwrap();
+    if std::fs::read_to_string(&unreadable).is_ok() {
+        // Root bypasses mode bits; the environment cannot exercise the
+        // required-failure path, so claim no coverage.
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+            .unwrap();
+        return;
+    }
+
+    let output = cfg
+        .command()
+        .args(["scan", dir.path().to_str().unwrap()])
+        .output()
+        .unwrap();
+    std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode)).unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "an incomplete scan must exit 3; stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+/// Fail-closed exit matrix (blocked, process level, cross-platform): one
+/// binary file scanned per-file — the mode a PR check uses when it runs
+/// the CLI once per changed file — has no analyzer. Single-file scans
+/// never load `.aegisignore` (only a directory walk initializes the
+/// ignore root), so no ignore rule can rescue this mode: the binary
+/// stays a required inspection in the receipt, and the run must exit `3`
+/// (incomplete), never `0`, even with zero findings. Only file bytes are
+/// involved (no mode bits), so the test runs on Windows, Linux, and
+/// macOS alike.
+#[test]
+fn test_scan_per_file_binary_exits_3_not_0() {
+    let cfg = isolated_config();
+    let dir = tempfile::TempDir::new().unwrap();
+    let binary = dir.path().join("asset.bin");
+    // A NUL byte is what the binary sniff keys on, on every platform.
+    std::fs::write(&binary, [0x00_u8, 0x01, 0x02, b'A', 0x00, 0xFF]).unwrap();
+
+    // `--file` makes the named path the whole scan target, so the binary
+    // cannot be skipped as one entry among many: it is a required
+    // unsupported unit and the receipt leaves the run incomplete.
+    let per_file = cfg
+        .command()
+        .args(["scan", "--file", binary.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(
+        per_file.status.code(),
+        Some(3),
+        "a per-file scan of a binary must exit 3; stdout: {}",
+        String::from_utf8_lossy(&per_file.stdout)
+    );
+
+    // The bare-path form routes through directory-walk mode. With only
+    // one required unsupported file, scan_dir returns an error before the
+    // CLI persists a receipt, so the command exits 1 rather than 0 or 3.
+    let bare_receipt_path = dir.path().join("bare-receipt.json");
+    let bare = cfg
+        .command()
+        .env("AEGIS_RECEIPT_FILE", bare_receipt_path.as_os_str())
+        .args(["scan", binary.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(
+        bare.status.code(),
+        Some(1),
+        "a bare lone-binary scan must fail before receipt persistence; stdout: {}; stderr: {}",
+        String::from_utf8_lossy(&bare.stdout),
+        String::from_utf8_lossy(&bare.stderr)
+    );
+    assert!(
+        !bare_receipt_path.exists(),
+        "an all-required-files-failed scan must not leave a receipt"
+    );
+}
+
+/// Fail-closed exit matrix (safe exclusion, process level): a directory
+/// scan loads `.aegisignore` from the scan root, so a binary matched by a
+/// rule is recorded as a non-required exclusion instead of a required
+/// unsupported unit. The remaining readable file completes the receipt
+/// and the scan exits `0` — the supported remediation the CLI guide
+/// documents, and directory-scan only, which is why the per-file test
+/// above pins exit `3` for the same file named on the command line.
+#[test]
+fn test_scan_dir_with_aegisignored_binary_exits_0() {
+    let cfg = isolated_config();
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(dir.path().join("readable.rs"), "fn main() {}\n").unwrap();
+    let binary = dir.path().join("asset.bin");
+    // A NUL byte is what the binary sniff keys on, on every platform.
+    std::fs::write(&binary, [0x00_u8, 0x01, 0x02, b'A', 0x00, 0xFF]).unwrap();
+    std::fs::write(dir.path().join(".aegisignore"), "asset.bin\n").unwrap();
+
+    let receipt_path = dir.path().join("receipt.json");
+    let output = cfg
+        .command()
+        .env("AEGIS_RECEIPT_FILE", receipt_path.as_os_str())
+        .args(["scan", dir.path().to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "an ignored binary must not block a directory scan; stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    // The receipt must show why the pass is safe: the binary landed in
+    // the ledger as an excluded, non-required unit — not a required
+    // inspection that failed — and the readable file was analyzed.
+    let receipt: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&receipt_path).unwrap())
+            .expect("receipt must be readable JSON");
+    let units = receipt["inspection_ledger"]["units"]
+        .as_array()
+        .expect("inspection ledger units present");
+    let binary_unit = units.iter().find(|unit| {
+        unit["unit_id"]
+            .as_str()
+            .is_some_and(|id| id.ends_with("asset.bin"))
+            && unit["status"] == "excluded"
+            && unit["required"] == false
+    });
+    assert!(
+        binary_unit.is_some(),
+        "the ignored binary must be a non-required exclusion: {units:?}"
+    );
+    assert!(
+        units.iter().any(|unit| {
+            unit["unit_id"]
+                .as_str()
+                .is_some_and(|id| id.ends_with("readable.rs"))
+                && unit["status"] == "analyzed"
+                && unit["required"] == true
+        }),
+        "the readable file must be a required analyzed unit: {units:?}"
+    );
+}
+
+/// The receipt written through `AEGIS_RECEIPT_FILE` on a clean pass must
+/// carry the inspection evidence a downstream gate validates: a current
+/// schema, zero findings, and a non-empty ledger proving the scan inspected
+/// something.
+#[test]
+fn test_scan_writes_a_safe_receipt_on_a_clean_pass() {
+    let cfg = isolated_config();
+    let dir = tempfile::TempDir::new().unwrap();
+    let receipt_path = dir.path().join("receipt.json");
+    let target = dir.path().join("clean.rs");
+    std::fs::write(&target, "fn main() { println!(\"ok\"); }\n").unwrap();
+
+    let output = cfg
+        .command()
+        .env("AEGIS_RECEIPT_FILE", receipt_path.as_os_str())
+        .args(["--format", "json", "scan", target.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let receipt: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&receipt_path).unwrap())
+            .expect("receipt must be readable JSON");
+    assert_eq!(receipt["schema_version"], 1);
+    assert_eq!(receipt["finding_count"], 0);
+    let units = receipt["inspection_ledger"]["units"]
+        .as_array()
+        .expect("inspection ledger units present");
+    assert!(
+        !units.is_empty(),
+        "a clean pass must carry inspection evidence, not an empty ledger"
+    );
+    assert!(
+        units
+            .iter()
+            .all(|unit| unit["status"] != "failed" || unit["required"] == false),
+        "no required unit may be failed on a clean pass: {units:?}"
+    );
+}
