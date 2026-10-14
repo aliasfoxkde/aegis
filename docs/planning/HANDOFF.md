@@ -10,6 +10,9 @@ sync mirror; measurement round complete — MCP discovery lifecycle, wire
 conformance fixtures + 10 MiB frame caps, per-rule corpus gates, and the
 crates.io decision are closed out (see Known Issues)
 **Location:** `/nas/Temp/repos/aegis`
+
+> **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions.
+**Evidence boundary (central audit):** branch `main`, HEAD `370e5679d48980ac1bb4ad1e28e3e1df70b6dabe`, 0 dirty status entries.
 **MSRV:** 1.88 (pinned by locked deps `time 0.3.55` / `ignore 0.4.33`; CI and
 the release builder image both use `rust:1.88`)
 
