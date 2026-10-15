@@ -535,18 +535,17 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
 
     persist_receipt_if_configured(&result.receipt)?;
 
+    let exit_code = scan_exit_code(&result.receipt);
+
     // Print to stdout
     println!("{}", result.output);
 
     // Write to file if specified
     if let Some(ref path) = opts.output_file {
-        std::fs::write(path, result.output)?;
+        std::fs::write(path, result.output.as_bytes())?;
     }
 
-    // Fail-closed exit contract: the status must agree with both the
-    // receipt's inspection completeness and the finding policy, decided
-    // from the same receipt a downstream consumer validates.
-    Ok(scan_exit_code(&result.receipt))
+    Ok(exit_code)
 }
 
 /// Read stdin content (extracted for testing)
@@ -1191,17 +1190,56 @@ mod tests {
         std::fs::remove_dir_all(scan_path).ok();
     }
 
-    /// `AEGIS_RECEIPT_FILE` is process-global, so both of its failure
-    /// modes are exercised in this one serialized test — parallel tests
-    /// could otherwise race each other's `set_var`/`remove_var`. The two
-    /// pinned failure modes:
-    ///
-    /// 1. a failing scan must not leave a stale receipt: the old receipt
-    ///    is removed before the scan, so a failed run leaves the file
-    ///    simply absent — not a mix of old and new data;
-    /// 2. a receipt target that cannot be written must fail the scan
-    ///    closed — before any clean-looking banner is printed — instead
-    ///    of passing while discarding the evidence.
+    /// Receipt-derived fail-closed regression: required work that was not
+    /// analyzed must yield `EXIT_INCOMPLETE`, while optional failures do not
+    /// invalidate an otherwise complete receipt.
+    #[test]
+    fn required_incomplete_receipt_units_fail_closed() {
+        let opts = ScanOptions {
+            path: PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: true,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            anomaly_detectors: None,
+        };
+        let clean = execute_scan_with_stdin(&opts, "clean input\n").expect("scan succeeds");
+        assert_eq!(scan_exit_code(&clean.receipt), EXIT_CLEAN);
+
+        for status in [
+            InspectionStatus::Failed,
+            InspectionStatus::Skipped,
+            InspectionStatus::Unsupported,
+        ] {
+            let mut receipt = clean.receipt.clone();
+            receipt.inspection_ledger.record(
+                format!("synthetic-required-{status:?}"),
+                status,
+                true,
+                Some("regression_test".to_string()),
+            );
+            assert_eq!(scan_exit_code(&receipt), EXIT_INCOMPLETE, "{status:?}");
+        }
+
+        let mut optional_failure = clean.receipt;
+        optional_failure.inspection_ledger.record(
+            "optional-failure",
+            InspectionStatus::Failed,
+            false,
+            Some("regression_test".to_string()),
+        );
+        assert_eq!(scan_exit_code(&optional_failure), EXIT_CLEAN);
+    }
     #[tokio::test]
     async fn test_receipt_file_failures_retire_stale_and_fail_closed() {
         // Mode 1: stale-receipt retirement. Use a process-unique temp path

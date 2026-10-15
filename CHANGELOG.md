@@ -45,6 +45,30 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- Diff scans now attribute findings to the target file's actual line from
+  each unified-diff hunk, reject additions without a trustworthy file/hunk
+  anchor, correctly decode Git C-quoted paths, and apply baselines only
+  after location identities are remapped. Malformed or out-of-range octal
+  path escapes are rejected rather than truncated into a different path.
+
+- CLI scans: a scan that could not inspect every required unit exited 0
+  whenever it reported no findings, so an incomplete scan passed a CI
+  gate as clean. That covers an unreadable file or walk error (counted
+  in `stats.files_failed`) and every required inspection-ledger unit
+  that did not finish as `Analyzed` or `Suppressed` — the same
+  required-unit rule `InspectionLedger::allows_safe` applies. The core can
+  record a tree-sitter parse error as `Failed` when its optional feature is
+  enabled (the default CLI dependency does not enable that feature), a
+  size limit lands as a required `Skipped` unit, and a binary file as a
+  required `Unsupported` unit. These required incomplete inspections now
+  produce `EXIT_INCOMPLETE` (3) from the scan's receipt instead of passing
+  as clean; complete scans with findings remain exit 1, while failures
+  before a receipt is produced still propagate as errors. Optional units
+  and out-of-scope exclusions (`Excluded`, ignore rules) stay non-gating.
+  The scan renders and persists the evidence, including uninspected units
+  in the receipt ledger. Found by the 2026-10-05 audit of
+  `run_scan_and_get_exit_code`.
+
 - Release builds: the tarball mtime pin now reads the tag commit's time
   (`git show -s --format=%ct` on the commit, not the tag — on an
   annotated tag the command prints the whole tag-object display, and
