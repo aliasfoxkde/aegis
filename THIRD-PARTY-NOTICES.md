@@ -1301,7 +1301,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- proptest 1.11.0 — https://github.com/proptest-rs/proptest
+- proptest 1.12.0 — https://github.com/proptest-rs/proptest
 - rusty-fork 0.3.1 — https://github.com/altsysrq/rusty-fork
 
 ```
@@ -1662,6 +1662,39 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
+- core_detect 1.0.0 — https://github.com/thomcc/core_detect
+
+```
+Copyright (c) 2017-2020 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+```
+
+### MIT License
+
 - digest 0.11.3 — https://github.com/RustCrypto/traits
 
 ```
@@ -1923,11 +1956,10 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- getrandom 0.3.4 — https://github.com/rust-random/getrandom
+- rand_core 0.10.1 — https://github.com/rust-random/rand_core
 
 ```
-Copyright (c) 2018-2025 The rust-random Project Developers
-Copyright (c) 2014 The Rust Project Developers
+Copyright (c) 2018-2026 The Rand Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -2144,10 +2176,14 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- ppv-lite86 0.2.21 — https://github.com/cryptocorrosion/cryptocorrosion
+- tracing-attributes 0.1.31 — https://github.com/tokio-rs/tracing
+- tracing-core 0.1.36 — https://github.com/tokio-rs/tracing
+- tracing-log 0.2.0 — https://github.com/tokio-rs/tracing
+- tracing-subscriber 0.3.23 — https://github.com/tokio-rs/tracing
+- tracing 0.1.44 — https://github.com/tokio-rs/tracing
 
 ```
-Copyright (c) 2019 The CryptoCorrosion Contributors
+Copyright (c) 2019 Tokio Contributors
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -2177,14 +2213,10 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- tracing-attributes 0.1.31 — https://github.com/tokio-rs/tracing
-- tracing-core 0.1.36 — https://github.com/tokio-rs/tracing
-- tracing-log 0.2.0 — https://github.com/tokio-rs/tracing
-- tracing-subscriber 0.3.23 — https://github.com/tokio-rs/tracing
-- tracing 0.1.44 — https://github.com/tokio-rs/tracing
+- chacha20 0.10.2 — https://github.com/RustCrypto/stream-ciphers
 
 ```
-Copyright (c) 2019 Tokio Contributors
+Copyright (c) 2019-2026 The RustCrypto Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -2314,8 +2346,8 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- bit-set 0.8.0 — https://github.com/contain-rs/bit-set
-- bit-vec 0.8.0 — https://github.com/contain-rs/bit-vec
+- bit-set 0.11.1 — https://github.com/contain-rs/bit-vec
+- bit-vec 0.10.1 — https://github.com/contain-rs/bit-vec
 
 ```
 Copyright (c) 2023 The Rust Project Developers
@@ -2424,10 +2456,8 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- rand 0.9.5 — https://github.com/rust-random/rand
-- rand_chacha 0.9.0 — https://github.com/rust-random/rand
-- rand_core 0.9.5 — https://github.com/rust-random/rand
-- rand_xorshift 0.4.0 — https://github.com/rust-random/rngs
+- rand 0.10.3 — https://github.com/rust-random/rand
+- rand_xorshift 0.5.0 — https://github.com/rust-random/rngs
 
 ```
 Copyright 2018 Developers of the Rand project
@@ -2648,7 +2678,6 @@ SOFTWARE.
 - plotters-backend 0.3.7 — https://github.com/plotters-rs/plotters
 - plotters-svg 0.3.7 — https://github.com/plotters-rs/plotters.git
 - plotters 0.3.7 — https://github.com/plotters-rs/plotters
-- r-efi 5.3.0 — https://github.com/r-efi/r-efi
 - r-efi 6.0.0 — https://github.com/r-efi/r-efi
 - tree-sitter-typescript 0.23.2 — https://github.com/tree-sitter/tree-sitter-typescript
 - winapi-i686-pc-windows-gnu 0.4.0 — https://github.com/retep998/winapi-rs
@@ -2680,7 +2709,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- tokio 1.53.1 — https://github.com/tokio-rs/tokio
+- tokio 1.53.3 — https://github.com/tokio-rs/tokio
 
 ```
 MIT License
@@ -2873,7 +2902,7 @@ SOFTWARE.
 - serde 1.0.229 — https://github.com/serde-rs/serde
 - serde_core 1.0.229 — https://github.com/serde-rs/serde
 - serde_derive 1.0.229 — https://github.com/serde-rs/serde
-- serde_json 1.0.151 — https://github.com/serde-rs/json
+- serde_json 1.0.154 — https://github.com/serde-rs/json
 - serde_yaml 0.9.34+deprecated — https://github.com/dtolnay/serde-yaml
 - syn 2.0.119 — https://github.com/dtolnay/syn
 - syn 3.0.4 — https://github.com/dtolnay/syn
@@ -2882,8 +2911,6 @@ SOFTWARE.
 - unicode-ident 1.0.24 — https://github.com/dtolnay/unicode-ident
 - unsafe-libyaml 0.2.11 — https://github.com/dtolnay/unsafe-libyaml
 - wasi 0.11.1+wasi-snapshot-preview1 — https://github.com/bytecodealliance/wasi
-- wasip2 1.0.4+wasi-0.2.12 — https://github.com/bytecodealliance/wasi-rs
-- wit-bindgen 0.57.1 — https://github.com/bytecodealliance/wit-bindgen
 - zmij 1.0.23 — https://github.com/dtolnay/zmij
 
 ```
@@ -3241,8 +3268,8 @@ SOFTWARE.
 
 ### MIT License
 
-- tree-sitter-language 0.1.8 — https://github.com/tree-sitter/tree-sitter
-- tree-sitter 0.27.0 — https://github.com/tree-sitter/tree-sitter
+- tree-sitter-language 0.1.9 — https://github.com/tree-sitter/tree-sitter
+- tree-sitter 0.27.1 — https://github.com/tree-sitter/tree-sitter
 
 ```
 The MIT License (MIT)
@@ -3875,5 +3902,31 @@ not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
+```
+
+### zlib License
+
+- foldhash 0.2.0 — https://github.com/orlp/foldhash
+
+```
+Copyright (c) 2024 Orson Peters
+
+This software is provided 'as-is', without any express or implied warranty. In
+no event will the authors be held liable for any damages arising from the use of
+this software.
+
+Permission is granted to anyone to use this software for any purpose, including
+commercial applications, and to alter it and redistribute it freely, subject to
+the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not claim
+    that you wrote the original software. If you use this software in a product,
+    an acknowledgment in the product documentation would be appreciated but is
+    not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+    misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
 ```
 
