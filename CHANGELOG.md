@@ -60,16 +60,14 @@ every release are attached to the matching GitHub release.
   record a tree-sitter parse error as `Failed` when its optional feature is
   enabled (the default CLI dependency does not enable that feature), a
   size limit lands as a required `Skipped` unit, and a binary file as a
-  required `Unsupported` unit;
-  the exit code is now fail-closed for all of them: nonzero
-  `stats.files_failed` or any required ledger unit outside
-  `Analyzed`/`Suppressed` exits 1 under the documented scan-failure
-  code. Optional units and out-of-scope exclusions (`Excluded`, ignore
-  rules) stay non-gating. An empty ledger does not independently fail the
-  CLI predicate; current content-based modes record a synthetic analyzed
-  unit. The scan still completes and renders its report, and the receipt
-  it persists records the uninspected units in its inspection ledger. Found by the
-  2026-10-05 audit of `run_scan_and_get_exit_code`.
+  required `Unsupported` unit. These required incomplete inspections now
+  produce `EXIT_INCOMPLETE` (3) from the scan's receipt instead of passing
+  as clean; complete scans with findings remain exit 1, while failures
+  before a receipt is produced still propagate as errors. Optional units
+  and out-of-scope exclusions (`Excluded`, ignore rules) stay non-gating.
+  The scan renders and persists the evidence, including uninspected units
+  in the receipt ledger. Found by the 2026-10-05 audit of
+  `run_scan_and_get_exit_code`.
 
 - Release builds: the tarball mtime pin now reads the tag commit's time
   (`git show -s --format=%ct` on the commit, not the tag — on an
