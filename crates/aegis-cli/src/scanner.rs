@@ -1216,7 +1216,11 @@ mod tests {
         let clean = execute_scan_with_stdin(&opts, "clean input\n").expect("scan succeeds");
         assert_eq!(scan_exit_code(&clean.receipt), EXIT_CLEAN);
 
-        for status in [InspectionStatus::Failed, InspectionStatus::Skipped, InspectionStatus::Unsupported] {
+        for status in [
+            InspectionStatus::Failed,
+            InspectionStatus::Skipped,
+            InspectionStatus::Unsupported,
+        ] {
             let mut receipt = clean.receipt.clone();
             receipt.inspection_ledger.record(
                 format!("synthetic-required-{status:?}"),

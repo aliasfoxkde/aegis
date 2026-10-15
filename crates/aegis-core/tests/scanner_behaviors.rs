@@ -599,7 +599,6 @@ fn scan_diff_reports_original_line_numbers_across_hunks() {
         lines.iter().all(|line| *line >= 4),
         "no finding may fall back to a position in the joined addition text, got: {lines:?}"
     );
-    );
 }
 
 #[test]
