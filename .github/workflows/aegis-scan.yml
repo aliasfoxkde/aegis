@@ -68,11 +68,13 @@ jobs:
           RUST_BACKTRACE: 1
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis scan
         id: scan
         run: |
+          # Do not let a report from an earlier attempt make this scan look complete.
+          rm -f aegis-results.sarif
           set +e
           ./target/release/aegis --format sarif scan . \
             --categories secrets,security-hardening,web-security \
@@ -150,7 +152,7 @@ jobs:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis on changed files
         run: |
@@ -196,11 +198,12 @@ jobs:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis secrets scan
         id: secrets_scan
         run: |
+          rm -f aegis-secrets.sarif
           set +e
           ./target/release/aegis --format sarif scan . \
             --categories secrets \
@@ -221,7 +224,7 @@ jobs:
 
       - name: Upload secrets SARIF
         uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
-        if: always()
+        if: always() && hashFiles('aegis-secrets.sarif') != ''
         with:
           sarif_file: aegis-secrets.sarif
           category: aegis-secrets-detection
@@ -262,11 +265,12 @@ jobs:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Scan dependencies
         id: supply_scan
         run: |
+          rm -f aegis-supply-chain.json
           set +e
           # Scan Cargo.toml and Cargo.lock for supply chain risks
           ./target/release/aegis --format json scan . \

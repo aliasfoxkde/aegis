@@ -416,6 +416,12 @@ impl Scanner {
         self.ignore_manager.should_ignore(path)
     }
 
+    /// Maximum byte size accepted for a single file by this scanner.
+    #[must_use]
+    pub fn max_file_size(&self) -> u64 {
+        self.options.max_file_size
+    }
+
     /// Update options and rebuild category scanners if needed
     ///
     /// # Panics
@@ -2179,6 +2185,7 @@ mod tests {
         });
         // Should not panic
         assert_eq!(scanner.options.max_file_size, 1024 * 1024);
+        assert_eq!(scanner.max_file_size(), 1024 * 1024);
     }
 
     #[test]
