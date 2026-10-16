@@ -240,10 +240,33 @@ fn staged_file_list(root: &Path) -> Result<Vec<String>> {
 
 /// Read the staged blob for one index path.
 fn staged_blob(root: &Path, file: &str, max_file_size: u64) -> Result<Vec<u8>> {
+    // Resolve the index entry once. Using the object ID for both the size
+    // query and content read avoids an index mutation swapping in a larger
+    // blob between those operations.
+    let oid_output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--verify", "--end-of-options"])
+        .arg(format!(":{file}"))
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to resolve staged blob for {file}: {e}"))?;
+    if !oid_output.status.success() {
+        anyhow::bail!(
+            "failed to resolve staged blob for {file}: {}",
+            String::from_utf8_lossy(&oid_output.stderr).trim()
+        );
+    }
+    let oid = String::from_utf8_lossy(&oid_output.stdout)
+        .trim()
+        .to_string();
+    if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        anyhow::bail!("git returned an invalid staged blob object ID for {file}");
+    }
+
     let size_output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["cat-file", "-s", &format!(":{file}")])
+        .args(["cat-file", "-s", &oid])
         .output()
         .map_err(|e| anyhow::anyhow!("failed to inspect staged blob size: {e}"))?;
     if !size_output.status.success() {
@@ -265,12 +288,12 @@ fn staged_blob(root: &Path, file: &str, max_file_size: u64) -> Result<Vec<u8>> {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["show", &format!(":{file}")])
+        .args(["cat-file", "blob", &oid])
         .output()
-        .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to read staged blob for {file}: {e}"))?;
     if !output.status.success() {
         anyhow::bail!(
-            "git show :{file} failed: {}",
+            "failed to read staged blob for {file}: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
@@ -314,7 +337,7 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
     stats
         .inspection_ledger
         .record("git-index", InspectionStatus::Analyzed, true, None);
-    let max_file_size = CoreOptions::default().max_file_size;
+    let max_file_size = scanner.max_file_size();
     for file in files {
         // Staged blobs bypass `scan_file`, so ignore rules are applied
         // here explicitly; otherwise a staged `.aegis/baseline.json`
@@ -1870,10 +1893,17 @@ mod tests {
     }
 
     #[test]
-    fn test_staged_scan_rejects_oversized_blob_before_read() {
+    fn test_staged_scan_respects_configured_blob_limit_before_read() {
         let fixture = tempfile::tempdir().unwrap();
         git_repo_with_staged(fixture.path(), &[("clean.rs", "x")]);
-        let error = staged_blob(fixture.path(), "clean.rs", 0).unwrap_err();
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts)
+            .unwrap()
+            .with_options(CoreOptions {
+                max_file_size: 0,
+                ..Default::default()
+            });
+        let error = perform_scan(&scanner, &opts).unwrap_err();
         assert!(error.to_string().contains("exceeding"));
     }
 
