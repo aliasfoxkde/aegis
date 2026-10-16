@@ -164,7 +164,7 @@ fn stats_with_findings(mut stats: ScanStats, findings: &[Finding]) -> ScanStats 
 ///
 /// Returns an error when the diff file cannot be read, when the target file
 /// or directory cannot be scanned, or when `--staged` runs outside a git
-/// repository.
+/// repository or contains an oversized/unreadable staged blob.
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
         // Scan only changed lines from a diff file
@@ -210,8 +210,8 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
 }
 
 /// List the paths staged in the git index at `root` (added, copied,
-/// modified, renamed). Paths are relative to the repository root, which is
-/// also the form `git show :<path>` expects.
+/// modified, renamed, or changed file type). Paths are relative to the
+/// repository root, which is also the form `git show :<path>` expects.
 fn staged_file_list(root: &Path) -> Result<Vec<String>> {
     let output = std::process::Command::new("git")
         .arg("-C")
@@ -221,7 +221,7 @@ fn staged_file_list(root: &Path) -> Result<Vec<String>> {
             "--cached",
             "--name-only",
             "-z",
-            "--diff-filter=ACMR",
+            "--diff-filter=ACMRT",
         ])
         .output()
         .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
@@ -239,7 +239,29 @@ fn staged_file_list(root: &Path) -> Result<Vec<String>> {
 }
 
 /// Read the staged blob for one index path.
-fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
+fn staged_blob(root: &Path, file: &str, max_file_size: u64) -> Result<Vec<u8>> {
+    let size_output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["cat-file", "-s", &format!(":{file}")])
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to inspect staged blob size: {e}"))?;
+    if !size_output.status.success() {
+        anyhow::bail!(
+            "failed to inspect staged blob size for {file}: {}",
+            String::from_utf8_lossy(&size_output.stderr).trim()
+        );
+    }
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|e| anyhow::anyhow!("invalid staged blob size for {file}: {e}"))?;
+    if size > max_file_size {
+        anyhow::bail!(
+            "staged file {file} is {size} bytes, exceeding the {max_file_size} byte scan limit"
+        );
+    }
+
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
@@ -250,6 +272,11 @@ fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
         anyhow::bail!(
             "git show :{file} failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    if output.stdout.len() as u64 > max_file_size {
+        anyhow::bail!(
+            "staged file {file} grew beyond the {max_file_size} byte scan limit while reading"
         );
     }
     Ok(output.stdout)
@@ -287,6 +314,7 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
     stats
         .inspection_ledger
         .record("git-index", InspectionStatus::Analyzed, true, None);
+    let max_file_size = CoreOptions::default().max_file_size;
     for file in files {
         // Staged blobs bypass `scan_file`, so ignore rules are applied
         // here explicitly; otherwise a staged `.aegis/baseline.json`
@@ -301,7 +329,7 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
             );
             continue;
         }
-        let blob = staged_blob(&opts.path, &file)?;
+        let blob = staged_blob(&opts.path, &file, max_file_size)?;
         // Same NUL-sniff the engine applies to files on disk; skipped
         // staged blobs are counted exactly like `scan_dir` skips binaries.
         if aegis_core::scanner::is_binary_blob(&blob) {
@@ -314,8 +342,9 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
             );
             continue;
         }
-        let content = String::from_utf8_lossy(&blob);
-        let file_findings = scanner.scan_string(&content, &file);
+        let content = std::str::from_utf8(&blob)
+            .map_err(|e| anyhow::anyhow!("staged file {file} is not valid UTF-8: {e}"))?;
+        let file_findings = scanner.scan_string(content, &file);
         stats.files_scanned += 1;
         stats.bytes_scanned += blob.len() as u64;
         stats
@@ -507,6 +536,24 @@ pub fn scan_exit_code(receipt: &ScanReceipt) -> i32 {
     }
 }
 
+/// Remove a previous report before scanning so consumers cannot mistake it
+/// for output from a scan that fails before rendering a replacement.
+fn retire_output_file(path: Option<&Path>) -> Result<()> {
+    if let Some(path) = path {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                anyhow::bail!(
+                    "failed to retire previous scan report {}: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Run scan and return exit code (testable async wrapper)
 ///
 /// The exit code comes from [`scan_exit_code`] on the scan's own receipt:
@@ -525,6 +572,7 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     // Fail-closed: remove any existing receipt before scan so a failed scan
     // cannot be confused with a successful one whose result we never persisted.
     retire_receipt_if_configured();
+    retire_output_file(opts.output_file.as_deref())?;
 
     let result = if opts.scan_stdin {
         let content = read_stdin_content().await?;
@@ -1336,6 +1384,70 @@ mod tests {
         std::fs::remove_dir_all(scan_path).ok();
     }
 
+    #[tokio::test]
+    async fn test_failing_scan_does_not_leave_stale_output_file() {
+        let fixture = tempfile::tempdir().unwrap();
+        let report_path = fixture.path().join("report.sarif");
+        std::fs::write(&report_path, "stale report").unwrap();
+        let opts = ScanOptions {
+            path: fixture.path().join("missing-input"),
+            scan_file: true,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: Some(report_path.clone()),
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Sarif,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            anomaly_detectors: None,
+        };
+
+        let result = run_scan_and_get_exit_code(opts).await;
+        assert!(result.is_err(), "missing scan input must fail");
+        assert!(
+            !report_path.exists(),
+            "a failed scan must not leave the previous report available"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_successful_scan_writes_replacement_output_file() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("clean.rs"), "fn main() {}\n").unwrap();
+        let report_path = fixture.path().join("report.sarif");
+        std::fs::write(&report_path, "stale report").unwrap();
+        let opts = ScanOptions {
+            path: fixture.path().to_path_buf(),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: Some(report_path.clone()),
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Sarif,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            anomaly_detectors: None,
+        };
+
+        let exit_code = run_scan_and_get_exit_code(opts).await.unwrap();
+        assert_eq!(exit_code, 0);
+        let report = std::fs::read_to_string(report_path).unwrap();
+        assert!(report.contains("\"version\": \"2.1.0\""));
+        assert!(!report.contains("stale report"));
+    }
+
     /// RAII guard that sets an env var on construction and removes it on drop.
     struct OnDropEnvVar {
         key: String,
@@ -1718,6 +1830,74 @@ mod tests {
             err.to_string().contains("git repository"),
             "error must name the requirement, got: {err}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_staged_scan_includes_file_type_changes() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture.path())
+            .output()
+            .expect("git init must succeed");
+        let path = fixture.path().join("config.env"); // aegis:ignore:env-file-in-git
+        symlink("safe", &path).unwrap();
+        let add_symlink = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "config.env"])
+            .output()
+            .unwrap();
+        assert!(add_symlink.status.success());
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, STAGED_SECRET).unwrap(); // aegis:ignore:env-file-in-git
+        let add_file = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "--", "config.env"])
+            .output()
+            .unwrap();
+        assert!(add_file.status.success());
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(findings.len(), 1, "a staged type change must be scanned");
+    }
+
+    #[test]
+    fn test_staged_scan_rejects_oversized_blob_before_read() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("clean.rs", "x")]);
+        let error = staged_blob(fixture.path(), "clean.rs", 0).unwrap_err();
+        assert!(error.to_string().contains("exceeding"));
+    }
+
+    #[test]
+    fn test_staged_scan_rejects_invalid_utf8() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture.path())
+            .output()
+            .expect("git init must succeed");
+        std::fs::write(fixture.path().join("invalid.txt"), [0xff]).unwrap();
+        let add = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "invalid.txt"])
+            .output()
+            .unwrap();
+        assert!(add.status.success());
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let error = perform_scan(&scanner, &opts).unwrap_err();
+        assert!(error.to_string().contains("not valid UTF-8"));
     }
 
     #[test]
