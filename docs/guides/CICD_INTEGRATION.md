@@ -45,6 +45,55 @@ key is followed by a space. Because the scan already exits non-zero when
 it produces findings, the "Fail on Critical" step is only needed when you
 want to gate on one severity rather than on any finding.
 
+## GitHub Code Scanning (SARIF)
+
+To publish Aegis findings in the repository's **Security → Code scanning**
+view, emit SARIF and upload it with the GitHub code-scanning action. The
+workflow needs `security-events: write`; the scan step keeps Aegis's exit
+status so findings at or above the selected threshold can fail the job.
+
+```yaml
+name: Aegis security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  aegis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Aegis
+        run: |
+          curl -fsSLO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+          tar -xzf aegis-linux-x86_64.tar.gz
+          sudo install -m 0755 aegis /usr/local/bin/aegis
+
+      - name: Scan and write SARIF
+        run: aegis --format sarif scan . --severity-threshold high --output-file aegis-results.sarif
+
+      - name: Upload SARIF to GitHub code scanning
+        if: always() && hashFiles('aegis-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: aegis-results.sarif
+          category: aegis
+```
+
+The upload step is conditional so a missing report does not cause a second
+failure that hides the original scan error. Confirm that code scanning is
+available for the repository and that the workflow token has the permissions
+shown above. For artifact retention without code-scanning integration, use
+the JSON artifact example below.
+
 ## GitLab CI
 
 ```yaml
