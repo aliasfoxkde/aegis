@@ -1,0 +1,90 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Aegis",
+          "version": "0.6.4",
+          "rules": [
+            {
+              "id": "aegis-8df48180634c583c1bd7d2f67cd63843faba1b90ffe640b16f54c378d3126a55",
+              "name": "p0_synthetic_finding",
+              "properties": {
+                "tags": [
+                  "security",
+                  "synthetic"
+                ],
+                "security-severity": "8.5"
+              },
+              "relationships": [
+                {
+                  "target": {
+                    "id": "CWE-532",
+                    "index": 0,
+                    "toolComponent": {
+                      "name": "CWE",
+                      "index": 0
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "aegis-8df48180634c583c1bd7d2f67cd63843faba1b90ffe640b16f54c378d3126a55",
+          "level": "error",
+          "message": {
+            "text": "Synthetic P0 contract fixture finding: the Aegis rule p0_synthetic_finding anchored at p0-synthetic-source.txt line 1. Fixture content, not a real detection."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "p0-synthetic-source.txt"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 1
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "inspectionLedger": {
+          "schema_version": 1,
+          "units": [
+            {
+              "unit_id": "p0-synthetic-source.txt",
+              "status": "analyzed",
+              "required": true
+            }
+          ]
+        }
+      },
+      "taxonomies": [
+        {
+          "name": "CWE",
+          "version": "4.14",
+          "organization": "MITRE",
+          "shortDescription": {
+            "text": "The MITRE Common Weakness Enumeration"
+          },
+          "isComprehensive": false,
+          "taxa": [
+            {
+              "id": "CWE-532",
+              "name": "Insertion of Sensitive Information into Log File",
+              "helpUri": "https://cwe.mitre.org/data/definitions/532.html"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
