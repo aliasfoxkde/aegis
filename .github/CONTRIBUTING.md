@@ -150,6 +150,21 @@ chore: bump clap to 4.6.6
 4. PRs require 1 code owner approval
 5. Merges are **squash-only** with `--delete-branch`
 
+### Keeping a branch current
+
+Merges are squash-only, so `main`'s history is never replayed onto your
+branch and a long-lived branch drifts. Bring `main` **in**:
+
+```bash
+git fetch origin
+git merge origin/main      # not rebase, not force-push
+```
+
+Rebasing rewrites a pushed branch, which force-pushes need; merging
+keeps the pushed history intact and lets CI re-run on the new head.
+If CI caught a regression on an already-pushed head, fix it forward in
+a new commit on the same branch — do not rewrite the branch.
+
 ---
 
 ## Project Structure

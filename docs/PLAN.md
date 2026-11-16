@@ -7,17 +7,17 @@ and quality phases. Status is updated as phases land.
 
 ---
 
-## Current state (2026-09-24, phases 0–13 and 15 of the improvement plan closed, phase 14 delivered except ML/regex hybrid and API-call verification; v0.6.3 released)
+## Current state (2026-11-16, phases 0–13 and 15 of the improvement plan closed, phase 14 delivered except ML/regex hybrid and API-call verification; v0.6.4 published 2026-09-27, with 24 commits merged since and no release yet)
 
 | Dimension | State |
 | --- | --- |
 | Patterns | 677 across 35 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
-| Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
+| Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool; path classes (`--classify-path`), inline `aegis:synthetic` annotations, and secret-triage verdicts (all three shipped in #185) |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 925 tests passing in the CI test lane (2026-11-16, `bce16c5`), `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
-| Release | v0.6.3 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
-| Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
+| Release | v0.6.4 published 2026-09-27; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish). 24 commits are merged and unreleased; the next release is v0.6.5 |
+| Known defects | Open items are tracked in the [2026-11-16 gap analysis](audits/2026-11-16-gap-analysis.md): the daemon's and the MCP server's `config` field is never read (neither wire surface can apply path classes, thresholds, or category filters), nothing enforces patch coverage, and the release/changelog debt for the 24 unreleased commits. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
 
 Crate responsibilities: [docs/MODULES.md](MODULES.md) and
 [docs/architecture/OVERVIEW.md](architecture/OVERVIEW.md). Per-category
@@ -588,10 +588,11 @@ than policy. Resuming this item means filing the feature upstream
 (status aggregation + ref-update policy hooks) in the GitForge repo. ☐
 
 **F. Release provenance gaps — MEDIUM, open.**
-- `scripts/release/Dockerfile` builds on `rust:1-bookworm` (floating
-  minor) while `docker/Dockerfile` pins `rust:1.88-slim` — same tag,
-  different toolchains over time, different binaries. Pin both to the
-  same digest or versioned tag.
+- The two builder images now pin the same toolchain: `scripts/release/Dockerfile`
+  builds on `rust:1.88-bookworm` and `docker/Dockerfile` on
+  `rust:1.88-slim` (delivered 2026-09-24, Phase 17H). The open question
+  is whether both should move to a digest-pinned base rather than a
+  version-pinned tag.
 - `checksums.txt` on the GitHub mirror is verified by
   `sha256sum -c` but itself unsigned; the GitForge path carries the
   minisign-signed attestation. Sign the mirror's checksums with the same
@@ -637,6 +638,33 @@ volatile asset left is `attestation.json`'s `built_at`.
 and a numbered ADR register (six real decisions already live in the
 phase history above; backfill into `docs/decisions/` only if a decision
 needs to be cited independently).
+
+### Phase 18 — Gap analysis and systematic work order (opened 2026-11-16)
+
+The full analysis lives in
+[docs/audits/2026-11-16-gap-analysis.md](audits/2026-11-16-gap-analysis.md):
+every claim names the file, gate, or run it came from. This phase
+records the order the work is done in, so the sequence is written down
+rather than re-derived each time.
+
+1. **Land the triage-reason fix** (PR #195) — a triage reason named the
+   placeholder marker it matched, which the verdict contract forbids.
+2. **Reject an invalid path-class rule in `Scanner::from_config`**
+   (PR #197) — the matcher dropped a glob it could not compile, so the
+   caller went on believing a path class was in force.
+3. **Resolve the inert `config` field on the daemon and the MCP
+   server** — both publish a configuration that is written once and
+   never read. Apply it or delete it; a write-only handle is a trap.
+4. **Release the 24 unreleased commits as v0.6.5**, with the changelog
+   entries the merged feature set never got.
+5. **Enforce patch coverage** — only the project-wide floor is
+   enforced, so a pull request can add uncovered lines and stay green.
+6. **Pin the triage ergonomics on the wire surfaces** — conformance
+   fixtures for path classes, the synthetic annotation, and a triage
+   verdict, once step 3 makes them reachable.
+7. **Documentation cleanups** — Phase 17F's first bullet (corrected
+   above), the branch-sync rule in `CONTRIBUTING.md`, and the
+   current-state block (refreshed above).
 
 ---
 

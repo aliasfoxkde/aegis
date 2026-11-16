@@ -44,7 +44,7 @@ guide, but nothing tested the *reasons* against the value — the existing
 test asserted the whole value was absent, which a single matched word
 satisfied. A contract that is not asserted is a comment.
 
-### 1.2 `Scanner::from_config` silently drops an invalid path-class rule — P1, OPEN
+### 1.2 `Scanner::from_config` silently drops an invalid path-class rule — P1, IN FLIGHT (PR #197)
 
 `Scanner::from_config` copies `config.path_classes` into the scanner's
 options and builds the matcher without validating the globs
@@ -65,6 +65,13 @@ an invalid path-class rule, or a dedicated error enum for
 `from_config` — then make `from_config` fail loudly instead of
 degrading. Add a regression that a bad glob in a `Config` is an error,
 not a warning.
+
+Decided and in flight in PR #197: the error surface is a
+`PatternError::InvalidPathClass` variant (the function already maps
+configuration problems such as an unknown category into `PatternError`),
+and `from_config` rejects the configuration naming the offending glob.
+Integration coverage over the public entry point is in the same
+change.
 
 ---
 
@@ -230,9 +237,8 @@ the gate that proves it.
 
 1. **Land PR #195** (triage reason) — Clippy, Format, and the three-OS
    test matrix are the gate.
-2. **Make `Scanner::from_config` reject an invalid path-class rule**
-   (item 1.2) — decide the error surface, add the regression, prove it
-   with the core test suite.
+2. **Land PR #197** (reject an invalid path-class rule in
+   `from_config`, item 1.2) — the core test suite is the gate.
 3. **Resolve the inert `config` field on the daemon and the MCP server**
    (item 2.1) — apply it or delete it; the daemon's own test suite and
    the MCP wire conformance suite are the gate.
