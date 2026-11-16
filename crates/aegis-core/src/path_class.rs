@@ -124,12 +124,12 @@ impl PathClassMatcher {
 /// a legal character in a file name, so it must not be read as a
 /// separator there.
 fn normalize_separators(path: &str) -> String {
-    normalize_separators_with(path, std::path::MAIN_SEPARATOR)
+    normalize_separators_with(path, std::path::MAIN_SEPARATOR_STR)
 }
 
 /// The separator-replacing form, with the separator given explicitly so
 /// the behaviour can be exercised on every platform.
-fn normalize_separators_with(path: &str, separator: char) -> String {
+fn normalize_separators_with(path: &str, separator: &str) -> String {
     if separator == GLOB_SEPARATOR {
         return path.to_owned();
     }
@@ -137,7 +137,7 @@ fn normalize_separators_with(path: &str, separator: char) -> String {
 }
 
 /// The separator a glob is written with.
-const GLOB_SEPARATOR: char = '/';
+const GLOB_SEPARATOR: &str = "/";
 
 /// The path with leading components removed at every directory boundary.
 ///
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn the_platform_separator_is_replaced_with_the_glob_separator() {
         assert_eq!(
-            normalize_separators_with("docs\\guides\\setup.md", '\\'),
+            normalize_separators_with("docs\\guides\\setup.md", "\\"),
             "docs/guides/setup.md"
         );
     }
@@ -275,7 +275,7 @@ mod tests {
     #[test]
     fn the_glob_separator_is_left_alone() {
         assert_eq!(
-            normalize_separators_with("docs/guides/setup.md", '/'),
+            normalize_separators_with("docs/guides/setup.md", "/"),
             "docs/guides/setup.md"
         );
     }
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn a_backslash_is_not_a_separator_on_a_platform_that_does_not_use_one() {
         assert_eq!(
-            normalize_separators_with("docs\\guides\\setup.md", '/'),
+            normalize_separators_with("docs\\guides\\setup.md", "/"),
             "docs\\guides\\setup.md"
         );
     }
