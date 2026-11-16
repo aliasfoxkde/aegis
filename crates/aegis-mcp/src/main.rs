@@ -95,7 +95,7 @@ impl ServerState {
     /// scanner in place, so a rejected configuration never leaves the
     /// server half-configured.
     pub async fn set_config(&self, config: Config) -> std::result::Result<(), String> {
-        let bundle = self.current_bundle().await?;
+        let bundle = self.current_bundle().await;
         // Rebuilding the scanner compiles the whole rule set, which is
         // CPU-bound; `spawn_blocking` keeps it off the reactor so other
         // tool calls keep being served while the configuration changes.
@@ -111,11 +111,11 @@ impl ServerState {
 
     /// The rule set the server is serving: the installed bundle when one
     /// was installed, the shipped corpus otherwise.
-    async fn current_bundle(&self) -> std::result::Result<Bundle, String> {
+    async fn current_bundle(&self) -> Bundle {
         if let Some(bundle) = self.installed_bundle.read().await.clone() {
-            return Ok(bundle);
+            return bundle;
         }
-        Ok(shipped_bundle())
+        shipped_bundle()
     }
 
     /// Compile the bundled patterns on first use instead of at startup.
@@ -138,7 +138,7 @@ impl ServerState {
         }
         self.patterns_init
             .get_or_init(|| async {
-                let bundle = self.current_bundle().await?;
+                let bundle = self.current_bundle().await;
                 let config = self.config.read().await.clone();
                 let compiled: std::result::Result<Scanner, String> =
                     match tokio::task::spawn_blocking(move || scanner_for(&bundle, &config)).await {
@@ -1185,8 +1185,10 @@ mod tests {
             "the fixture must trip a rule outside the secrets category"
         );
 
-        let mut config = Config::default();
-        config.enabled_categories = Some(vec!["secrets".to_string()]);
+        let config = Config {
+            enabled_categories: Some(vec!["secrets".to_string()]),
+            ..Config::default()
+        };
         state
             .set_config(config)
             .await
@@ -1220,11 +1222,13 @@ mod tests {
     #[tokio::test]
     async fn a_configuration_with_an_uncompilable_path_class_is_rejected() {
         let state = Arc::new(ServerState::new());
-        let mut config = Config::default();
-        config.path_classes = vec![aegis_core::PathClassRule {
-            glob: "docs/[".to_string(),
-            class: aegis_core::PathClass::Docs,
-        }];
+        let config = Config {
+            path_classes: vec![aegis_core::PathClassRule {
+                glob: "docs/[".to_string(),
+                class: aegis_core::PathClass::Docs,
+            }],
+            ..Config::default()
+        };
 
         let error = state
             .set_config(config)
@@ -1239,8 +1243,10 @@ mod tests {
     #[tokio::test]
     async fn a_configuration_with_an_unusable_severity_threshold_is_rejected() {
         let state = Arc::new(ServerState::new());
-        let mut config = Config::default();
-        config.severity_threshold = Some("severe".to_string());
+        let config = Config {
+            severity_threshold: Some("severe".to_string()),
+            ..Config::default()
+        };
 
         let error = state
             .set_config(config)

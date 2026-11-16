@@ -1116,8 +1116,10 @@ mod tests {
             "the fixture must trip a rule outside the secrets category"
         );
 
-        let mut config = Config::default();
-        config.enabled_categories = Some(vec!["secrets".to_string()]);
+        let config = Config {
+            enabled_categories: Some(vec!["secrets".to_string()]),
+            ..Config::default()
+        };
         state
             .set_config(config)
             .await
@@ -1157,9 +1159,12 @@ mod tests {
             PathBuf::from("/tmp/test.sock"),
             dir.path(),
         ));
-        let mut config = Config::default();
-        config.path_classes =
-            vec![aegis_core::PathClassRule::new("docs/**", "docs").expect("valid rule")];
+        let config = Config {
+            path_classes: vec![
+                aegis_core::PathClassRule::new("docs/**", "docs").expect("valid rule")
+            ],
+            ..Config::default()
+        };
         state
             .set_config(config)
             .await
@@ -1189,11 +1194,13 @@ mod tests {
     #[tokio::test]
     async fn a_configuration_with_an_uncompilable_path_class_is_rejected() {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
-        let mut config = Config::default();
-        config.path_classes = vec![aegis_core::PathClassRule {
-            glob: "docs/[".to_string(),
-            class: aegis_core::PathClass::Docs,
-        }];
+        let config = Config {
+            path_classes: vec![aegis_core::PathClassRule {
+                glob: "docs/[".to_string(),
+                class: aegis_core::PathClass::Docs,
+            }],
+            ..Config::default()
+        };
 
         let error = state
             .set_config(config)
@@ -1208,8 +1215,10 @@ mod tests {
     #[tokio::test]
     async fn a_configuration_with_an_unusable_severity_threshold_is_rejected() {
         let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
-        let mut config = Config::default();
-        config.severity_threshold = Some("severe".to_string());
+        let config = Config {
+            severity_threshold: Some("severe".to_string()),
+            ..Config::default()
+        };
 
         let error = state
             .set_config(config)
