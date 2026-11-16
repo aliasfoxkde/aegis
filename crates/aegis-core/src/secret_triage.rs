@@ -23,7 +23,9 @@
 //! The verdict never repeats the value it judged. The reasons name the
 //! *signal* (`"entropy 4.21 over 24 bytes is consistent with a random
 //! credential"`), never a fragment of the credential, because a report that
-//! says "the secret contains `example`" is itself a disclosure.
+//! says "the secret contains `example`" is itself a disclosure. The
+//! placeholder marker that matched is not named either: the signal is
+//! reported, not the text it matched.
 
 use serde::{Deserialize, Serialize};
 
@@ -166,12 +168,15 @@ pub fn triage_secret(value: &str) -> SecretTriage {
         reasons.push("matches a published documentation example".to_string());
     }
 
-    if let Some(word) = PLACEHOLDER_WORDS
+    if PLACEHOLDER_WORDS
         .iter()
-        .find(|word| lowered.contains(**word))
+        .any(|word| lowered.contains(**word))
     {
         placeholder = true;
-        reasons.push(format!("contains the placeholder marker `{word}`"));
+        // The signal is named; the word that matched is not. A reason that
+        // said "contains the placeholder marker `changeme`" would quote a
+        // fragment of the credential into the report.
+        reasons.push("contains a known placeholder marker".to_string());
     }
 
     if has_template_shape(value) {
@@ -329,6 +334,23 @@ mod tests {
             assert!(
                 !reason.contains(secret),
                 "a reason must not repeat the value"
+            );
+        }
+    }
+
+    #[test]
+    fn a_reason_never_names_the_placeholder_word_it_matched() {
+        // "changeme" appears in no other reason string, so finding it in a
+        // reason means the reason echoed the matched word out of the value.
+        let secret = "changeme-0123456789abcdef";
+        let verdict = triage_secret(secret);
+        assert_eq!(verdict.outcome, TriageOutcome::LikelyPlaceholder);
+        for reason in &verdict.reasons {
+            // The failure message names no part of the verdict: a panic
+            // that printed a reason could print a fragment of the value.
+            assert!(
+                !reason.contains("changeme"),
+                "a reason must not name the matched marker"
             );
         }
     }
