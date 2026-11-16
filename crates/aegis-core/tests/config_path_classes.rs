@@ -40,13 +40,14 @@ fn definition() -> PatternDefinition {
 
 /// A configuration over one pattern, carrying the given path classes.
 fn config_with(rules: Vec<PathClassRule>) -> Config {
-    let mut config = Config::default();
-    config.bundle = Bundle::new(vec![definition()]);
-    config.path_classes = rules;
-    // The anomaly layer would report findings of its own; this test is
-    // about path classification.
-    config.anomaly_detectors = Some(Vec::new());
-    config
+    Config {
+        bundle: Bundle::new(vec![definition()]),
+        path_classes: rules,
+        // The anomaly layer would report findings of its own; this test is
+        // about path classification.
+        anomaly_detectors: Some(Vec::new()),
+        ..Config::default()
+    }
 }
 
 /// The findings the registered pattern produced.
