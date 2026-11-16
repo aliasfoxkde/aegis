@@ -77,7 +77,7 @@ change.
 
 ## 2. Feature reach across surfaces — P1
 
-### 2.1 The daemon's and the MCP server's `config` is inert — IN FLIGHT (PR #198)
+### 2.1 The daemon's and the MCP server's `config` is inert — RESOLVED (PRs #198, #199)
 
 Both wire surfaces published a live configuration that was never read:
 
@@ -117,11 +117,24 @@ method. A peer that can set the severity threshold or the category list
 can weaken the very scan it was asked for — the configuration belongs to
 the operator side of the trust boundary, not to the client.
 
-**Still open, and small:** both binaries start with `Config::default()`.
-An operator profile file — the same `config/profiles/*.json` the CLI
-reads — is how a deployment would choose categories, a severity
-threshold, or path classes at startup. That is operator-side by design,
-and it is the remaining step for this item.
+**Resolved in PR #199** — the operator profile file. `AEGIS_DAEMON_CONFIG`
+and `AEGIS_MCP_CONFIG` name the same JSON profile document the CLI reads
+with `aegis --config <file>`; the categories, severity threshold,
+anomaly detectors, and path classes in it are applied before the daemon
+binds its socket and before the MCP server answers. A configuration that
+cannot be applied stops the process instead of leaving it serving scans
+it was not configured for, and an empty variable is refused rather than
+read as "no configuration". The configuration stays operator-side: no
+request over either protocol changes it.
+
+**A defect found while landing it.** The two paths that build and install
+a scanner — the lazy compilation on first use and the configuration change
+— could interleave: a compilation that began before a configuration was
+applied installed its scanner afterwards and silently undid the change.
+That is the same "the configuration does nothing" defect this item exists
+to remove, reached by a different route. Both surfaces now serialize the
+two paths with one lock, and both carry a regression that asserts the
+configuration in force after the change is the one that was applied.
 
 ### 2.2 The triage ergonomics are CLI-only — P2
 
@@ -264,13 +277,15 @@ the gate that proves it.
    `from_config`, item 1.2) — the core test suite is the gate.
 3. **Resolve the inert `config` field on the daemon and the MCP server**
    (item 2.1) — apply it or delete it; the daemon's own test suite and
-   the MCP wire conformance suite are the gate. *Applied in PR #198: both
-   surfaces read the configuration when the scanner is built, publish it,
-   and rebuild the scanner around a new one. What is left is small and
-   operator-side — an operator profile file the binaries read at startup,
-   so a deployment can choose categories, a severity threshold, or path
-   classes without a wire method that would let a client weaken its own
-   scan.*
+   the MCP wire conformance suite are the gate. *Done in PR #198 and
+   PR #199: both surfaces read the configuration when the scanner is
+   built, publish it, and rebuild the scanner around a new one; and an
+   operator profile file — `AEGIS_DAEMON_CONFIG`, `AEGIS_MCP_CONFIG` —
+   lets a deployment choose categories, a severity threshold, or path
+   classes at startup, without a wire method that would let a client
+   weaken its own scan. The two paths that install a scanner are now
+   serialized, so a compilation that began before a configuration was
+   applied cannot undo it.*
 4. **Write the changelog entries for PR #193's features, refresh
    `docs/PLAN.md`'s current-state block, and cut `v0.6.5`** (items 3.1,
    3.2) — the release workflow is the gate.
