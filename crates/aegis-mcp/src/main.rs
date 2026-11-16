@@ -6,7 +6,7 @@ mod protocol;
 mod sandbox;
 
 use aegis_core::transport::{read_bounded_line, FrameRead, MAX_FRAME_BYTES};
-use aegis_core::{Bundle, Config, PatternDefinition, ScanReceipt, ScanStats, Scanner};
+use aegis_core::{Bundle, Config, PatternDefinition, ScanOptions, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
@@ -23,7 +23,17 @@ pub struct ServerState {
     pub scanner: RwLock<Scanner>,
     /// Configuration in force for the session, seeded with defaults at
     /// startup.
-    pub config: RwLock<Config>,
+    ///
+    /// The configuration is not merely recorded: the categories, severity
+    /// threshold, anomaly detectors, and path classes it names are in
+    /// force for the scans that follow. It is written only through
+    /// [`ServerState::set_config`], which rebuilds the scanner around it,
+    /// so the two are replaced together.
+    config: RwLock<Config>,
+    /// The bundle installed by `update_bundle`, kept so a configuration
+    /// applied later can be built around the same rules instead of
+    /// silently falling back to the shipped corpus.
+    installed_bundle: RwLock<Option<Bundle>>,
     /// Version of the bundle currently serving scans, `"0.0.0"` until one is
     /// installed.
     pub bundle_version: RwLock<String>,
@@ -51,11 +61,66 @@ impl ServerState {
         Self {
             scanner: RwLock::new(Scanner::new()),
             config: RwLock::new(config),
+            installed_bundle: RwLock::new(None),
             bundle_version: RwLock::new(String::from("0.0.0")),
             bundle_checksum: RwLock::new(String::new()),
             patterns_init: tokio::sync::OnceCell::const_new(),
             bundle_swapped: AtomicBool::new(false),
         }
+    }
+
+    /// The configuration in force.
+    ///
+    /// The configuration that is returned is the one the scanner was built
+    /// from, so a caller that reads it after [`Self::set_config`] returns
+    /// learns what the server is actually applying.
+    #[must_use]
+    pub async fn config(&self) -> Config {
+        self.config.read().await.clone()
+    }
+
+    /// Apply a configuration and rebuild the scanner around it.
+    ///
+    /// The categories, severity threshold, anomaly detectors, and path
+    /// classes the configuration names are in force for the scans that
+    /// follow. The rule set stays in force: a configuration says what to
+    /// look for, not which rules to ship, so an installed bundle keeps
+    /// serving and the shipped corpus is used when no bundle is installed.
+    ///
+    /// # Errors
+    /// Returns a message naming the reason the configuration was rejected
+    /// — an unknown category, a path-class rule whose glob does not
+    /// compile, a severity threshold no severity name matches, or an
+    /// unknown anomaly detector — and leaves the previous configuration and
+    /// scanner in place, so a rejected configuration never leaves the
+    /// server half-configured.
+    pub async fn set_config(&self, config: Config) -> Result<(), String> {
+        let bundle = self.current_bundle().await?;
+        // Rebuilding the scanner compiles the whole rule set, which is
+        // CPU-bound; `spawn_blocking` keeps it off the reactor so other
+        // tool calls keep being served while the configuration changes.
+        let applied = config.clone();
+        let rebuilt = tokio::task::spawn_blocking(move || scanner_for(&bundle, &applied))
+            .await
+            .map_err(|error| format!("scanner rebuild task failed: {error}"))?;
+        let scanner = rebuilt?;
+        *self.scanner.write().await = scanner;
+        *self.config.write().await = config;
+        Ok(())
+    }
+
+    /// The rule set the server is serving: the installed bundle when one
+    /// was installed, the shipped corpus otherwise.
+    async fn current_bundle(&self) -> Result<Bundle, String> {
+        if let Some(bundle) = self.installed_bundle.read().await.clone() {
+            return Ok(bundle);
+        }
+        Ok(Bundle::new(
+            aegis_patterns::all_patterns()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        ))
     }
 
     /// Compile the bundled patterns on first use instead of at startup.
@@ -64,6 +129,10 @@ impl ServerState {
     /// the reactor, and the `OnceCell` makes concurrent first requests
     /// share one compilation. Fails closed: a compilation error surfaces on
     /// every request instead of degrading to a scanner with no patterns.
+    ///
+    /// The configuration in force when the patterns are compiled is the one
+    /// the scanner is built from, so a configuration applied before the
+    /// first request is honoured rather than overwritten.
     ///
     /// # Errors
     /// Returns `InternalError` when the pattern compilation task fails or
@@ -74,11 +143,13 @@ impl ServerState {
         }
         self.patterns_init
             .get_or_init(|| async {
+                let bundle = self.current_bundle().await?;
+                let config = self.config.read().await.clone();
                 let compiled: std::result::Result<Scanner, String> =
-                    tokio::task::spawn_blocking(init_scanner)
-                        .await
-                        .map_err(|error| format!("pattern compilation task failed: {error}"))
-                        .and_then(|result| result.map_err(|error| error.to_string()));
+                    match tokio::task::spawn_blocking(move || scanner_for(&bundle, &config)).await {
+                        Ok(result) => result,
+                        Err(error) => Err(format!("pattern compilation task failed: {error}")),
+                    };
                 match compiled {
                     Ok(scanner) => {
                         *self.scanner.write().await = scanner;
@@ -95,6 +166,53 @@ impl ServerState {
                 data: None,
             })
     }
+}
+
+/// Build a scanner over a rule set with a configuration in force.
+///
+/// The configuration names the categories to scan, the severity threshold,
+/// the anomaly detectors, and the path classes; the bundle stays the rule
+/// set, because a configuration says what to look for, not which rules to
+/// ship.
+///
+/// # Errors
+///
+/// Returns a message naming the reason the configuration was rejected —
+/// an unknown category, a path-class rule whose glob does not compile, a
+/// severity threshold no severity name matches, or an unknown anomaly
+/// detector. The scanner is not built, so a rejected configuration leaves
+/// the server serving the configuration it already had.
+fn scanner_for(bundle: &Bundle, config: &Config) -> Result<Scanner, String> {
+    // A rule whose glob does not compile classifies nothing, so the
+    // configuration is rejected here instead of being applied as a silent
+    // no-op: the caller learns that its path class never fired.
+    for rule in &config.path_classes {
+        rule.validate()?;
+    }
+
+    let mut configured = config.clone();
+    configured.bundle = bundle.clone();
+
+    let scanner = Scanner::from_config(&configured).map_err(|error| error.to_string())?;
+
+    // `from_config` applies the categories and the path classes; the
+    // threshold and the detector selection are scan options, so they are
+    // applied here — with the path classes carried over, because the
+    // options replace the ones the scanner was built with.
+    let options = ScanOptions {
+        path_classes: configured.path_classes.clone(),
+        severity_threshold: configured.severity_threshold.clone(),
+        anomaly_detectors: configured.anomaly_detectors.clone(),
+        ..ScanOptions::default()
+    };
+    // A threshold or a detector name that cannot be honoured would quiet
+    // the scan without saying so, so the configuration is rejected instead.
+    options.validate()?;
+    if let Some(detectors) = &options.anomaly_detectors {
+        aegis_core::anomalies::validate_detector_names(detectors)?;
+    }
+
+    Ok(scanner.with_options(options))
 }
 
 impl Default for ServerState {
@@ -378,8 +496,11 @@ impl AegisRpcImpl {
                 data: None,
             })?;
 
-            // Create scanner from bundle
-            let new_scanner = Scanner::from_bundle(&bundle).map_err(|e| jsonrpc_core::Error {
+            // Create the scanner from the bundle with the configuration in
+            // force: an installed rule set answers what to scan, not how
+            // to treat what is found.
+            let config = state.config.read().await.clone();
+            let new_scanner = scanner_for(&bundle, &config).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
                 message: format!("Failed to create scanner: {e}"),
                 data: None,
@@ -391,6 +512,13 @@ impl AegisRpcImpl {
             {
                 let mut scanner = state.scanner.write().await;
                 *scanner = new_scanner;
+            }
+            // Keep the installed bundle, so a configuration applied later
+            // is built around the same rules instead of silently falling
+            // back to the shipped corpus.
+            {
+                let mut installed = state.installed_bundle.write().await;
+                *installed = Some(bundle.clone());
             }
             state.bundle_swapped.store(true, Ordering::Release);
             {
@@ -413,6 +541,10 @@ impl AegisRpcImpl {
 }
 
 /// Initialize scanner with patterns from aegis-patterns
+///
+/// The server builds its scanner through [`scanner_for`], so this shortcut
+/// exists for the tests that need a scanner without a configuration.
+#[cfg(test)]
 fn init_scanner() -> anyhow::Result<Scanner> {
     let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
         .into_iter()
@@ -1016,6 +1148,107 @@ mod tests {
         assert!(
             response.finding_count > 0,
             "finding in nested fixture must be reported"
+        );
+    }
+
+    /// Content that trips one secret rule and one non-secret rule. The
+    /// pieces are assembled at run time so the repository's own scan does
+    /// not flag this fixture as a leak.
+    fn mixed_category_fixture() -> String {
+        let token = format!("glpat-{}", "ABCDEFGHIJKLMNOPQRST");
+        let weak_hash = format!("md{}(password)", "5");
+        format!("{token}\n{weak_hash}")
+    }
+
+    #[tokio::test]
+    async fn a_configured_category_is_in_force_for_the_next_scan() {
+        let state = Arc::new(ServerState::new());
+        let rpc = AegisRpcImpl::new(state.clone());
+        let content = mixed_category_fixture();
+
+        let unconfigured = rpc
+            .scan_string(content.clone(), "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            unconfigured
+                .findings
+                .iter()
+                .any(|finding| finding.category == "secrets"),
+            "the fixture must trip a secret rule"
+        );
+        assert!(
+            unconfigured
+                .findings
+                .iter()
+                .any(|finding| finding.category != "secrets"),
+            "the fixture must trip a rule outside the secrets category"
+        );
+
+        let mut config = Config::default();
+        config.enabled_categories = Some(vec!["secrets".to_string()]);
+        state
+            .set_config(config)
+            .await
+            .expect("configuration applies");
+
+        let configured = rpc
+            .scan_string(content, "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            configured
+                .findings
+                .iter()
+                .any(|finding| finding.category == "secrets"),
+            "the configured category must still report"
+        );
+        assert!(
+            configured
+                .findings
+                .iter()
+                .all(|finding| finding.category == "secrets"),
+            "only the configured category may report: {:?}",
+            configured
+                .findings
+                .iter()
+                .map(|finding| finding.category.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_configuration_with_an_uncompilable_path_class_is_rejected() {
+        let state = Arc::new(ServerState::new());
+        let mut config = Config::default();
+        config.path_classes = vec![aegis_core::PathClassRule {
+            glob: "docs/[".to_string(),
+            class: aegis_core::PathClass::Docs,
+        }];
+
+        let error = state
+            .set_config(config)
+            .await
+            .expect_err("a glob that cannot compile must be rejected");
+        assert!(
+            error.contains("docs/["),
+            "the rejection names the broken glob: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_configuration_with_an_unusable_severity_threshold_is_rejected() {
+        let state = Arc::new(ServerState::new());
+        let mut config = Config::default();
+        config.severity_threshold = Some("severe".to_string());
+
+        let error = state
+            .set_config(config)
+            .await
+            .expect_err("a threshold that matches no severity must be rejected");
+        assert!(
+            error.contains("severe"),
+            "the rejection names the threshold: {error}"
         );
     }
 }

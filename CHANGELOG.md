@@ -45,6 +45,24 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- The daemon and the MCP server each held a configuration they never
+  applied. The categories, severity threshold, anomaly detectors, and path
+  classes it named had no effect on any scan, and no caller could change
+  it: the field was written once at startup and never read again. Both
+  surfaces now publish the configuration in force (`config()`), apply it
+  when the scanner is built, and rebuild the scanner around a new
+  configuration (`set_config()`), so a host process that retunes scanning
+  sees the change in what is reported. A configuration that cannot be
+  applied — an unknown category, a path-class rule whose glob does not
+  compile, a severity threshold no severity name matches, or an unknown
+  anomaly detector — is rejected with the reason, and the configuration
+  already in force keeps serving. Installing a bundle now builds around
+  the configuration in force as well, so the rule set and the
+  configuration cannot disagree. The daemon's `DaemonState::config` field
+  is now private: read the configuration in force with `config()` and
+  change it with `set_config()`, so the field can no longer be written
+  behind the scanner's back.
+
 - The `llm-guardrails` PII-output marker no longer fires on the three
   letters inside an ordinary identifier. The rule matched a bare token
   anywhere on a line, so the camel-case rendering of React's `className`
