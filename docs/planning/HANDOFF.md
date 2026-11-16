@@ -1,7 +1,7 @@
 # Aegis Handoff — Security Scanner
 
-**Last Updated:** 2026-10-10
-**Status:** 🔄 Active — v0.6.2 released (first release whose assets were
+**Last Updated:** 2026-11-16
+**Status:** 🔄 Active — v0.6.4 released (first release whose assets were
 actually built by the GitForge pipeline: 7-step run green, 10 artifacts,
 checksums verified at publish); full gate set green (`--locked` fmt /
 clippy `-D warnings` / tests); repository self-scan clean (0 findings at
@@ -12,7 +12,7 @@ crates.io decision are closed out (see Known Issues)
 **Location:** `/nas/Temp/repos/aegis`
 
 > **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions.
-**Evidence boundary (central audit):** branch `main`, HEAD `370e5679d48980ac1bb4ad1e28e3e1df70b6dabe`, 0 dirty status entries.
+**Evidence boundary (central audit):** branch `main`, HEAD `086d478c0f89608cf926795910cf5a0881c0852e` (`origin/main`, verified 2026-11-16), 0 dirty status entries.
 **MSRV:** 1.88 (pinned by locked deps `time 0.3.55` / `ignore 0.4.33`; CI and
 the release builder image both use `rust:1.88`)
 
@@ -23,8 +23,8 @@ be verified locally, it says so.
 
 ## Project Overview
 
-Aegis is a Rust security scanner: 670 compiled-in detection patterns across
-34 categories (secrets, PII, AI/LLM safety, supply chain, Kubernetes,
+Aegis is a Rust security scanner: 677 compiled-in detection patterns across
+35 categories (secrets, PII, AI/LLM safety, supply chain, Kubernetes,
 Terraform, code quality, and more), with entropy gates, per-extension
 dispatch, suppression directives, baseline filtering, and a
 provable-liveness harness that requires every enabled rule to fire on a
@@ -49,7 +49,7 @@ aegis-mcp/        — `aegis-mcp` binary: JSON-RPC 2.0 over stdio
 aegis-daemon/     — `aegis-daemon` binary: long-running server on a local
                     Unix socket with peer-credential allowlisting (no HTTP)
 aegis-bundler/    — packs YAML pattern sets into SHA-256-verified bundles
-aegis-patterns/   — the 670 patterns as Rust source, compiled in
+aegis-patterns/   — the 677 patterns as Rust source, compiled in
 aegis-wasm/       — WebAssembly target (`scan_content` → JSON findings)
 ```
 
@@ -275,7 +275,7 @@ workspace suite intentionally not run in the worktree closeout.
    `confidence` labels demote-only (`high` ≥ 0.95, `medium` ≥ 0.80 at
    ≥ 3 observations), and the five rules fixed by the 2026-09-22 audit
    are pinned silent by `tests/corpus/negative/` fixtures. But most of
-   the 670 rules have too few corpus observations to measure at all —
+   the 677 rules have too few corpus observations to measure at all —
    coverage grows only as fixtures are added.
 5. **ML/regex hybrid detection** and **AST-level API-call verification**
    remain unshipped roadmap items (Phase 14). Near-miss clone detection

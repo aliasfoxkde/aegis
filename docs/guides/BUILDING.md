@@ -159,7 +159,7 @@ aegis/
 │   ├── aegis-daemon/      # Daemon mode (Unix sockets)
 │   ├── aegis-bundler/     # Pattern bundler
 │   ├── aegis-wasm/        # WebAssembly binding
-│   └── aegis-patterns/    # 670 pattern definitions
+│   └── aegis-patterns/    # 677 pattern definitions
 │       └── src/
 │           ├── secrets.rs
 │           ├── pii.rs

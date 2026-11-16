@@ -59,7 +59,7 @@ For transport health, start `aegis-mcp` from the configured allowed root and sen
 
 **Protocol boundary:** the server implements the standard MCP lifecycle — `initialize`, `notifications/initialized`, `tools/list`, `tools/call`, and `ping` — plus a `tools/list` catalog of seven tools: `scan_string`, `scan_file`, `scan_dir`, `scan_env`, `list_patterns`, `list_categories`, and `update_bundle`. Standard MCP discovery works out of the box; a client negotiates the handshake, lists tools, and invokes them through `tools/call`. All tools share the same sandboxed scanner functions.
 
-`update_bundle` installs either the embedded rule set (670 patterns) or a bundle loaded from a sandboxed path, and reports the installed `pattern_count`.
+`update_bundle` installs either the embedded rule set (677 patterns) or a bundle loaded from a sandboxed path, and reports the installed `pattern_count`.
 
 ## API Surface
 
