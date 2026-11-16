@@ -414,7 +414,7 @@ PII marker detected in content
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)(ssn|social\s*security|credit\s*card|bank\s+account)
+(?i)(?:\bssn|_ssn|social\s*security|credit\s*card|bank\s+account)
 ```
 
 **Input that fires** (verified by the liveness test):
