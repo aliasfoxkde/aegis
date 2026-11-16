@@ -12,6 +12,17 @@ the same lcov report and fails below the floor.
 The floor sits just below measured reality and is ratcheted up — never
 lowered to pass (see docs/PLAN.md, "Measure, then pin").
 
+What counts as a line:
+
+- A line the report records is measured, and counts as covered when its hit
+  count is above zero.
+- A line the report does not record is not an instrumented line — a blank
+  line, a comment, a brace — so it stays out of the denominator.
+- A production file the report does not contain was never compiled into
+  anything the report covers, so its added lines count as uncovered.
+- A test file the report does not contain is left out of the measurement
+  and named in the output: a test file is its own coverage.
+
 Usage:
     scripts/patch-coverage-floor.py <lcov.info> <base> <head> [floor_percent]
 
@@ -62,6 +73,11 @@ def is_ignored(path: str) -> bool:
     if normalized.endswith(IGNORED_BASENAMES) and "crates/" not in normalized:
         return True
     return False
+
+
+def is_test_file(path: str) -> bool:
+    """Report whether a path is a test source file."""
+    return "/tests/" in f"/{normalize(path)}"
 
 
 def read_lcov(path: Path) -> dict[str, dict[int, int]]:
@@ -149,16 +165,25 @@ def added_lines(base: str, head: str, cwd: str | None = None) -> dict[str, set[i
 
 def measure(
     hits: dict[str, dict[int, int]], added: dict[str, set[int]]
-) -> tuple[int, int, list[str], list[str]]:
+) -> tuple[int, int, list[str], list[str], list[str]]:
     """Count the added lines that are instrumented, and how many are covered.
 
     Returns the instrumented total, the covered count, the uncovered lines,
-    and the files the coverage report does not mention at all.
+    the production files the coverage report does not mention at all, and
+    the test files it does not mention.
+
+    A file the report does not mention was not compiled into anything the
+    report covers. For production code that is a failure to fail closed
+    on: its lines count as uncovered. For a test file it is not a
+    measurement problem — a test file is its own coverage, and a report
+    that leaves it out has nothing to say about it — so it is left out of
+    the denominator and named in the output.
     """
     total = 0
     covered = 0
     uncovered: list[str] = []
     missing_files: list[str] = []
+    missing_tests: list[str] = []
     # The report keys its records by the path the compiler saw, which on a
     # CI runner is absolute; the diff keys them by the workspace path.
     # Index both by the normalized form so they meet.
@@ -170,6 +195,9 @@ def measure(
             continue
         record = index.get(normalize(path))
         if record is None:
+            if is_test_file(path):
+                missing_tests.append(path)
+                continue
             missing_files.append(path)
             total += len(numbers)
             uncovered.extend(f"{path}:{number}" for number in sorted(numbers))
@@ -185,7 +213,7 @@ def measure(
                 covered += 1
             else:
                 uncovered.append(f"{path}:{number}")
-    return total, covered, uncovered, missing_files
+    return total, covered, uncovered, missing_files, missing_tests
 
 
 def main() -> int:
@@ -215,7 +243,7 @@ def main() -> int:
         return 2
 
     added = added_lines(args.base, args.head)
-    total, covered, uncovered, missing = measure(hits, added)
+    total, covered, uncovered, missing, missing_tests = measure(hits, added)
 
     if missing:
         print(
@@ -225,6 +253,13 @@ def main() -> int:
         )
         for path in missing:
             print(f"  - {path}", file=sys.stderr)
+    if missing_tests:
+        print(
+            "patch-coverage-floor: these test files are not in the coverage "
+            "report; their lines are left out of the measurement:"
+        )
+        for path in missing_tests:
+            print(f"  - {path}")
 
     if total == 0:
         print("patch-coverage-floor: the change adds no instrumented lines")

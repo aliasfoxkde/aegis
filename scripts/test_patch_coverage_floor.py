@@ -66,6 +66,22 @@ class IgnoreTest(unittest.TestCase):
         self.assertFalse(helper.is_ignored("crates/aegis-core/src/lib.rs"))
 
 
+class TestFileTest(unittest.TestCase):
+    def test_an_integration_test_file_is_a_test_file(self) -> None:
+        self.assertTrue(helper.is_test_file("crates/aegis-core/tests/scanner.rs"))
+
+    def test_an_absolute_integration_test_path_is_a_test_file(self) -> None:
+        self.assertTrue(
+            helper.is_test_file("/work/crates/aegis-core/tests/scanner.rs")
+        )
+
+    def test_a_source_file_is_not_a_test_file(self) -> None:
+        self.assertFalse(helper.is_test_file("crates/aegis-core/src/lib.rs"))
+
+    def test_a_unit_test_module_inside_a_source_file_is_not_a_test_file(self) -> None:
+        self.assertFalse(helper.is_test_file("crates/aegis-core/src/path_class.rs"))
+
+
 class ReadLcovTest(unittest.TestCase):
     def test_line_hits_are_read_per_file(self) -> None:
         report = lcov(
@@ -94,37 +110,51 @@ class MeasureTest(unittest.TestCase):
     def test_covered_added_lines_count_toward_the_total(self) -> None:
         hits = {"/work/crates/aegis-core/src/lib.rs": {1: 4, 2: 0, 3: 1}}
         added = {"crates/aegis-core/src/lib.rs": {1, 2, 3}}
-        total, covered, uncovered, missing = helper.measure(hits, added)
+        total, covered, uncovered, missing, missing_tests = helper.measure(hits, added)
         self.assertEqual((total, covered), (3, 2))
         self.assertEqual(uncovered, ["crates/aegis-core/src/lib.rs:2"])
         self.assertEqual(missing, [])
+        self.assertEqual(missing_tests, [])
 
     def test_a_line_the_report_does_not_mention_is_not_instrumented(self) -> None:
         """A blank line or a comment has no coverage record; it must not
         count against the patch."""
         hits = {"/work/crates/aegis-core/src/lib.rs": {1: 4}}
         added = {"crates/aegis-core/src/lib.rs": {1, 2}}
-        total, covered, uncovered, _ = helper.measure(hits, added)
+        total, covered, uncovered, _, _ = helper.measure(hits, added)
         self.assertEqual((total, covered), (1, 1))
         self.assertEqual(uncovered, [])
 
-    def test_a_file_absent_from_the_report_counts_as_uncovered(self) -> None:
+    def test_a_production_file_absent_from_the_report_counts_as_uncovered(self) -> None:
         hits = {"/work/crates/aegis-core/src/lib.rs": {1: 4}}
         added = {"crates/aegis-core/src/new.rs": {1, 2}}
-        total, covered, uncovered, missing = helper.measure(hits, added)
+        total, covered, uncovered, missing, missing_tests = helper.measure(hits, added)
         self.assertEqual((total, covered), (2, 0))
         self.assertEqual(missing, ["crates/aegis-core/src/new.rs"])
+        self.assertEqual(missing_tests, [])
         self.assertEqual(
             uncovered, ["crates/aegis-core/src/new.rs:1", "crates/aegis-core/src/new.rs:2"]
         )
 
-    def test_ignored_files_are_left_out_of_the_measurement(self) -> None:
-        hits = {}
-        added = {"crates/aegis-wasm/src/lib.rs": {1}}
-        total, covered, uncovered, missing = helper.measure(hits, added)
+    def test_a_test_file_absent_from_the_report_is_left_out_of_the_measurement(self) -> None:
+        """A test file is its own coverage; a report without it has
+        nothing to say about it, so it is not a measurement failure."""
+        hits = {"/work/crates/aegis-core/src/lib.rs": {1: 4}}
+        added = {"crates/aegis-core/tests/new.rs": {1, 2}}
+        total, covered, uncovered, missing, missing_tests = helper.measure(hits, added)
         self.assertEqual((total, covered), (0, 0))
         self.assertEqual(uncovered, [])
         self.assertEqual(missing, [])
+        self.assertEqual(missing_tests, ["crates/aegis-core/tests/new.rs"])
+
+    def test_ignored_files_are_left_out_of_the_measurement(self) -> None:
+        hits = {}
+        added = {"crates/aegis-wasm/src/lib.rs": {1}}
+        total, covered, uncovered, missing, missing_tests = helper.measure(hits, added)
+        self.assertEqual((total, covered), (0, 0))
+        self.assertEqual(uncovered, [])
+        self.assertEqual(missing, [])
+        self.assertEqual(missing_tests, [])
 
 
 class AddedLinesTest(unittest.TestCase):

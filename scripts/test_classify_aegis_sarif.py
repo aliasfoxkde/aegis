@@ -4,8 +4,7 @@
 Deterministic: fixed fixtures, no network, no clock, no external
 dependencies. Run from the repository root with:
 
-    python3 -m unittest scripts/test_classify_aegis_sarif.py
-    # or: python3 scripts/test_classify_aegis_sarif.py
+    python3 scripts/test_classify_aegis_sarif.py
 """
 
 from __future__ import annotations
