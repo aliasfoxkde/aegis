@@ -264,7 +264,7 @@ impl Finding {
     /// synthetic annotation — and the same tag may be contributed twice.
     pub fn add_tag(&mut self, tag: impl Into<String>) {
         let tag = tag.into();
-        if !self.tags.iter().any(|existing| existing == &tag) {
+        if !self.tags.contains(&tag) {
             self.tags.push(tag);
         }
     }
