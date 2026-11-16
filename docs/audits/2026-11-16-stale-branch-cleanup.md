@@ -345,6 +345,13 @@ divergence. The "behind" half is closed by merging `origin/main` into
 `gitforge/main` (a merge commit — no force-push, no history rewrite), after
 which both remotes carry the same tree.
 
+**Executed 2026-11-16.** PR #191 (squash `18d63b1`) promoted both commits
+into `origin/main`; `origin/main` was then merged into `gitforge/main` as
+merge commit `bccf626` (one conflict, in `docs/planning/HANDOFF.md`,
+resolved to the `origin/main` side). The two remotes now carry a
+byte-identical tree, and the merge was a fast-forward for the `gitforge`
+ref — no history was rewritten on either remote.
+
 ## 6. Deleted branches
 
 `origin` (12): `audit/t5500-clean-stack`, `chore/release-v0.6.1`,
@@ -356,7 +363,8 @@ which both remotes carry the same tree.
 `codex/aegis-shared-parity-20260919`, `codex/aegis-strict-clippy-20260910`,
 `docs/benchmark-results`, `platform-handoff/aegis-baseline-20260821`.
 
-`gitforge` (32): the 12 shared with `origin` above, plus
+`gitforge` (30): the 10 of those names that exist on that mirror (it never
+had `audit/t5500-clean-stack` or `chore/release-v0.6.1`), plus
 `chore/release-0.6.4`, `chore/v0.6.3`, `ci/coverage-floor`, `ci/drift-checks`,
 `codex/aegis-atheon-parity-handoff-20261011`,
 `codex/aegis-h2-security-20260831`,
@@ -377,6 +385,13 @@ Retained: `release/v0.1.3` (ruleset-protected),
 `codex/control-center-adapter-cli` and
 `platform-handoff/aegis-w1-01` (unique work, §4.4/§4.5),
 `codex/pa-handoff-aegis-sarif-20261011` (open PR #174, §4.6).
+
+**Executed 2026-11-16.** The 12 `origin` branches and the 30 `gitforge`
+branches above were deleted; `origin` kept `main`, `release/v0.1.3`,
+`codex/control-center-adapter-cli` and
+`codex/pa-handoff-aegis-sarif-20261011`, and `gitforge` kept `main` and
+`platform-handoff/aegis-w1-01`. The audit record itself landed in PR #191
+(squash `18d63b1`).
 
 ## 7. Residual scope
 
