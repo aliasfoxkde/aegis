@@ -23,10 +23,11 @@ the preset, and a typo'd path fails with the real I/O error instead of
 the preset list.
 
 A profile supplies defaults for the current run for any flag you did
-not set explicitly. Four fields are applied: `enabled_categories`
+not set explicitly. Five fields are applied: `enabled_categories`
 become the category allowlist, `output_format` the render,
-`severity_threshold` the threshold, and `anomaly_detectors` the
-statistical-anomaly allowlist. Flags given on the command line always
+`severity_threshold` the threshold, `anomaly_detectors` the
+statistical-anomaly allowlist, and `path_classes` the path
+classifications. Flags given on the command line always
 win over profile values.
 
 ## Profile Fields
@@ -40,6 +41,7 @@ A profile is a single JSON object with these keys:
 | `output_format` | string | `human`, `json`, or `sarif` |
 | `severity_threshold` | string or `null` | Minimum severity to report: `critical`, `high`, `medium`, or `low`; anything else fails the scan (`info` observations sit below every threshold) |
 | `anomaly_detectors` | array or `null` | Statistical anomaly detectors to run; `null` runs all four, `[]` disables the layer, and a list runs exactly the named detectors (`comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`) |
+| `path_classes` | array | Path classifications: `{"glob": "docs/**", "class": "docs"}` objects whose findings are reported at low severity. `class` is `docs` or `fixture`; secret findings keep their severity and carry the class as a tag. See [Triage](TRIAGE.md) |
 
 Unknown keys are ignored; omitted keys fall back to their default.
 

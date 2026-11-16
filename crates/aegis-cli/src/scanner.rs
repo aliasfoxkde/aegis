@@ -3,8 +3,8 @@
 use crate::output::Output;
 use crate::OutputFormat;
 use aegis_core::{
-    Finding, InspectionStatus, PatternDefinition, RiskScore, ScanOptions as CoreOptions,
-    ScanReceipt, ScanStats, Scanner,
+    Finding, InspectionStatus, PathClassRule, PatternDefinition, RiskScore,
+    ScanOptions as CoreOptions, ScanReceipt, ScanStats, Scanner,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -52,6 +52,10 @@ pub struct ScanOptions {
     /// `ScanStats::clones` and are rendered by the human and JSON formats
     /// without affecting findings or the exit code.
     pub detect_clones: bool,
+    /// Path classifications: findings below a classified path are reported
+    /// at low severity, so documentation prose and test fixtures stop
+    /// competing with real signals.
+    pub path_classes: Vec<PathClassRule>,
     /// Renderer for the report buffer, mirroring the `--format` flag.
     pub format: OutputFormat,
     /// Suppress header and stats blocks so the buffer carries findings only.
@@ -123,6 +127,7 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         baseline: opts.baseline.clone(),
         anomaly_detectors,
         detect_clones: opts.detect_clones,
+        path_classes: opts.path_classes.clone(),
         ..Default::default()
     };
 
@@ -696,6 +701,7 @@ mod tests {
             quiet: false,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         };
 
         assert!(!opts.scan_file);
@@ -724,6 +730,7 @@ mod tests {
             staged: false,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         };
 
         assert_eq!(opts.categories.as_ref().unwrap(), "secrets,pii");
@@ -747,6 +754,7 @@ mod tests {
             staged: false,
             anomaly_detectors: list.map(str::to_string),
             detect_clones: false,
+            path_classes: Vec::new(),
             format: OutputFormat::Human,
             quiet: false,
         }
@@ -801,6 +809,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -826,6 +835,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -851,6 +861,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -881,6 +892,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -905,6 +917,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -930,6 +943,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -959,6 +973,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -987,6 +1002,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1017,6 +1033,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1049,6 +1066,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1077,6 +1095,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1119,6 +1138,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1148,6 +1168,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1183,6 +1204,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1215,6 +1237,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1247,6 +1270,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1283,6 +1307,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
         let clean = execute_scan_with_stdin(&opts, "clean input\n").expect("scan succeeds");
@@ -1364,6 +1389,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1429,6 +1455,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1462,6 +1489,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1527,6 +1555,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
         }
     }
 
@@ -1752,6 +1781,7 @@ mod tests {
             diff: None,
             staged: true,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,
@@ -1993,6 +2023,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -2059,6 +2090,7 @@ mod tests {
             diff: None,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,

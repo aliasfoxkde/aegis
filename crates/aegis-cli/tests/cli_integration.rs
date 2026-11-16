@@ -615,3 +615,81 @@ fn test_scan_writes_a_safe_receipt_on_a_clean_pass() {
         "no required unit may be failed on a clean pass: {units:?}"
     );
 }
+
+#[test]
+fn test_scan_classifies_a_documentation_path_and_triages_the_secret() {
+    let cfg = isolated_config();
+    let root = tempfile::TempDir::new().unwrap();
+    let docs = root.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    // A password-shaped example: the scanner is right about the shape and
+    // wrong about the risk, which is exactly what the triage has to say.
+    std::fs::write(docs.join("intro.md"), "password = \"example-password\"\n").unwrap();
+
+    let output = cfg
+        .command()
+        .args([
+            "scan",
+            root.path().to_str().unwrap(),
+            "--classify-path",
+            "docs/**=docs",
+        ])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("tags: docs"),
+        "the class must be recorded on the finding: {stdout}"
+    );
+
+    let output = cfg
+        .command()
+        .args([
+            "--format",
+            "json",
+            "scan",
+            root.path().to_str().unwrap(),
+            "--classify-path",
+            "docs/**=docs",
+        ])
+        .output()
+        .unwrap();
+    let document: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).expect("json report");
+    let findings = document["findings"].as_array().expect("findings array");
+    let secret = findings
+        .iter()
+        .find(|finding| finding["category"] == "secrets")
+        .expect("the example must be reported as a secret");
+    // A secret keeps its severity under a path class: the class is recorded,
+    // the severity is not lowered.
+    assert_ne!(secret["severity"], "low");
+    assert_eq!(
+        secret["secret_triage"]["outcome"], "likely_placeholder",
+        "the example must be triaged as a placeholder"
+    );
+    assert!(
+        secret["tags"]
+            .as_array()
+            .expect("tags array")
+            .iter()
+            .any(|tag| tag == "docs"),
+        "the path class must be recorded on the finding"
+    );
+}
+
+#[test]
+fn test_scan_rejects_a_malformed_classify_path() {
+    let cfg = isolated_config();
+    let output = cfg
+        .command()
+        .args(["scan", ".", "--classify-path", "docs/**"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("GLOB=KIND"),
+        "the failure must name the expected form: {stderr}"
+    );
+}

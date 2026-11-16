@@ -14,14 +14,16 @@ use walkdir::WalkDir;
 use crate::anomalies::{self, FileMetrics};
 use crate::clone::{CloneDetector, CloneReport};
 use crate::entropy::shannon_entropy;
-use crate::suppression::SuppressionManager;
+use crate::suppression::{SuppressionManager, SYNTHETIC_TAG};
 
 use crate::ast::{AstAnalyzer, AstInspectionStatus};
 use crate::bundle::Bundle;
-use crate::config::Config;
+use crate::config::{Config, PathClassRule};
 use crate::finding::{Finding, FindingKind, InspectionStatus, Location, ScanStats};
 use crate::ignore::IgnoreManager;
+use crate::path_class::{apply_path_class, PathClassMatcher};
 use crate::pattern::{PatternDefinition, PatternRegistry, Severity};
+use crate::secret_triage::{triage_secret, SECRET_CATEGORY};
 
 fn ast_findings_to_findings(
     inspection: &crate::ast::AstInspection,
@@ -156,6 +158,11 @@ pub struct ScanOptions {
     /// output are unaffected. Off by default: detection is a full second
     /// token-and-LCS pass over each file.
     pub detect_clones: bool,
+    /// Path classifications: globs whose findings are reported at low
+    /// severity because the paths hold documentation or test fixtures
+    /// rather than shipped code. Secret findings keep their severity and
+    /// carry the class as a tag.
+    pub path_classes: Vec<PathClassRule>,
 }
 
 impl Default for ScanOptions {
@@ -174,6 +181,7 @@ impl Default for ScanOptions {
             diff_file: None,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         }
     }
 }
@@ -213,6 +221,8 @@ pub struct Scanner {
     registry: Arc<PatternRegistry>,
     ignore_manager: Arc<IgnoreManager>,
     options: ScanOptions,
+    /// Compiled path classifications, applied to every scanned file.
+    path_classes: PathClassMatcher,
     /// Cached category scanners for performance
     /// Per-extension category scanners ("" = sources without an extension);
     /// values contain only patterns applicable to that extension
@@ -311,6 +321,7 @@ impl Scanner {
             registry: Arc::new(PatternRegistry::new()),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -332,6 +343,7 @@ impl Scanner {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -355,6 +367,7 @@ impl Scanner {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -372,7 +385,7 @@ impl Scanner {
     /// bundle cannot be loaded (invalid regex, duplicate name) or when
     /// `enabled_categories` names a category absent from the registry.
     pub fn from_config(config: &Config) -> Result<Self, crate::pattern::PatternError> {
-        let scanner = Self::from_bundle(&config.bundle)?;
+        let mut scanner = Self::from_bundle(&config.bundle)?;
 
         if let Some(categories) = &config.enabled_categories {
             // Only meaningful against a populated registry; an empty bundle
@@ -385,6 +398,13 @@ impl Scanner {
                 scanner.registry.set_category_enabled(cat, true);
             }
         }
+
+        // A profile may classify paths; the classifications apply to every
+        // file this scanner reads. The rules are kept in the options as
+        // well as in the matcher, so a caller that reads the options back
+        // sees exactly the rules the matcher was built from.
+        scanner.options.path_classes = config.path_classes.clone();
+        scanner.path_classes = PathClassMatcher::new(&config.path_classes);
 
         Ok(scanner)
     }
@@ -438,6 +458,9 @@ impl Scanner {
         self.extension_scanners.write().clear();
         let baseline = options.baseline.clone();
         self.options = options;
+        // Compile the path classes once: a broken glob is skipped with a
+        // warning here rather than failing a scan in the middle of a walk.
+        self.path_classes = PathClassMatcher::new(&self.options.path_classes);
         if let Some(path) = baseline {
             // Load once here so scans pay no per-file I/O and a broken
             // baseline is reported instead of silently ignored. `set` only
@@ -881,28 +904,43 @@ impl Scanner {
 
         let ast_inspection = AstAnalyzer::inspect_source(content, source);
         let mut findings = findings;
-        findings.extend(
+        // A synthetic annotation marks the value as a deliberate example.
+        // The finding stays in the report, tagged, but at low severity so
+        // it stops competing with real signals. It is applied before the
+        // severity gate so a downgraded finding is judged by the severity
+        // it ends up with.
+        for finding in &mut findings {
+            Self::apply_synthetic_annotation(finding, &suppression_mgr);
+        }
+        let mut ast_findings: Vec<Finding> =
             ast_findings_to_findings(&ast_inspection, content, source)
                 .into_iter()
                 .filter(|finding| {
                     // Inline directives must reach AST-emitted findings
                     // just as they do regex-path findings.
-                    if suppression_mgr.is_suppressed(
+                    !suppression_mgr.is_suppressed(
                         &finding.pattern,
                         u32::try_from(finding.location.line).unwrap_or(u32::MAX),
-                    ) {
-                        return false;
-                    }
-                    self.passes_post_filters(finding)
-                }),
-        );
+                    )
+                })
+                .collect();
+        for finding in &mut ast_findings {
+            Self::apply_synthetic_annotation(finding, &suppression_mgr);
+        }
+        findings.extend(ast_findings);
 
         // Apply category and severity-threshold gates before baseline
         // filtering.
-        let findings: Vec<Finding> = findings
+        let mut findings: Vec<Finding> = findings
             .into_iter()
             .filter(|finding| self.passes_post_filters(finding))
             .collect();
+
+        // Secret-shaped findings carry a triage verdict, so the set a
+        // human has to review is bounded by evidence rather than by volume.
+        for finding in &mut findings {
+            Self::apply_secret_triage(finding);
+        }
 
         // Filter findings against baseline if configured. `scan_diff` opts
         // out here and filters itself once findings carry real target
@@ -925,6 +963,30 @@ impl Scanner {
         (findings, ast_inspection, suppressed_count)
     }
 
+    /// Mark a finding whose line carries a synthetic-value annotation.
+    ///
+    /// The finding is kept and tagged, not hidden: a repository full of
+    /// deliberate examples should still show what was set aside, and why.
+    fn apply_synthetic_annotation(finding: &mut Finding, suppression_mgr: &SuppressionManager) {
+        let line = u32::try_from(finding.location.line).unwrap_or(u32::MAX);
+        if suppression_mgr.is_synthetic(line) {
+            finding.add_tag(SYNTHETIC_TAG);
+            finding.downgrade_to_low();
+        }
+    }
+
+    /// Attach a triage verdict to a secret-shaped finding.
+    ///
+    /// Only findings in the `secrets` category are judged, and only when
+    /// there is matched text to judge: a finding without it carries no
+    /// verdict rather than a fabricated one.
+    fn apply_secret_triage(finding: &mut Finding) {
+        if finding.category != SECRET_CATEGORY || finding.matched_content.is_empty() {
+            return;
+        }
+        finding.secret_triage = Some(triage_secret(&finding.matched_content));
+    }
+
     /// Category and severity-threshold gates shared by the per-file pipeline
     /// and the anomaly post-pass.
     fn passes_post_filters(&self, finding: &Finding) -> bool {
@@ -937,6 +999,15 @@ impl Scanner {
         {
             return false;
         }
+        self.passes_severity_threshold(finding)
+    }
+
+    /// Whether the finding reaches the configured severity threshold.
+    ///
+    /// Separate from the category gate so it can run again after a
+    /// classification lowered a finding's severity: a finding that ends up
+    /// below the operator's threshold must not survive the report.
+    fn passes_severity_threshold(&self, finding: &Finding) -> bool {
         let Some(threshold) = self.options.severity_threshold.as_deref() else {
             return true;
         };
@@ -1107,6 +1178,25 @@ impl Scanner {
     /// Panics if the metrics-sink lock was poisoned by a panic in another
     /// thread.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
+        self.scan_file_with_root(path, None)
+    }
+
+    /// Scan a single file, classifying its path relative to `root`.
+    ///
+    /// `root` is the scan root when the file was found by a directory
+    /// walk: a path classification is written relative to the root, and
+    /// the relative path is what makes `docs/**` mean "the docs
+    /// directory of this repository".
+    ///
+    /// # Panics
+    ///
+    /// Panics if the metrics-sink lock was poisoned by a panic in another
+    /// thread.
+    fn scan_file_with_root(
+        &self,
+        path: &Path,
+        root: Option<&Path>,
+    ) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         // Options are validated before any file access so a typo in the
         // threshold is reported even when the path is also wrong.
         self.options.validate().map_err(ScanError::InvalidOptions)?;
@@ -1194,8 +1284,23 @@ impl Scanner {
             }
         }
 
-        let (findings, ast_inspection, suppressed_count) =
+        let (mut findings, ast_inspection, suppressed_count) =
             self.scan_string_with_inspection(&content, &source);
+
+        // A classified path — documentation, test fixtures — reports its
+        // findings at low severity so they stop competing with real
+        // signals. The severity gate runs again afterwards, because a
+        // finding the classification lowered below the operator's
+        // threshold must not survive the report.
+        let relative = root
+            .and_then(|root| path.strip_prefix(root).ok())
+            .map(|relative| relative.to_string_lossy().into_owned());
+        if let Some(class) = self.path_classes.class_of(&source, relative.as_deref()) {
+            for finding in &mut findings {
+                apply_path_class(finding, class);
+            }
+            findings.retain(|finding| self.passes_severity_threshold(finding));
+        }
 
         // Clone detection runs inside the measured scan window so its cost
         // is visible in `scan_time_ms`. A detector failure is recorded in
@@ -1399,7 +1504,9 @@ impl Scanner {
         // failure becomes an explicit ledger record rather than disappearing.
         let scan_one = |entry: &walkdir::DirEntry| {
             let path = entry.path().to_path_buf();
-            let result = self.scan_file(&path);
+            // The root travels with the file so a path classification can
+            // be written relative to the repository.
+            let result = self.scan_file_with_root(&path, Some(root));
             (path, result)
         };
         let outcomes: Vec<_> = match self.scan_pool.get_or_init(|| {
@@ -2153,6 +2260,7 @@ mod tests {
             diff_file: Some(PathBuf::from("/diff.txt")),
             anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
             detect_clones: true,
+            path_classes: Vec::new(),
         };
 
         assert_eq!(options.max_file_size, 5 * 1024 * 1024);
