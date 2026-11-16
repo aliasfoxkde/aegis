@@ -403,7 +403,10 @@ impl Scanner {
         // file this scanner reads. The rules are kept in the options as
         // well as in the matcher, so a caller that reads the options back
         // sees exactly the rules the matcher was built from.
-        scanner.options.path_classes = config.path_classes.clone();
+        scanner
+            .options
+            .path_classes
+            .clone_from(&config.path_classes);
         scanner.path_classes = PathClassMatcher::new(&config.path_classes);
 
         Ok(scanner)

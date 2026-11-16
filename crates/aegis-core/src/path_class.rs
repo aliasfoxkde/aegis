@@ -85,9 +85,9 @@ impl PathClassMatcher {
             return None;
         }
         let normalized = path.strip_prefix("./").unwrap_or(path);
-        let base = relative
-            .map(|relative| relative.strip_prefix("./").unwrap_or(relative))
-            .unwrap_or(normalized);
+        let base = relative.map_or(normalized, |relative| {
+            relative.strip_prefix("./").unwrap_or(relative)
+        });
 
         let mut candidates: Vec<&str> = Vec::new();
         candidates.push(base);

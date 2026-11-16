@@ -323,9 +323,12 @@ mod tests {
         let secret = "s3cr3t-v4lu3-with-a-marker";
         let verdict = triage_secret(secret);
         for reason in &verdict.reasons {
+            // The failure message names no part of the verdict: a panic
+            // that printed a reason could print the value the verdict was
+            // built from, which is the disclosure this rule prevents.
             assert!(
                 !reason.contains(secret),
-                "a reason must not repeat the value: {reason}"
+                "a reason must not repeat the value"
             );
         }
     }
