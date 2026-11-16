@@ -94,7 +94,11 @@ fn a_config_with_an_uncompilable_path_class_is_rejected() {
         class: PathClass::Docs,
     }]);
 
-    let error = Scanner::from_config(&config).expect_err("a broken glob is an error");
+    // `expect_err` needs the success type to be `Debug`, and the scanner
+    // is not; the error is taken out of the result first.
+    let error = Scanner::from_config(&config)
+        .err()
+        .expect("a broken glob is an error");
     assert!(matches!(error, PatternError::InvalidPathClass(_)));
     // The message names the glob, so the caller can correct it.
     assert!(error.to_string().contains(BROKEN_GLOB));
@@ -115,6 +119,8 @@ fn one_broken_path_class_rejects_the_whole_configuration() {
 
     // A scanner that dropped only the broken rule would classify
     // everything else, so the caller would not know a rule was lost.
-    let error = Scanner::from_config(&config).expect_err("a broken glob is an error");
+    let error = Scanner::from_config(&config)
+        .err()
+        .expect("a broken glob is an error");
     assert!(matches!(error, PatternError::InvalidPathClass(_)));
 }
