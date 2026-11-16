@@ -35,6 +35,16 @@ go to stderr so stdout carries only JSON responses:
 aegis-mcp
 ```
 
+**Operator configuration:** `AEGIS_MCP_CONFIG` names a JSON profile document
+— the same format the CLI reads with `aegis --config <file>` — that the
+server applies at startup. Its `enabled_categories`, `severity_threshold`,
+`anomaly_detectors`, and `path_classes` fields decide what the server scans
+for. A configuration that cannot be applied stops the server instead of
+leaving it serving scans it was not configured for. The configuration is not
+reachable over the protocol: no tool changes it, so changing it means editing
+the file and restarting the server. See
+[Configuration](CONFIGURATION.md#operator-configuration-for-the-daemon-and-the-mcp-server).
+
 ## Available Tools
 
 The server accepts JSON-RPC requests over stdin and responds on stdout.
