@@ -45,6 +45,16 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- The `llm-guardrails` PII-output marker no longer fires on the three
+  letters inside an ordinary identifier. The rule matched a bare token
+  anywhere on a line, so the camel-case rendering of React's `className`
+  attribute was reported as a high-severity PII marker on every JSX
+  element in an application. The marker now requires the token to start
+  at a word boundary (or after an underscore), so the standalone forms
+  (`SSN`, `ssn:`, `ssn_field`, `user_ssn`, `social security number`) and
+  the camel-case field name (`ssnNumber`) still fire while `className`,
+  `classNames`, and `assignment` stay silent.
+
 - Diff scans now attribute findings to the target file's actual line from
   each unified-diff hunk, reject additions without a trustworthy file/hunk
   anchor, correctly decode Git C-quoted paths, and apply baselines only
