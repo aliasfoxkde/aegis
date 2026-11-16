@@ -12,6 +12,7 @@
 /// file from `scripts/generate_examples.py`.
 #[must_use]
 #[allow(clippy::match_same_arms)]
+// aegis-allow: the generator emits one arm per pattern name, so unrelated names legitimately share an example | expires=2027-12-31 | approver=maintainers
 pub fn example_for(name: &str) -> Option<&'static str> {
     match name {
         "aba-routing-number" => Some(concat!("routing_ -_ -- _no", ": =:= : = 735982468")),

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 /// Returns an error when `path` cannot be read or when its contents are not
 /// a valid JSON configuration.
 #[allow(dead_code)]
+// aegis-allow: public config loader kept for embedders; the CLI reads profiles through its own config module | expires=2027-12-31 | approver=maintainers
 pub fn load_config(path: &PathBuf) -> Result<aegis_core::Config, anyhow::Error> {
     let content = std::fs::read_to_string(path)?;
     let config: aegis_core::Config = serde_json::from_str(&content)?;
@@ -22,6 +23,7 @@ pub fn load_config(path: &PathBuf) -> Result<aegis_core::Config, anyhow::Error> 
 /// Returns an error when `config` cannot be serialized or when `path`
 /// cannot be written.
 #[allow(dead_code)]
+// aegis-allow: public config writer kept for embedders; the CLI writes pattern state through its own state module | expires=2027-12-31 | approver=maintainers
 pub fn save_config(config: &aegis_core::Config, path: &PathBuf) -> Result<(), anyhow::Error> {
     let content = serde_json::to_string_pretty(config)?;
     std::fs::write(path, content)?;

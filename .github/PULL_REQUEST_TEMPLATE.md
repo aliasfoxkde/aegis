@@ -1,39 +1,53 @@
-## Pull Request Checklist
+<!--
+Six sections, in this order. A reviewer should be able to read them top to
+bottom and know what changed, why, how it was proven, what it can break,
+and what it closes.
+-->
 
-- [ ] **Tests pass** - `cargo test --workspace`
-- [ ] **Clippy clean** - `cargo clippy --workspace -- -D warnings`
-- [ ] **Formatted** - `cargo fmt --all`
-- [ ] **Documentation updated** (if applicable)
-- [ ] **Patterns validated** (if adding patterns)
+## 1. What changed
 
-## PR Type
+<!--
+The change itself, in two or three sentences. Say which files or subsystems
+moved, and name the behavior that is different afterwards.
+-->
 
-<!-- What type of PR is this? -->
+## 2. Why
 
-- [ ] **feat** - New feature
-- [ ] **fix** - Bug fix
-- [ ] **docs** - Documentation changes
-- [ ] **refactor** - Code restructuring
-- [ ] **test** - Adding tests
-- [ ] **chore** - Maintenance tasks
-- [ ] **patterns** - New or updated detection patterns
+<!--
+The problem this solves, and what happens if it is not solved. Link the
+issue: Fixes #123, Closes #456.
+-->
 
-## Description
+## 3. How it was verified
 
-<!-- Describe your changes -->
+<!--
+The commands you ran and their results — not a claim that it works. Name
+the gate you ran and what it showed. A test that was not run is not a
+verification.
+-->
 
-## Motivation
+## 4. Risk and rollback
 
-<!-- Why is this change needed? -->
+<!--
+What could break, who is affected, and how to undo it. Say "low, docs only"
+if that is the truth. For a behavior change, name the flag, config key, or
+file that turns it back.
+-->
 
-## Testing
+## 5. Checklist
 
-<!-- How was this tested? -->
+- [ ] Formatting check clean
+- [ ] Lint check clean (deny warnings)
+- [ ] Test suite passes
+- [ ] Documentation build clean (public API changed)
+- [ ] Documentation updated (if a claim, count, or contract changed)
+- [ ] Patterns validated with the corpus harness (if a rule changed)
+- [ ] No quality gate weakened (lint level, advisory waiver, license, coverage floor)
+- [ ] Every `#[allow(...)]` added carries an `aegis-allow:` annotation with a reason, an expiry, and an approver
 
-## Screenshots/Examples
+## 6. Related issues and notes
 
-<!-- If applicable, provide screenshots or example output -->
-
-## Related Issues
-
-<!-- Link to issues: Fixes #123, Closes #456 -->
+<!--
+Issue links, follow-ups, and anything a reviewer should know but does not
+need to act on. Screenshots or example output belong here.
+-->

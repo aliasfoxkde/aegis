@@ -114,6 +114,7 @@ fn unquote_c_style(raw: &str) -> Option<String> {
 /// would force every caller to translate back to per-option flags.
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
+// aegis-allow: the booleans mirror the CLI scan flag set one-to-one | expires=2027-12-31 | approver=maintainers
 pub struct ScanOptions {
     /// Maximum file size to scan
     pub max_file_size: u64,

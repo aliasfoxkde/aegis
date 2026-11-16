@@ -40,6 +40,7 @@ pub struct InitializeParams {
     /// advertises `tools`, and no client capability changes our answers.
     #[serde(default)]
     #[allow(dead_code)]
+    // aegis-allow: client capabilities are parsed for wire compatibility; this server advertises only tools | expires=2027-12-31 | approver=maintainers
     pub capabilities: Value,
     // `clientInfo` is deliberately not captured — serde ignores unknown
     // fields, and the server never needs the client's identity.

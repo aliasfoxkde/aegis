@@ -14,6 +14,7 @@ use crate::bundle::Bundle;
 #[serde(default)]
 // Mirrors the on/off CLI flags 1:1.
 #[allow(clippy::struct_excessive_bools)]
+// aegis-allow: the booleans mirror the on/off CLI flags one-to-one | expires=2027-12-31 | approver=maintainers
 pub struct Config {
     /// Profile name
     pub name: String,

@@ -87,6 +87,7 @@ mod tests {
     // Test-only helper, but the expects live inside a `tokio::spawn`
     // closure, which clippy's test-function analysis cannot see into.
     #[allow(clippy::expect_used)]
+    // aegis-allow: test-only helper whose expects live inside a tokio::spawn closure that clippy cannot see into | expires=2027-12-31 | approver=maintainers
     async fn read_line_over_duplex(input: &[u8], cap: usize) -> std::io::Result<FrameRead> {
         let (mut client, server) = tokio::io::duplex(64);
         let mut reader = tokio::io::BufReader::new(server);

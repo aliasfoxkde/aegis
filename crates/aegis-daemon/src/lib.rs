@@ -186,7 +186,7 @@ impl DaemonState {
     /// that is not an existing directory; the `expect` message states the
     /// requirement.
     #[must_use]
-    #[allow(clippy::expect_used)] // documented panicking convenience wrapper; `try_with_scan_root` is the fallible form
+    #[allow(clippy::expect_used)] // aegis-allow: documented panicking convenience wrapper; try_with_scan_root is the fallible form | expires=2027-12-31 | approver=maintainers
     pub fn with_scan_root(socket_path: PathBuf, scan_root: &Path) -> Self {
         Self::try_with_scan_root(socket_path, scan_root)
             .expect("Aegis daemon scan root must be an existing directory")

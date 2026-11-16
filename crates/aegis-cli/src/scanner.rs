@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 /// The booleans mirror the CLI's scan flag set one-to-one; a settings enum
 /// would force every caller to translate back into per-flag fields.
 #[allow(clippy::struct_excessive_bools)]
+// aegis-allow: the booleans mirror the CLI scan flag set one-to-one | expires=2027-12-31 | approver=maintainers
 pub struct ScanOptions {
     /// Target of the scan: the repository or directory root, or the single
     /// file when `scan_file` is set.
