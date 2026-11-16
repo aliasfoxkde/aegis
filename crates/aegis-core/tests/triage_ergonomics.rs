@@ -20,6 +20,9 @@ const CREDENTIAL_SHAPED: &str = "9fK2mQ7xL4nR8vT1yW6zB3cD5";
 /// triage has evidence that it is not a live credential.
 const EXAMPLE_SHAPED: &str = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
 
+/// The name of the one pattern these tests register.
+const PATTERN_NAME: &str = "credential-shape";
+
 /// Build a scanner over one hand-written pattern.
 ///
 /// Test-only helper, but not a `#[test]` function, so clippy.toml's test
@@ -33,7 +36,7 @@ fn scanner_with(definition: PatternDefinition) -> Scanner {
 #[allow(clippy::unwrap_used)]
 fn definition(category: &str, severity: Severity) -> PatternDefinition {
     PatternDefinition {
-        name: "credential-shape".to_string(),
+        name: PATTERN_NAME.to_string(),
         category: category.to_string(),
         match_pattern: "[A-Za-z0-9+/]{24,}".to_string(),
         enabled: true,
@@ -55,6 +58,20 @@ fn write_file(root: &TempDir, relative: &str, content: &str) {
     std::fs::write(path, content).unwrap();
 }
 
+/// The findings the registered pattern produced.
+///
+/// The scanner also runs its AST and anomaly layers, so a test that counts
+/// *every* finding would assert on rules that have nothing to do with the
+/// behaviour under test. This selects the one pattern these tests own.
+#[allow(clippy::unwrap_used)]
+fn findings_of(scanner: &Scanner, root: &TempDir) -> Vec<aegis_core::Finding> {
+    let (findings, _stats) = scanner.scan_dir(root.path()).unwrap();
+    findings
+        .into_iter()
+        .filter(|finding| finding.pattern == PATTERN_NAME)
+        .collect()
+}
+
 #[test]
 fn a_documentation_path_reports_its_findings_at_low_severity() {
     let dir = TempDir::new().unwrap();
@@ -74,7 +91,7 @@ fn a_documentation_path_reports_its_findings_at_low_severity() {
             ..ScanOptions::default()
         });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].severity, "low");
     assert!(findings[0].tags.iter().any(|tag| tag == "docs"));
@@ -99,7 +116,7 @@ fn a_path_outside_the_classified_glob_keeps_its_severity() {
             ..ScanOptions::default()
         });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].severity, "high");
     assert!(findings[0].tags.is_empty());
@@ -123,7 +140,7 @@ fn a_secret_keeps_its_severity_under_a_path_class() {
         ..ScanOptions::default()
     });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     // A credential in a documentation file is still a credential: the class
     // is recorded, the severity is not lowered.
@@ -151,10 +168,9 @@ fn a_downgraded_finding_does_not_survive_a_severity_threshold() {
             ..ScanOptions::default()
         });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
     // The finding was downgraded to low before the threshold was applied,
     // so it must not reappear in a medium-and-above report.
-    assert!(findings.is_empty());
+    assert!(findings_of(&scanner, &dir).is_empty());
 }
 
 #[test]
@@ -172,7 +188,7 @@ fn a_synthetic_annotation_keeps_the_finding_at_low_severity() {
             ..ScanOptions::default()
         });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     // The finding is not hidden: it is kept, tagged, and reported at low
     // severity so it stops competing with real signals.
@@ -194,7 +210,7 @@ fn a_secret_finding_carries_a_triage_verdict() {
         ..ScanOptions::default()
     });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     let triage = findings[0]
         .secret_triage
@@ -221,7 +237,7 @@ fn a_published_example_is_triaged_as_a_placeholder() {
         ..ScanOptions::default()
     });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     let triage = findings[0]
         .secret_triage
@@ -245,7 +261,7 @@ fn a_non_secret_finding_carries_no_triage_verdict() {
             ..ScanOptions::default()
         });
 
-    let (findings, _stats) = scanner.scan_dir(dir.path()).unwrap();
+    let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     assert!(findings[0].secret_triage.is_none());
 }
