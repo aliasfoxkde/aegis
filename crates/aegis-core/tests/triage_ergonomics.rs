@@ -119,7 +119,7 @@ fn a_path_outside_the_classified_glob_keeps_its_severity() {
     let findings = findings_of(&scanner, &dir);
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].severity, "high");
-    assert!(findings[0].tags.is_empty());
+    assert_eq!(findings[0].tags, [] as [String; 0]);
 }
 
 #[test]
