@@ -1,0 +1,17 @@
+# CodeRabbit configuration for aegis.
+#
+# Schema reference: https://docs.coderabbit.ai/reference/configuration
+#
+# Draft pull requests are reviewed automatically, so an in-progress PR gets
+# feedback before it is marked ready and the author does not have to
+# re-request a review after every push. `base_branches` keeps auto-review
+# scoped to the branch this repository actually merges from (`main` is
+# PR-only and squash-merged).
+language: en-US
+
+reviews:
+  auto_review:
+    enabled: true
+    drafts: true
+    base_branches:
+      - main
