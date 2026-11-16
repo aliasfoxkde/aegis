@@ -382,8 +382,9 @@ impl Scanner {
     /// # Errors
     ///
     /// Returns [`PatternError`](crate::pattern::PatternError) when the
-    /// bundle cannot be loaded (invalid regex, duplicate name) or when
-    /// `enabled_categories` names a category absent from the registry.
+    /// bundle cannot be loaded (invalid regex, duplicate name), when
+    /// `enabled_categories` names a category absent from the registry, or
+    /// when a path-class rule names a glob that does not compile.
     pub fn from_config(config: &Config) -> Result<Self, crate::pattern::PatternError> {
         let mut scanner = Self::from_bundle(&config.bundle)?;
 
@@ -403,6 +404,15 @@ impl Scanner {
         // file this scanner reads. The rules are kept in the options as
         // well as in the matcher, so a caller that reads the options back
         // sees exactly the rules the matcher was built from.
+        //
+        // A rule whose glob does not compile classifies nothing. The
+        // matcher would drop it, and the caller would go on believing a
+        // path class was in force, so the configuration is rejected here
+        // instead: a rule that cannot fire is a bug, not a warning.
+        for rule in &config.path_classes {
+            rule.validate()
+                .map_err(crate::pattern::PatternError::InvalidPathClass)?;
+        }
         scanner
             .options
             .path_classes

@@ -77,6 +77,21 @@ every release are attached to the matching GitHub release.
   is now private: read the configuration in force with `config()` and
   change it with `set_config()`, so the field can no longer be written
   behind the scanner's back.
+- A secret-triage verdict no longer names the placeholder marker it
+  matched. The reason read "contains the placeholder marker `changeme`",
+  so every placeholder finding put a fragment of the matched credential
+  into the report — the disclosure the triage contract exists to
+  prevent. The reason now names the signal only ("contains a known
+  placeholder marker"), and a regression test asserts that no reason
+  names the marker the verdict matched.
+
+- A scanner built from a configuration whose path-class rule names a
+  glob that does not compile is now rejected instead of built. The
+  matcher drops a rule it cannot compile, so the caller went on
+  believing a path class was in force while the rule classified
+  nothing. `Scanner::from_config` now returns
+  `PatternError::InvalidPathClass` naming the offending glob. The
+  command line already rejected such a rule before use.
 
 - The `llm-guardrails` PII-output marker no longer fires on the three
   letters inside an ordinary identifier. The rule matched a bare token
