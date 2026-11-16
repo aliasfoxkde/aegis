@@ -59,6 +59,11 @@ path class and carries the class as a tag instead.
 Downgrading happens before the severity threshold is applied, so a finding
 that drops to `low` does not survive `--severity-threshold medium`.
 
+A path class quiets a path; it does not remove it. When a path should
+not be scanned at all, `.aegisignore` is the mechanism — it drops the
+file from the scan, receipt and ledger alike. A path class keeps the
+finding visible and explains why it was downgraded.
+
 ## Synthetic values
 
 A synthetic annotation marks a deliberate example where it stands. The
@@ -126,5 +131,9 @@ disclosure.
 - A secret finding never loses severity to a path class.
 - Secret triage never changes the exit code: it adds a verdict, not a
   severity.
+- Triage judges the *shape* of a value, not its validity. Proving a
+  credential live would mean calling the provider, which a static
+  scanner does not do; a `likely_real` verdict means "rotate it", not
+  "it still works".
 - The staged-blob scan (`--staged`) reads the git index rather than the
   working tree, so path classes do not apply to it.
