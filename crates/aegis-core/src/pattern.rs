@@ -622,6 +622,11 @@ pub enum PatternError {
         /// Sorted, deduplicated category names present in the registry.
         valid: Vec<String>,
     },
+    /// A path-class rule named a glob that does not compile. The rule would
+    /// classify nothing, so the caller is told instead of discovering that
+    /// the rule stopped applying.
+    #[error("Invalid path class rule: {0}")]
+    InvalidPathClass(String),
 }
 
 /// Pattern registry for managing all patterns
