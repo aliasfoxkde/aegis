@@ -90,9 +90,7 @@ impl PathClassMatcher {
         }
         let normalized = normalize_separators(path.strip_prefix("./").unwrap_or(path));
         let base = match relative {
-            Some(relative) => {
-                normalize_separators(relative.strip_prefix("./").unwrap_or(relative))
-            }
+            Some(relative) => normalize_separators(relative.strip_prefix("./").unwrap_or(relative)),
             None => normalized,
         };
 
