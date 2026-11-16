@@ -32,12 +32,14 @@ pub mod control_center_adapter;
 pub mod entropy;
 pub mod finding;
 pub mod ignore;
+pub mod path_class;
 pub mod pattern;
 pub mod receipt;
 pub mod remediation;
 pub mod risk;
 pub mod sbom;
 pub mod scanner;
+pub mod secret_triage;
 pub mod suppression;
 #[cfg(feature = "tokio")]
 pub mod transport;
@@ -53,6 +55,7 @@ pub use ast::{AstAnalysis, AstAnalyzer, AstFinding, AstInspection, AstInspection
 pub use benchmark::{format_benchmark_json, BenchmarkConfig, ScanBenchmark};
 pub use bundle::{Bundle, BundleMetadata};
 pub use config::Config;
+pub use config::{PathClass, PathClassRule};
 pub use control_center_adapter::{
     AdapterError, ControlCenterAdapter, EvidenceRecord, ScanResult, WorkRequest,
 };
@@ -61,6 +64,7 @@ pub use finding::{
     Finding, FindingKind, InspectionLedger, InspectionStatus, InspectionUnit, Location, ScanStats,
     INSPECTION_LEDGER_SCHEMA_VERSION,
 };
+pub use path_class::{apply_path_class, PathClassMatcher};
 pub use pattern::{Category, Confidence, Pattern, PatternDefinition, PatternRegistry, Severity};
 pub use receipt::{ReceiptFinding, ReceiptLocation, ScanReceipt, SCAN_RECEIPT_SCHEMA_VERSION};
 pub use remediation::{
@@ -70,6 +74,7 @@ pub use remediation::{
 pub use risk::{RiskClassification, RiskLevel, RiskScore};
 pub use sbom::{Sbom, SbomComponent, SbomDependency, SbomFormat, SbomFormat::Spdx, SbomGenerator};
 pub use scanner::{ScanError, ScanOptions, Scanner};
+pub use secret_triage::{triage_secret, SecretTriage, TriageOutcome};
 pub use suppression::Suppression;
 
 use std::path::PathBuf;

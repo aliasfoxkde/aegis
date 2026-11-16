@@ -116,7 +116,7 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
     --categories secrets,security-hardening,web-security --severity-threshold high
   ```
 
-  This currently reports **0 findings**. It exits 1 when it reports findings (exit 1 means "findings", not "tool failure"). Synthetic test credentials (the AWS documentation example key) appear in a few `#[cfg(test)]` fixtures and are suppressed with a same-line `aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures` directive — the directive must sit on the **same line as the finding**, or it does not take effect. Check this list before assuming a new finding is yours.
+  This currently reports **0 findings**. It exits 1 when it reports findings (exit 1 means "findings", not "tool failure"). Synthetic test credentials (the AWS documentation example key) appear in a few `#[cfg(test)]` fixtures and are suppressed with a same-line `aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures` directive — the directive must sit on the **same line as the finding**, or it does not take effect.  Check this list before assuming a new finding is yours. A deliberate example may also be marked with a same-line `aegis:synthetic` annotation: the finding is kept, tagged `synthetic`, and reported at low severity instead of being hidden — the path classes, the annotation, and the secret triage are documented in [docs/guides/TRIAGE.md](docs/guides/TRIAGE.md).
 
 ## Branch and Commit Policy
 

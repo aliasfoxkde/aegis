@@ -10,16 +10,34 @@
 //! | `aegis:ignore-start` | Begin suppressing every pattern |
 //! | `aegis:ignore-end` | End the innermost open range |
 //! | `aegis:ignore-file` | Suppress the entire file |
+//! | `aegis:synthetic` | Mark this line's value as a deliberate example |
+//! | `aegis:synthetic-file` | Mark every value in this file as an example |
 //!
 //! An optional reason follows a `--` separator:
 //! `aegis:ignore:hardcoded-secret -- test fixture`. A bare
 //! `aegis:ignore` with no pattern list suppresses nothing —
 //! suppressions must name what they suppress.
+//!
+//! ## Suppression and annotation are different tools
+//!
+//! `aegis:ignore` hides a finding. `aegis:synthetic` keeps it: the finding
+//! stays in the report, tagged `synthetic` and reported at low severity, so
+//! a repository full of deliberate examples no longer drowns the real
+//! signals but still shows what was set aside and why.
 
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+/// The marker that introduces an ignore directive.
+const IGNORE_MARKER: &str = "aegis:ignore";
+
+/// The marker that introduces a synthetic-value annotation.
+const SYNTHETIC_MARKER: &str = "aegis:synthetic";
+
+/// The tag a finding under a synthetic annotation carries.
+pub const SYNTHETIC_TAG: &str = "synthetic";
 
 /// Suppression for a finding
 #[derive(Debug, Clone)]
@@ -92,6 +110,48 @@ impl SuppressionRange {
     }
 }
 
+/// Find an inline directive body for `marker` in `line`.
+///
+/// Returns the text after the `marker`, or `None` when the line carries no
+/// such directive. The comment prefixes are tried in the order `//`, `#`,
+/// and `/*`; a `//` directive is found anywhere in the line, a `#`
+/// directive is found mid-line only when no `//` comment precedes it, and
+/// a `/*` directive only at the start of the line.
+fn directive_body<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
+    // Most lines carry no directive at all, and this runs once per line
+    // of every scanned file. The substring check keeps the common path
+    // allocation-free; the needle strings are built only for a line that
+    // mentions the marker.
+    if !line.contains(marker) {
+        return None;
+    }
+    let slash = format!("// {marker}");
+    let hash = format!("# {marker}");
+    let block = format!("/* {marker}");
+
+    if let Some(rest) = line.trim_start().strip_prefix(slash.as_str()) {
+        return Some(rest);
+    }
+    if let Some(index) = line.find(slash.as_str()) {
+        return Some(&line[index + slash.len()..]);
+    }
+    if let Some(rest) = line.trim_start().strip_prefix(hash.as_str()) {
+        return Some(rest);
+    }
+    if let Some(index) = line.find(hash.as_str()) {
+        // Mid-line `#` directives (YAML, shell, Python) — mirrors the
+        // mid-line `//` handling above.
+        if !line[..index].contains("//") {
+            return Some(&line[index + hash.len()..]);
+        }
+    }
+    if let Some(rest) = line.trim_start().strip_prefix(block.as_str()) {
+        // `/* ... */` on one line: drop the closer before parsing.
+        return Some(rest.trim().strip_suffix("*/").map_or(rest, str::trim));
+    }
+    None
+}
+
 /// Manages finding suppressions - RwLock allows parallel reads
 #[derive(Debug, Default)]
 pub struct SuppressionManager {
@@ -100,6 +160,10 @@ pub struct SuppressionManager {
     ranges: RwLock<Vec<SuppressionRange>>,
     /// `aegis:ignore-file` reason, when the file is wholly suppressed
     file_suppressed: RwLock<Option<String>>,
+    /// Lines carrying an `aegis:synthetic` annotation
+    synthetic_lines: RwLock<HashSet<u32>>,
+    /// Whether an `aegis:synthetic-file` annotation covers the whole file
+    synthetic_file: RwLock<bool>,
     /// Findings actually suppressed by `is_suppressed`
     suppressed_hits: AtomicU64,
 }
@@ -112,6 +176,8 @@ impl SuppressionManager {
             suppressions: RwLock::new(HashSet::new()),
             ranges: RwLock::new(Vec::new()),
             file_suppressed: RwLock::new(None),
+            synthetic_lines: RwLock::new(HashSet::new()),
+            synthetic_file: RwLock::new(false),
             suppressed_hits: AtomicU64::new(0),
         }
     }
@@ -134,29 +200,53 @@ impl SuppressionManager {
                 .unwrap_or(u32::MAX)
                 .saturating_add(1); // 1-indexed
 
-            // Check for // aegis:ignore or # aegis:ignore. Rust fixtures often
-            // need an inline directive after the expression being tested.
-            if let Some(remaining) = line.trim_start().strip_prefix("// aegis:ignore") {
-                self.parse_directive(line_num, remaining);
-            } else if let Some(marker) = line.find("// aegis:ignore") {
-                self.parse_directive(line_num, &line[marker + 15..]);
-            } else if let Some(remaining) = line.trim_start().strip_prefix("# aegis:ignore") {
-                self.parse_directive(line_num, remaining);
-            } else if let Some(marker) = line.find("# aegis:ignore") {
-                // Mid-line `#` directives (YAML, shell, Python) — mirrors
-                // the mid-line `//` handling above.
-                if !line[..marker].contains("//") {
-                    self.parse_directive(line_num, &line[marker + 14..]);
-                }
-            } else if let Some(remaining) = line.trim_start().strip_prefix("/* aegis:ignore") {
-                // `/* ... */` on one line: drop the closer before parsing.
-                let remaining = remaining
-                    .trim()
-                    .strip_suffix("*/")
-                    .map_or(remaining, str::trim);
+            // Rust fixtures often need an inline directive after the
+            // expression being tested, so the directive is looked for
+            // anywhere in the line, not only at its start.
+            if let Some(remaining) = directive_body(line, IGNORE_MARKER) {
                 self.parse_directive(line_num, remaining);
             }
+            if let Some(remaining) = directive_body(line, SYNTHETIC_MARKER) {
+                self.parse_synthetic_directive(line_num, remaining);
+            }
         }
+    }
+
+    /// Parse one synthetic-value annotation (the text after the marker).
+    fn parse_synthetic_directive(&mut self, line: u32, raw_rest: &str) {
+        let rest = raw_rest.trim();
+        let rest = rest.strip_suffix("*/").map_or(rest, str::trim);
+
+        // A trailing reason (`-- why`) is documentation for the reader and
+        // is not parsed here. It is stripped before the specification is
+        // read, so `aegis:synthetic-file -- reason` still means the whole
+        // file rather than silently degrading to one line.
+        let spec = match rest.split_once(" -- ") {
+            Some((spec, _reason)) => spec.trim(),
+            None => rest,
+        };
+
+        // Only the `-file` variant carries a specification; the plain form
+        // takes no argument.
+        if spec == "-file" {
+            // `aegis:synthetic-file` — every value in the file is an example.
+            *self.synthetic_file.write() = true;
+            return;
+        }
+
+        // `aegis:synthetic` — this line's value is an example. A pattern
+        // list is not accepted: the annotation describes the value, not the
+        // rules that happen to match it.
+        self.synthetic_lines.write().insert(line);
+    }
+
+    /// Whether the line carries a synthetic-value annotation.
+    ///
+    /// True for a line marked with `aegis:synthetic` and for every line of
+    /// a file marked with `aegis:synthetic-file`.
+    #[must_use]
+    pub fn is_synthetic(&self, line: u32) -> bool {
+        *self.synthetic_file.read() || self.synthetic_lines.read().contains(&line)
     }
 
     /// Parse one suppression directive body (the text after the marker).
@@ -471,6 +561,42 @@ mod tests {
         let mut manager = SuppressionManager::new();
         manager.parse_content("/* aegis:ignore:multiline-secret */\n");
         assert!(manager.is_suppressed("multiline-secret", 1));
+    }
+
+    #[test]
+    fn a_synthetic_annotation_marks_only_its_own_line() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("key = value // aegis:synthetic -- test fixture\nother = value\n");
+        assert!(manager.is_synthetic(1));
+        assert!(!manager.is_synthetic(2));
+    }
+
+    #[test]
+    fn a_synthetic_file_annotation_marks_every_line() {
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("// aegis:synthetic-file\nkey = value\nother = value\n");
+        assert!(manager.is_synthetic(1));
+        assert!(manager.is_synthetic(2));
+        assert!(manager.is_synthetic(3));
+    }
+
+    #[test]
+    fn a_synthetic_file_annotation_with_a_reason_still_covers_the_file() {
+        // The reason is documentation for the reader. Dropping it must not
+        // turn a file-wide annotation into a single-line one.
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("// aegis:synthetic-file -- published examples\nkey = value\n");
+        assert!(manager.is_synthetic(2));
+    }
+
+    #[test]
+    fn a_synthetic_annotation_does_not_suppress_a_finding() {
+        // The annotation keeps the finding visible; it only changes how it
+        // is reported. A suppressed finding is gone.
+        let mut manager = SuppressionManager::new();
+        manager.parse_content("key = value // aegis:synthetic -- test fixture\n");
+        assert!(manager.is_synthetic(1));
+        assert!(!manager.is_suppressed("hardcoded-password", 1));
     }
 
     #[test]

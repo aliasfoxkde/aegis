@@ -11,6 +11,7 @@ Comprehensive security scanning tool for DevOps, CI/CD pipelines, and AI systems
 ## Usage
 
 - [CLI Reference](guides/CLI.md) - All available commands
+- [Triage](guides/TRIAGE.md) - Path classes, synthetic values, and secret verdicts
 - [CI/CD Integration](guides/CICD_INTEGRATION.md) - GitHub, GitLab, Jenkins, Azure
 - [MCP Server](guides/MCP.md) - Model Context Protocol integration
 

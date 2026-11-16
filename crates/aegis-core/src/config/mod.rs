@@ -32,9 +32,103 @@ pub struct Config {
     /// non-empty list runs exactly the named detectors.
     #[serde(default)]
     pub anomaly_detectors: Option<Vec<String>>,
+    /// Path classifications: globs whose findings are reported at low
+    /// severity because the paths hold documentation or test fixtures
+    /// rather than shipped code.
+    #[serde(default)]
+    pub path_classes: Vec<PathClassRule>,
     /// Bundle path
     #[serde(skip)]
     pub bundle: Bundle,
+}
+
+/// How a path is treated when a finding is reported from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PathClass {
+    /// Documentation prose. Heuristic findings here are reported at low
+    /// severity: a prose mention of a credential-shaped string is not a
+    /// credential.
+    Docs,
+    /// Test fixtures and synthetic data. Findings here are reported at low
+    /// severity for the same reason.
+    Fixture,
+}
+
+impl PathClass {
+    /// Parse a class name as written on the command line or in a profile.
+    ///
+    /// Accepts `docs`, `doc`, `documentation`, `fixture`, `test` and
+    /// `test-fixture`; the comparison is case-insensitive.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "docs" | "doc" | "documentation" => Some(Self::Docs),
+            "fixture" | "fixtures" | "test" | "test-fixture" => Some(Self::Fixture),
+            _ => None,
+        }
+    }
+
+    /// The tag a finding in a path of this class carries.
+    #[must_use]
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::Docs => "docs",
+            Self::Fixture => "fixture",
+        }
+    }
+
+    /// The name a class is written with in a profile or on the command
+    /// line, e.g. `docs`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        self.tag()
+    }
+}
+
+/// One glob-to-class mapping: findings below the glob are reported at low
+/// severity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PathClassRule {
+    /// Glob matched against the scanned file's path, relative to the scan
+    /// root. A glob without a `/` matches the file name.
+    pub glob: String,
+    /// The class the glob assigns.
+    pub class: PathClass,
+}
+
+impl PathClassRule {
+    /// Build a rule, validating the class name.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the accepted classes when `class` is not
+    /// one of them.
+    pub fn new(glob: impl Into<String>, class: &str) -> Result<Self, String> {
+        let class = PathClass::parse(class).ok_or_else(|| {
+            format!("unknown path class `{class}`; expected one of: docs, fixture")
+        })?;
+        Ok(Self {
+            glob: glob.into(),
+            class,
+        })
+    }
+
+    /// Check that the rule can match anything at all.
+    ///
+    /// A glob that does not compile classifies nothing, so the rule would
+    /// be a silent no-op. Callers that accept rules from a user — a command
+    /// line, a profile file — check this and fail loudly rather than
+    /// quietly reporting an unclassified scan.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message naming the glob when it does not compile.
+    pub fn validate(&self) -> Result<(), String> {
+        glob::Pattern::new(&self.glob)
+            .map(|_| ())
+            .map_err(|error| format!("invalid path class glob `{}`: {error}", self.glob))
+    }
 }
 
 /// Output format
@@ -101,6 +195,7 @@ impl Config {
                 output_format: OutputFormat::Sarif,
                 severity_threshold: None,
                 anomaly_detectors: None,
+                path_classes: Vec::new(),
                 bundle: Bundle::new(vec![]),
             }),
             "pipeline" => Some(Self {
@@ -119,6 +214,7 @@ impl Config {
                 output_format: OutputFormat::Json,
                 severity_threshold: None,
                 anomaly_detectors: None,
+                path_classes: Vec::new(),
                 bundle: Bundle::new(vec![]),
             }),
             "development" => Some(Self {
@@ -127,6 +223,7 @@ impl Config {
                 output_format: OutputFormat::Human,
                 severity_threshold: None,
                 anomaly_detectors: None,
+                path_classes: Vec::new(),
                 bundle: Bundle::new(vec![]),
             }),
             "mcp-integration" => Some(Self {
@@ -135,6 +232,7 @@ impl Config {
                 output_format: OutputFormat::Json,
                 severity_threshold: None,
                 anomaly_detectors: None,
+                path_classes: Vec::new(),
                 bundle: Bundle::new(vec![]),
             }),
             _ => None,
@@ -156,6 +254,7 @@ impl Config {
             output_format: OutputFormat::Human,
             severity_threshold: None,
             anomaly_detectors: None,
+            path_classes: Vec::new(),
             bundle: Bundle::new(vec![]),
         }
     }
@@ -213,6 +312,7 @@ mod tests {
                 from_file.severity_threshold, preset.severity_threshold,
                 "preset {name}"
             );
+            assert_eq!(from_file.path_classes, preset.path_classes, "preset {name}");
         }
     }
 

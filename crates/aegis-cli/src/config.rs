@@ -62,6 +62,38 @@ pub fn resolve_profile(name_or_path: &str) -> Result<aegis_core::Config, anyhow:
     aegis_core::Config::load(&candidate).map_err(anyhow::Error::from)
 }
 
+/// Parse `--classify-path GLOB=KIND` specifications into path-class rules.
+///
+/// A specification names the glob and the class it assigns, separated by
+/// the last `=`: `docs/**=docs`, `**/tests/**=fixture`. Every rule is
+/// checked before it is returned, because a malformed rule would classify
+/// nothing and leave the operator believing a path had been quieted.
+///
+/// # Errors
+///
+/// Returns an error when a specification has no `=`, has an empty glob,
+/// names an unknown class, or carries a glob that does not compile.
+pub fn parse_path_class_specs(
+    specs: &[String],
+) -> Result<Vec<aegis_core::PathClassRule>, anyhow::Error> {
+    let mut rules = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let Some((glob, class)) = spec.rsplit_once('=') else {
+            anyhow::bail!("invalid --classify-path `{spec}`: expected GLOB=KIND");
+        };
+        let glob = glob.trim();
+        if glob.is_empty() {
+            anyhow::bail!("invalid --classify-path `{spec}`: the glob is empty");
+        }
+        let rule = aegis_core::PathClassRule::new(glob, class.trim())
+            .map_err(|message| anyhow::anyhow!("invalid --classify-path `{spec}`: {message}"))?;
+        rule.validate()
+            .map_err(|message| anyhow::anyhow!("invalid --classify-path `{spec}`: {message}"))?;
+        rules.push(rule);
+    }
+    Ok(rules)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,5 +174,51 @@ mod tests {
         // bare `production` preset name.
         let profile = resolve_profile("production").expect("bare preset name");
         assert_eq!(profile.name, "production");
+    }
+
+    #[test]
+    fn parse_path_class_specs_reads_glob_and_class() {
+        let specs = vec![
+            "docs/**=docs".to_string(),
+            "**/tests/**=fixture".to_string(),
+        ];
+        let rules = parse_path_class_specs(&specs).expect("valid specifications");
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[0].glob, "docs/**");
+        assert_eq!(rules[0].class, aegis_core::PathClass::Docs);
+        assert_eq!(rules[1].class, aegis_core::PathClass::Fixture);
+    }
+
+    #[test]
+    fn parse_path_class_specs_rejects_a_specification_without_a_class() {
+        let specs = vec!["docs/**".to_string()];
+        let error = parse_path_class_specs(&specs).expect_err("missing class");
+        let message = error.to_string();
+        assert!(message.contains("GLOB=KIND"), "unexpected error: {message}");
+    }
+
+    #[test]
+    fn parse_path_class_specs_rejects_an_unknown_class() {
+        let specs = vec!["docs/**=prose".to_string()];
+        let error = parse_path_class_specs(&specs).expect_err("unknown class");
+        let message = error.to_string();
+        assert!(message.contains("docs"), "unexpected error: {message}");
+        assert!(message.contains("fixture"), "unexpected error: {message}");
+    }
+
+    #[test]
+    fn parse_path_class_specs_rejects_an_empty_glob() {
+        let specs = vec!["=docs".to_string()];
+        let error = parse_path_class_specs(&specs).expect_err("empty glob");
+        assert!(error.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn parse_path_class_specs_rejects_a_glob_that_cannot_compile() {
+        // A glob that does not compile would classify nothing, and the
+        // operator would believe the path had been quieted.
+        let specs = vec!["docs/**b=docs".to_string()];
+        let error = parse_path_class_specs(&specs).expect_err("invalid glob");
+        assert!(error.to_string().contains("glob"));
     }
 }

@@ -29,6 +29,7 @@ aegis scan [path] [options]
 | `--anomaly-detectors` | Comma-separated allow-list of statistical anomaly detectors: `comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`; unknown names fail with the valid list | all |
 | `--no-anomalies` | Disable the statistical anomaly layer entirely (conflicts with `--anomaly-detectors`) | `false` |
 | `--detect-clones` | Also detect copy-paste code clones (Type 1–3) within each scanned file. Pairs render in a `Code clones` section (human) and under `stats.clones` (JSON) with kind, description, similarity, token count, and line ranges. Pairing stops at 256 pairs per file, so pathological minified or generated files stay bounded. SARIF omits them; they never affect findings or the exit code | `false` |
+| `--classify-path` | Classify a path so findings below it are reported at low severity; repeat the flag for more rules. The value is `GLOB=KIND`, where KIND is `docs` or `fixture`. Secret findings keep their severity and carry the class as a tag. See [Triage](TRIAGE.md) | none |
 
 **Global flags:** `-f, --format <human|json|sarif>` is a top-level
 option, so it must come **before** the subcommand
@@ -76,6 +77,11 @@ aegis scan . --staged
 # Also surface copy-paste code clones; reported separately, never
 # part of the exit code
 aegis scan . --detect-clones
+
+# Quiet documentation prose and test fixtures: findings below a
+# classified path are reported at low severity, and secrets keep
+# their severity
+aegis scan . --classify-path "docs/**=docs" --classify-path "**/tests/**=fixture"
 ```
 
 ### aegis list
