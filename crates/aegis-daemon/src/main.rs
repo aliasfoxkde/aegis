@@ -196,7 +196,7 @@ fn configured_path(env_name: &str, default: &str) -> std::io::Result<PathBuf> {
 /// deployment that meant to configure the daemon and named nothing would
 /// otherwise run with the default configuration and say nothing.
 #[cfg(unix)]
-fn operator_config_path() -> anyhow::Result<Option<PathBuf>> {
+fn operator_config_path() -> Result<Option<PathBuf>> {
     match std::env::var_os(CONFIG_ENV) {
         Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
         Some(_) => Err(anyhow::anyhow!("{CONFIG_ENV} cannot be empty")),
