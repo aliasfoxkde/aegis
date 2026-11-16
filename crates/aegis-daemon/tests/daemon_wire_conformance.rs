@@ -41,16 +41,16 @@ const PLANTED_LEAK: &str = "aws_key: AKIAIOSFODNN7EXAMPLE\n"; // aegis:ignore:aw
 /// The frame cap the daemon enforces (see `crates/aegis-daemon/src/main.rs`).
 const MAX_FRAME_BYTES: usize = 10 * 1024 * 1024;
 
+/// Path to the daemon binary under test.
+///
+/// Cargo exports `CARGO_BIN_EXE_<name>` to the integration tests of the
+/// package that owns a binary, with `<name>` the target name exactly as
+/// written in `Cargo.toml` — so the hyphen is part of the name. The
+/// variable is read at compile time on purpose: it does not depend on
+/// where Cargo puts the test executable, which has changed between
+/// releases (`target/<profile>/deps/` is no longer the only layout).
 fn daemon_binary() -> PathBuf {
-    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_aegis_daemon") {
-        return path.into();
-    }
-    let test_binary = std::env::current_exe().expect("test executable path is available");
-    test_binary
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("integration test runs under target/<profile>/deps")
-        .join("aegis-daemon")
+    PathBuf::from(env!("CARGO_BIN_EXE_aegis-daemon"))
 }
 
 /// A spawned daemon process killed on drop, so a failing assertion cannot

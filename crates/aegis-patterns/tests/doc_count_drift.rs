@@ -60,10 +60,6 @@ impl Corpus {
         }
     }
 
-    fn severity(&self, name: &str) -> usize {
-        self.severities.get(name).copied().unwrap_or(0)
-    }
-
     /// Render a template with the live totals.
     ///
     /// Placeholders: `{n}` rules, `{c}` categories, and one placeholder per

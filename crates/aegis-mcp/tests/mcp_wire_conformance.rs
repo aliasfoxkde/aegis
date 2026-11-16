@@ -23,16 +23,16 @@ const FIXTURES: &str = include_str!("fixtures/mcp_wire_conformance.json");
 /// compilation; on a loaded runner that can take a minute.
 const SESSION_DEADLINE: Duration = Duration::from_secs(180);
 
+/// Path to the MCP server binary under test.
+///
+/// Cargo exports `CARGO_BIN_EXE_<name>` to the integration tests of the
+/// package that owns a binary, with `<name>` the target name exactly as
+/// written in `Cargo.toml` — so the hyphen is part of the name. The
+/// variable is read at compile time on purpose: it does not depend on
+/// where Cargo puts the test executable, which has changed between
+/// releases (`target/<profile>/deps/` is no longer the only layout).
 fn mcp_binary() -> std::path::PathBuf {
-    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_aegis_mcp") {
-        return path.into();
-    }
-    let test_binary = std::env::current_exe().expect("test executable path is available");
-    test_binary
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("integration test runs under target/<profile>/deps")
-        .join("aegis-mcp")
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_aegis-mcp"))
 }
 
 /// One expected stdout frame: a subset match on the JSON plus, if the
