@@ -94,7 +94,7 @@ impl ServerState {
     /// unknown anomaly detector — and leaves the previous configuration and
     /// scanner in place, so a rejected configuration never leaves the
     /// server half-configured.
-    pub async fn set_config(&self, config: Config) -> Result<(), String> {
+    pub async fn set_config(&self, config: Config) -> std::result::Result<(), String> {
         let bundle = self.current_bundle().await?;
         // Rebuilding the scanner compiles the whole rule set, which is
         // CPU-bound; `spawn_blocking` keeps it off the reactor so other
@@ -111,7 +111,7 @@ impl ServerState {
 
     /// The rule set the server is serving: the installed bundle when one
     /// was installed, the shipped corpus otherwise.
-    async fn current_bundle(&self) -> Result<Bundle, String> {
+    async fn current_bundle(&self) -> std::result::Result<Bundle, String> {
         if let Some(bundle) = self.installed_bundle.read().await.clone() {
             return Ok(bundle);
         }
@@ -182,7 +182,7 @@ impl ServerState {
 /// severity threshold no severity name matches, or an unknown anomaly
 /// detector. The scanner is not built, so a rejected configuration leaves
 /// the server serving the configuration it already had.
-fn scanner_for(bundle: &Bundle, config: &Config) -> Result<Scanner, String> {
+fn scanner_for(bundle: &Bundle, config: &Config) -> std::result::Result<Scanner, String> {
     // A rule whose glob does not compile classifies nothing, so the
     // configuration is rejected here instead of being applied as a silent
     // no-op: the caller learns that its path class never fired.
