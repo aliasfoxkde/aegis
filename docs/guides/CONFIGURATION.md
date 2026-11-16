@@ -163,6 +163,12 @@ Aegis reads only these variables; there is no general `AEGIS_CONFIG` or
 | `AEGIS_SOURCE_REVISION` | Source revision stamped into scan receipts (informational only) |
 | `AEGIS_ATHEON_PATH` | Path to an Atheon binary that `aegis benchmark --compare` runs against; when unset, the external comparison is skipped |
 
+These `AEGIS_DAEMON_*` variables configure `aegis-daemon`, which serves its
+protocol over a Unix domain socket and is therefore only meaningful on
+Unix-like platforms; on Windows the binary builds but exits with an
+explanatory message. See `crates/aegis-daemon/README.md` for the socket and
+peer-credential boundary.
+
 ## Risk Scoring
 
 Risk scoring is not user-configurable. Each finding contributes its

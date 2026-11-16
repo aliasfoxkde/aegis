@@ -1,6 +1,6 @@
 # Contributing to Aegis
 
-Aegis is a security scanner with 670 built-in patterns across 34
+Aegis is a security scanner with 677 built-in patterns across 35
 categories, shipped as Rust definitions in `crates/aegis-patterns/`.
 Contributions fall into three buckets: patterns, engine/CLI code, and
 documentation.
@@ -162,7 +162,7 @@ aegis/
 │   ├── aegis-mcp/        # JSON-RPC server for editor/agent integration
 │   ├── aegis-daemon/     # Unix-socket daemon mode
 │   ├── aegis-bundler/    # Pattern bundler
-│   ├── aegis-patterns/   # 670 pattern definitions
+│   ├── aegis-patterns/   # 677 pattern definitions
 │   └── aegis-wasm/       # WebAssembly binding
 ├── config/profiles/      # Configuration profiles
 ├── docs/                 # Documentation and guides
