@@ -168,10 +168,7 @@ pub fn triage_secret(value: &str) -> SecretTriage {
         reasons.push("matches a published documentation example".to_string());
     }
 
-    if PLACEHOLDER_WORDS
-        .iter()
-        .any(|word| lowered.contains(*word))
-    {
+    if PLACEHOLDER_WORDS.iter().any(|word| lowered.contains(*word)) {
         placeholder = true;
         // The signal is named; the word that matched is not. A reason that
         // said "contains the placeholder marker `changeme`" would quote a
