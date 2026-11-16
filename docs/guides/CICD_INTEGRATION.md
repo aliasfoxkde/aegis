@@ -303,3 +303,25 @@ The canonical JSON lives in
 the built-ins by a test; see
 [Configuration](CONFIGURATION.md#profiles) for the full field
 reference and the shipped presets.
+
+---
+
+## Gate Report Contract
+
+A gate that parses Aegis's output depends on a small, fixed set of
+fields. The JSON report is `{"findings": [...], "stats": {...}}`, and
+each finding carries `id`, `pattern`, `category`, `severity`,
+`location.file`, and `location.line`. The matched secret itself is
+never serialized, so a report is safe to persist.
+
+Three exit codes drive a gate: `0` means the scan completed cleanly, `1`
+means it completed and found something, and `3` means the scan could not
+prove it inspected everything it was asked to. A gate should treat any
+non-zero exit as a failure, and `3` in particular is a failure, not a
+clean pass.
+
+Those fields, the redaction, and the exit codes are pinned by
+`crates/aegis-cli/tests/ci_gate_contract.rs`, so a change to the report
+shape fails here rather than in the gate that reads it. The evidence
+record for the Control Center / GitForge integration is
+[the GitForge integration audit](../audits/2026-11-16-gitforge-integration-evidence.md).
