@@ -77,28 +77,51 @@ change.
 
 ## 2. Feature reach across surfaces — P1
 
-### 2.1 The daemon's and the MCP server's `config` is inert — OPEN
+### 2.1 The daemon's and the MCP server's `config` is inert — IN FLIGHT (PR #198)
 
-Both wire surfaces publish a live configuration that is never read:
+Both wire surfaces published a live configuration that was never read:
 
-- `crates/aegis-daemon/src/lib.rs:149` — `pub config: RwLock<Config>`,
-  seeded with `Config::default()` at `:216` and never read again.
-- `crates/aegis-mcp/src/main.rs:26` — `pub config: RwLock<Config>`, seeded
-  at `:50` and never read again.
+- `crates/aegis-daemon/src/lib.rs` — `pub config: RwLock<Config>`,
+  seeded with `Config::default()` at startup and never read again.
+- `crates/aegis-mcp/src/main.rs` — `pub config: RwLock<Config>`, seeded
+  at startup and never read again.
 
-Both servers build their scanner once from the bundled pattern corpus
-(`init_scanner`) and scan with default options, so the daemon and the
-MCP server cannot apply path classes, severity thresholds, or category
-filters — and a host process that writes `state.config` sees no effect
-and no error. The doc comment on the daemon field calls it "live
-configuration"; it is not.
+Both servers built their scanner once from the bundled pattern corpus
+(`init_scanner`) and scanned with default options, so the daemon and the
+MCP server could not apply path classes, severity thresholds, or category
+filters — and a host process that wrote `state.config` saw no effect and
+no error. The doc comment on the daemon field called it "live
+configuration"; it was not.
 
-**Next step:** pick one of two honest end states — apply the config when
-the scanner is built (and rebuild on write, with the invalid-rule
-rejection of item 1.2), or delete the field and the promise. The
-"delete" branch is cheaper and removes a trap for the next reader; the
-"apply" branch is what a control-plane consumer would want. Whichever is
-chosen, the field must not remain a write-only handle.
+**Resolved in PR #198** — the "apply" branch, because a control-plane
+consumer is the caller the field was promised to. Both surfaces now read
+the configuration when the scanner is built (the lazy first compilation
+included), publish the configuration in force (`config()`), and rebuild
+the scanner around a new configuration (`set_config()`).
+
+- A configuration that cannot be applied is rejected with the reason and
+  the configuration already in force keeps serving: an unknown category,
+  a path-class rule whose glob does not compile (the rejection of item
+  1.2), a severity threshold no severity name matches, or an unknown
+  anomaly detector. A rejected configuration never leaves either surface
+  half-configured.
+- The rule set is not a configuration decision: an installed bundle keeps
+  serving, and installing a bundle now builds around the configuration in
+  force, so the rule set and the configuration cannot disagree.
+- The configuration fields are private now. The daemon's is read with
+  `config()` and changed with `set_config()`; the same is true of the
+  MCP server's. Neither can be written behind the scanner's back.
+
+**Deliberately not done:** the wire protocols gain no configuration
+method. A peer that can set the severity threshold or the category list
+can weaken the very scan it was asked for — the configuration belongs to
+the operator side of the trust boundary, not to the client.
+
+**Still open, and small:** both binaries start with `Config::default()`.
+An operator profile file — the same `config/profiles/*.json` the CLI
+reads — is how a deployment would choose categories, a severity
+threshold, or path classes at startup. That is operator-side by design,
+and it is the remaining step for this item.
 
 ### 2.2 The triage ergonomics are CLI-only — P2
 
@@ -111,10 +134,10 @@ CLI (`--classify-path`, `crates/aegis-cli/src/main.rs:114`). The daemon
 and MCP conformance suites (Phase 15) have no fixture that pins the
 behaviour of any of the three.
 
-**Next step:** when item 2.1 lands, add wire conformance fixtures for
+**Next step:** item 2.1 has landed, so the wire conformance fixtures for
 the path-class classification, the synthetic annotation, and a triage
-verdict on a secret finding — the same shape as the existing daemon and
-MCP fixture suites.
+verdict on a secret finding can be written — the same shape as the
+existing daemon and MCP fixture suites.
 
 ---
 
@@ -241,7 +264,13 @@ the gate that proves it.
    `from_config`, item 1.2) — the core test suite is the gate.
 3. **Resolve the inert `config` field on the daemon and the MCP server**
    (item 2.1) — apply it or delete it; the daemon's own test suite and
-   the MCP wire conformance suite are the gate.
+   the MCP wire conformance suite are the gate. *Applied in PR #198: both
+   surfaces read the configuration when the scanner is built, publish it,
+   and rebuild the scanner around a new one. What is left is small and
+   operator-side — an operator profile file the binaries read at startup,
+   so a deployment can choose categories, a severity threshold, or path
+   classes without a wire method that would let a client weaken its own
+   scan.*
 4. **Write the changelog entries for PR #193's features, refresh
    `docs/PLAN.md`'s current-state block, and cut `v0.6.5`** (items 3.1,
    3.2) — the release workflow is the gate.
