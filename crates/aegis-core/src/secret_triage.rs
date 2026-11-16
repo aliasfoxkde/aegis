@@ -170,7 +170,7 @@ pub fn triage_secret(value: &str) -> SecretTriage {
 
     if PLACEHOLDER_WORDS
         .iter()
-        .any(|word| lowered.contains(**word))
+        .any(|word| lowered.contains(*word))
     {
         placeholder = true;
         // The signal is named; the word that matched is not. A reason that
