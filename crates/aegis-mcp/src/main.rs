@@ -6,7 +6,7 @@ mod protocol;
 mod sandbox;
 
 use aegis_core::transport::{read_bounded_line, FrameRead, MAX_FRAME_BYTES};
-use aegis_core::{Bundle, Config, PatternDefinition, ScanOptions, ScanReceipt, ScanStats, Scanner};
+use aegis_core::{Bundle, Config, ScanOptions, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
@@ -115,12 +115,7 @@ impl ServerState {
         if let Some(bundle) = self.installed_bundle.read().await.clone() {
             return Ok(bundle);
         }
-        Ok(Bundle::new(
-            aegis_patterns::all_patterns()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        ))
+        Ok(shipped_bundle())
     }
 
     /// Compile the bundled patterns on first use instead of at startup.
@@ -166,6 +161,19 @@ impl ServerState {
                 data: None,
             })
     }
+}
+
+/// The rule set shipped with the binary.
+///
+/// A configuration says what to look for, not which rules to ship, so the
+/// shipped corpus is the rule set unless a bundle is installed on top.
+fn shipped_bundle() -> Bundle {
+    Bundle::new(
+        aegis_patterns::all_patterns()
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+    )
 }
 
 /// Build a scanner over a rule set with a configuration in force.
@@ -481,12 +489,8 @@ impl AegisRpcImpl {
                     data: None,
                 })?
             } else {
-                // Use embedded patterns from aegis-patterns crate
-                let patterns: Vec<PatternDefinition> = aegis_patterns::all_patterns()
-                    .into_iter()
-                    .map(Into::into)
-                    .collect();
-                Bundle::new(patterns)
+                // Use the patterns shipped with the binary
+                shipped_bundle()
             };
 
             // Validate bundle
@@ -546,11 +550,7 @@ impl AegisRpcImpl {
 /// exists for the tests that need a scanner without a configuration.
 #[cfg(test)]
 fn init_scanner() -> anyhow::Result<Scanner> {
-    let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
-        .into_iter()
-        .map(Into::into)
-        .collect();
-    Scanner::from_definitions(definitions).map_err(anyhow::Error::from)
+    scanner_for(&shipped_bundle(), &Config::default()).map_err(anyhow::Error::from)
 }
 
 fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {

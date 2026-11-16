@@ -3,8 +3,7 @@
 //! Core logic for the Aegis daemon.
 
 use aegis_core::{
-    Bundle, Config, Finding, PatternDefinition, RiskScore, ScanOptions, ScanReceipt, ScanStats,
-    Scanner,
+    Bundle, Config, Finding, RiskScore, ScanOptions, ScanReceipt, ScanStats, Scanner,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
@@ -350,12 +349,20 @@ impl DaemonState {
 /// Returns an error when a bundled pattern definition cannot be converted into
 /// a scanner pattern or cannot be compiled.
 pub fn init_scanner() -> anyhow::Result<Scanner> {
-    let definitions: Vec<PatternDefinition> = aegis_patterns::all_patterns()
-        .into_iter()
-        .map(Into::into)
-        .collect();
+    scanner_for(&Config::default()).map_err(anyhow::Error::from)
+}
 
-    Scanner::from_definitions(definitions).map_err(anyhow::Error::from)
+/// The rule set shipped with the binary.
+///
+/// A configuration says what to look for, not which rules to ship, so the
+/// shipped corpus is the rule set unless a bundle is installed on top.
+fn shipped_bundle() -> Bundle {
+    Bundle::new(
+        aegis_patterns::all_patterns()
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+    )
 }
 
 /// Build a scanner over the shipped patterns with a configuration in force.
@@ -381,12 +388,7 @@ fn scanner_for(config: &Config) -> Result<Scanner, String> {
     }
 
     let mut configured = config.clone();
-    configured.bundle = Bundle::new(
-        aegis_patterns::all_patterns()
-            .into_iter()
-            .map(Into::into)
-            .collect(),
-    );
+    configured.bundle = shipped_bundle();
 
     let scanner = Scanner::from_config(&configured).map_err(|error| error.to_string())?;
 
