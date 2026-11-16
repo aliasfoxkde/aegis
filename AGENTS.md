@@ -30,7 +30,50 @@ cargo fmt --all
 cargo llvm-cov --workspace
 ```
 
-`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code`/`unwrap_used`/`expect_used`/`panic` denied) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Unwinding panics are denied in production code — errors must be values; test code is exempt via `clippy.toml`. Fix the code; do not add an allow (the few deliberate exceptions carry an inline `#[allow]` with the invariant it protects). A `Rustdoc` CI job runs `cargo doc` with `-D warnings`, enforcing the `[lints.rustdoc]` table.
+`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code`/`unwrap_used`/`expect_used`/`panic` denied) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Unwinding panics are denied in production code — errors must be values; test code is exempt via `clippy.toml`. Fix the code; do not add an allow (the few deliberate exceptions carry an inline `#[allow]` with the invariant it protects, recorded in the `aegis-allow:` format described under *Quality Gates and What Enforces Them*). A `Rustdoc` CI job runs `cargo doc` with `-D warnings`, enforcing the `[lints.rustdoc]` table.
+
+## Quality Gates and What Enforces Them
+
+Every rule this repository claims to enforce has exactly one gate that
+proves it, and a change that weakens a gate is itself a failure. If a rule
+has no row here, it is not enforced — either it should be, or it should not
+be claimed.
+
+| Rule | Gate | Where it runs |
+|---|---|---|
+| Formatting | `cargo fmt --all -- --check` | CI "Format" |
+| Lints (`pedantic`, `missing_docs`, `unwrap`/`expect`/`panic` denied) | `cargo clippy --workspace --all-targets -- -D warnings` | CI "Clippy" |
+| Public API docs resolve | `cargo doc --workspace --no-deps` with `-D warnings` | CI "Rustdoc" |
+| Every enabled rule fires on a shipped example | `cargo test -p aegis-core --test pattern_liveness` | CI "Test" |
+| Documented rule/category counts match the corpus | `cargo test -p aegis-patterns --test doc_count_drift` | CI "Test" |
+| Every lint suppression carries a dated, owned decision | `cargo test -p aegis-core --test lint_policy` and `scripts/check-allow-expiry.sh` | CI "Gate policy" |
+| A change does not weaken a configured gate | `scripts/check-gate-parity.py` | CI "Gate policy" |
+| License allow-list parity (cargo-deny ↔ cargo-about) | `scripts/check-license-parity.sh` | CI "Third-Party Notices" |
+| Advisory waivers parity (cargo-audit ↔ cargo-deny) | `scripts/check-advisory-parity.sh` | CI "Dependency Policy" |
+| The fuzz lockfile pins the workspace | `scripts/check-fuzz-lock.sh` | CI "Dependency Policy" |
+| Known dependency vulnerabilities | `cargo audit` and `cargo deny check` | CI "Security Audit", CI "Dependency Policy" |
+| Line-coverage floor | `scripts/coverage-floor.sh` (97.0%) | CI "Coverage" |
+| Vulnerabilities in this repository's own code | CodeQL and the repository's own scan | CI "CodeQL", `aegis-scan.yml` |
+| The WASM bindings still compile | `cargo build --target wasm32-unknown-unknown --package aegis-wasm` | CI "WASM" |
+| The declared MSRV | `cargo check --workspace` on 1.88 | CI "MSRV 1.88" |
+| No unused dependencies | `cargo machete` | CI "Unused Dependencies" |
+
+### Lint suppressions are decisions, not scars
+
+A `#[allow(...)]` suppresses a rule the workspace enforces, so every one of
+them is a decision somebody has to own. Each suppression in `crates/*/src`
+therefore carries a machine-readable annotation on the attribute line or
+the line below it:
+
+```text
+// aegis-allow: <reason> | expires=YYYY-MM-DD | approver=<who>
+```
+
+`crates/aegis-core/tests/lint_policy.rs` fails when a suppression has no
+such annotation (or one that is missing a field), and
+`scripts/check-allow-expiry.sh` fails when an expiry has passed or is
+within 45 days. Renewing a suppression means re-deciding it: fix the code,
+or move the date and — if the reasoning changed — the reason with it.
 
 ## Architecture
 

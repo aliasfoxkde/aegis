@@ -139,6 +139,7 @@ pub fn create_bundle(patterns: Vec<Pattern>) -> Bundle {
     // and a bundle must not silently carry a fabricated timestamp, so the
     // error path stays loud.
     #[allow(clippy::unwrap_used)]
+    // aegis-allow: a clock before the Unix epoch is a programmer error and a bundle must not carry a fabricated timestamp | expires=2027-12-31 | approver=maintainers
     let seconds = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()

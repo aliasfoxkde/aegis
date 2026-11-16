@@ -114,6 +114,25 @@ jobs:
       - name: Build
         run: cargo build --locked --workspace --release
 
+  wasm:
+    name: WASM
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      # The WASM crate is not part of `cargo build --workspace` on a native
+      # target, so nothing else in this workflow proves it still compiles.
+      # AGENTS.md documents the binding as a supported surface, so it gets
+      # its own gate.
+      - name: Build the WASM bindings
+        run: cargo build --locked --target wasm32-unknown-unknown --package aegis-wasm
+
   feature-tree-sitter:
     name: Feature tree-sitter
     needs: fmt
@@ -189,6 +208,30 @@ jobs:
       - name: Diff against committed notices
         run: git diff --exit-code THIRD-PARTY-NOTICES.md
 
+  # The gates above are only as good as their configuration. This job
+  # checks the configuration itself: that the change did not move a floor
+  # down (lint levels, advisory waivers, license allow-list, coverage
+  # targets) and that every lint suppression still carries a live, dated
+  # decision.
+  gate-policy:
+    name: Gate policy
+    needs: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The comparison is against the merge base, so the history has to
+          # be there.
+          fetch-depth: 0
+      - name: Check that no quality gate was weakened
+        run: scripts/check-gate-parity.py "$BASE_REF"
+        env:
+          # A pull request is compared against its target branch; a push is
+          # compared against the commit it follows.
+          BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before }}
+      - name: Check that no lint suppression expired
+        run: scripts/check-allow-expiry.sh
+
   links:
     name: Links
     needs: fmt
@@ -224,7 +267,7 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --locked --workspace --lcov --output-path lcov.info
       # The enforcing gate: Codecov uploads currently fail (no
       # CODECOV_TOKEN secret), so the codecov.yml targets are never
       # evaluated there. This step fails the build below the floor
@@ -273,6 +316,11 @@ jobs:
           tool: cargo-deny
       - name: Check advisories, licenses, bans, sources
         run: cargo deny check
+      # One advisory policy, two consumers: cargo-audit (Security Audit job)
+      # and cargo-deny (this job) must waive the same advisories. A waiver
+      # added to one file only is a silent hole in the other gate.
+      - name: Check advisory-ignore parity
+        run: scripts/check-advisory-parity.sh
       # The fuzz lockfile lives outside the workspace, so `--locked` never
       # verifies it; catch a version bump that forgot to update it.
       - name: Check fuzz lockfile pins the workspace

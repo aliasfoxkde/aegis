@@ -20,15 +20,6 @@ on:
           - high
           - medium
           - low
-      preset:
-        description: 'Scan preset to use'
-        required: false
-        default: 'pipeline'
-        type: choice
-        options:
-          - production
-          - pipeline
-          - development
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,7 +42,6 @@ jobs:
       security-events: write
     env:
       SCAN_SEVERITY: ${{ inputs.severity || 'high' }}
-      SCAN_PRESET: ${{ inputs.preset || 'pipeline' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,6 +66,12 @@ jobs:
           # Do not let a report from an earlier attempt make this scan look complete.
           rm -f aegis-results.sarif
           set +e
+          # The category set is fixed on purpose: it is the same set the
+          # repository's self-scan contract names in AGENTS.md, and the
+          # expected result of this scan is documented there. The
+          # `config/profiles/*.json` presets stay available for local runs;
+          # wiring one in here would change what this gate proves without
+          # changing what it reports.
           ./target/release/aegis --format sarif scan . \
             --categories secrets,security-hardening,web-security \
             --severity-threshold "$SCAN_SEVERITY" \

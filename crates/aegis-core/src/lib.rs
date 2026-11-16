@@ -46,6 +46,7 @@ pub mod user_patterns;
 // Internal helpers - not part of public API. Some are intentionally kept as
 // reusable seams for analyzers that are being integrated incrementally.
 #[allow(dead_code)]
+// aegis-allow: internal helper module retained as an integration seam for analyzers still being wired in | expires=2027-12-31 | approver=maintainers
 mod internal;
 
 pub use ast::{AstAnalysis, AstAnalyzer, AstFinding, AstInspection, AstInspectionStatus, Language};

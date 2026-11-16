@@ -121,6 +121,7 @@ impl RiskScore {
             // Category scores are fractional by design; round to whole risk
             // points instead of silently truncating.
             #[allow(clippy::cast_possible_truncation)]
+            // aegis-allow: category scores are fractional by design and rounding them to whole risk points is intentional | expires=2027-12-31 | approver=maintainers
             let points = cat_score.round() as i32;
             total_score += points;
 

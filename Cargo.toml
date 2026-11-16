@@ -11,6 +11,12 @@ description = "Aegis - Security scanning for DevOps and CI/CD"
 name = "aegis-bootstrap"
 path = "src/main.rs"
 
+# The root package is a workspace member like every other crate: it opts
+# into the same lint baseline. Without this line the aggregator binary is
+# the one part of the tree that clippy never looks at.
+[lints]
+workspace = true
+
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"

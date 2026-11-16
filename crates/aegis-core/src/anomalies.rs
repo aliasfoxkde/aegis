@@ -86,6 +86,7 @@ static IDENTIFIER_RE: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
     // exercised by unit tests; a parse failure is a programmer error, so
     // failing loudly on first use is the correct behavior.
     #[allow(clippy::expect_used)]
+    // aegis-allow: the regex is a compile-time constant and a parse failure is a programmer error | expires=2027-12-31 | approver=maintainers
     Regex::new(r"[A-Za-z_][A-Za-z0-9_]{1,}").expect("static regex compiles")
 });
 
