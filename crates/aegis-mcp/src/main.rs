@@ -550,7 +550,7 @@ impl AegisRpcImpl {
 /// exists for the tests that need a scanner without a configuration.
 #[cfg(test)]
 fn init_scanner() -> anyhow::Result<Scanner> {
-    scanner_for(&shipped_bundle(), &Config::default()).map_err(anyhow::Error::from)
+    scanner_for(&shipped_bundle(), &Config::default()).map_err(anyhow::Error::msg)
 }
 
 fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {

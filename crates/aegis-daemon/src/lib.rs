@@ -349,7 +349,7 @@ impl DaemonState {
 /// Returns an error when a bundled pattern definition cannot be converted into
 /// a scanner pattern or cannot be compiled.
 pub fn init_scanner() -> anyhow::Result<Scanner> {
-    scanner_for(&Config::default()).map_err(anyhow::Error::from)
+    scanner_for(&Config::default()).map_err(anyhow::Error::msg)
 }
 
 /// The rule set shipped with the binary.
