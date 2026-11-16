@@ -21,12 +21,14 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// Repository root: this crate is a workspace member two levels below it.
-fn repo_root() -> PathBuf {
+///
+/// The lookup is fallible, so it returns `None` rather than asserting
+/// here — a helper outside a `#[test]` function may not call `expect`.
+fn repo_root() -> Option<PathBuf> {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("crate must live inside the repository")
-        .to_path_buf()
+        .ancestors()
+        .nth(2)
+        .map(Path::to_path_buf)
 }
 
 /// Collect every `.rs` file under `crates/<crate>/src`.
@@ -111,7 +113,7 @@ fn parse_annotation(text: &str) -> Option<Annotation> {
 
 #[test]
 fn every_suppression_carries_a_recorded_decision() {
-    let root = repo_root();
+    let root = repo_root().expect("crate must live inside the repository");
     let mut failures = Vec::new();
     let mut checked = 0usize;
 
@@ -134,12 +136,26 @@ fn every_suppression_carries_a_recorded_decision() {
             let annotation = lines[index..window_end]
                 .iter()
                 .find_map(|candidate| parse_annotation(candidate));
-            if annotation.is_none() {
-                failures.push(format!(
+            match annotation {
+                None => failures.push(format!(
                     "{relative}:{}: {} has no `aegis-allow:` annotation with reason, expiry and approver",
                     index + 1,
                     line.trim()
-                ));
+                )),
+                Some(annotation) => {
+                    if annotation.reason.trim().is_empty() {
+                        failures.push(format!(
+                            "{relative}:{}: the annotation records no reason",
+                            index + 1
+                        ));
+                    }
+                    if annotation.approver.trim().is_empty() {
+                        failures.push(format!(
+                            "{relative}:{}: the annotation records no approver",
+                            index + 1
+                        ));
+                    }
+                }
             }
         }
     }
@@ -161,7 +177,7 @@ fn every_suppression_carries_a_recorded_decision() {
 /// listed here so a policy change to the expiry horizon is a visible edit.
 #[test]
 fn suppression_expiries_are_listed() {
-    let root = repo_root();
+    let root = repo_root().expect("crate must live inside the repository");
     let mut expiries: BTreeSet<String> = BTreeSet::new();
     for path in production_sources(&root) {
         let Ok(contents) = std::fs::read_to_string(&path) else {

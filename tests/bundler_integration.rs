@@ -6,7 +6,7 @@ use std::process::Command;
 fn test_bundle_create_and_load() {
     // Create a temp directory with patterns
     let temp_dir = std::env::temp_dir().join("aegis_bundle_test");
-    let _ = std::fs::remove_dir_all(&temp_dir);
+    drop(std::fs::remove_dir_all(&temp_dir));
     std::fs::create_dir_all(&temp_dir).unwrap();
 
     // Create patterns.yaml - array format expected by bundler
@@ -51,5 +51,5 @@ fn test_bundle_create_and_load() {
     // Verify bundle was created
     assert!(output_file.exists(), "Bundle file should exist");
 
-    let _ = std::fs::remove_dir_all(temp_dir);
+    drop(std::fs::remove_dir_all(temp_dir));
 }

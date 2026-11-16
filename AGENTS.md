@@ -58,6 +58,19 @@ be claimed.
 | The declared MSRV | `cargo check --workspace` on 1.88 | CI "MSRV 1.88" |
 | No unused dependencies | `cargo machete` | CI "Unused Dependencies" |
 
+Two settings outside the repository's files decide whether these gates can
+report at all:
+
+- **CodeQL.** The "CodeQL" job in `ci.yml` is an *advanced configuration*
+  analysis, and GitHub refuses to process an advanced analysis while the
+  repository's default code-scanning setup is enabled. The default setup is
+  therefore switched off (`code-scanning/default-setup` -> `not-configured`);
+  the CI job is the scanning that counts. Re-enabling the default setup
+  silently breaks the CodeQL gate with an upload error.
+- **MSRV.** `Cargo.toml` declares 1.88 and CI checks it, so no dependency may
+  require a newer compiler. `parking_lot` is pinned to the 0.12 line for this
+  reason - 0.13 requires rustc 1.95.
+
 ### Lint suppressions are decisions, not scars
 
 A `#[allow(...)]` suppresses a rule the workspace enforces, so every one of

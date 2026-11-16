@@ -1039,7 +1039,7 @@ IN THE SOFTWARE.
 
 ### MIT License
 
-- flate2 1.1.10 — https://github.com/rust-lang/flate2-rs
+- flate2 1.1.11 — https://github.com/rust-lang/flate2-rs
 
 ```
 Copyright (c) 2014-2026 Alex Crichton
@@ -1530,7 +1530,7 @@ DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- sha2 0.11.0 — https://github.com/RustCrypto/hashes
+- sha2 0.11.1 — https://github.com/RustCrypto/hashes
 
 ```
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -2423,7 +2423,7 @@ SOFTWARE.
 
 ### MIT License
 
-- libc 0.2.189 — https://github.com/rust-lang/libc
+- libc 0.2.191 — https://github.com/rust-lang/libc
 
 ```
 Copyright (c) The Rust Project Developers
@@ -2709,7 +2709,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### MIT License
 
-- tokio 1.53.3 — https://github.com/tokio-rs/tokio
+- tokio 1.54.1 — https://github.com/tokio-rs/tokio
 
 ```
 MIT License
@@ -3269,7 +3269,7 @@ SOFTWARE.
 ### MIT License
 
 - tree-sitter-language 0.1.9 — https://github.com/tree-sitter/tree-sitter
-- tree-sitter 0.27.1 — https://github.com/tree-sitter/tree-sitter
+- tree-sitter 0.27.2 — https://github.com/tree-sitter/tree-sitter
 
 ```
 The MIT License (MIT)

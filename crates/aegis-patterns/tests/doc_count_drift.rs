@@ -16,12 +16,14 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// Repository root: this crate is a workspace member two levels below it.
-fn repo_root() -> PathBuf {
+///
+/// The lookup is fallible, so it returns `None` rather than asserting
+/// here — a helper outside a `#[test]` function may not call `expect`.
+fn repo_root() -> Option<PathBuf> {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("crate must live inside the repository")
-        .to_path_buf()
+        .ancestors()
+        .nth(2)
+        .map(Path::to_path_buf)
 }
 
 /// Collapse every whitespace run to a single space, so a phrase that wraps
@@ -152,7 +154,7 @@ fn documented_rule_counts_match_the_corpus() {
         corpus.total
     );
 
-    let root = repo_root();
+    let root = repo_root().expect("crate must live inside the repository");
     let mut failures = Vec::new();
     for (relative, template) in TOTAL_CLAIMS {
         let path = root.join(relative);
