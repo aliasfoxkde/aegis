@@ -314,10 +314,11 @@ each finding carries `id`, `pattern`, `category`, `severity`,
 `location.file`, and `location.line`. The matched secret itself is
 never serialized, so a report is safe to persist.
 
-Two exit codes drive a gate: `1` means the scan completed and found
-something, `0` means it completed cleanly, and `3` means the scan could
-not prove it inspected everything it was asked to. A gate should treat
-`3` as a failure, not as a clean pass.
+Three exit codes drive a gate: `0` means the scan completed cleanly, `1`
+means it completed and found something, and `3` means the scan could not
+prove it inspected everything it was asked to. A gate should treat any
+non-zero exit as a failure, and `3` in particular is a failure, not a
+clean pass.
 
 Those fields, the redaction, and the exit codes are pinned by
 `crates/aegis-cli/tests/ci_gate_contract.rs`, so a change to the report
