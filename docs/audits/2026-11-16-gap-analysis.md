@@ -44,7 +44,7 @@ guide, but nothing tested the *reasons* against the value — the existing
 test asserted the whole value was absent, which a single matched word
 satisfied. A contract that is not asserted is a comment.
 
-### 1.2 `Scanner::from_config` silently drops an invalid path-class rule — P1, IN FLIGHT (PR #197)
+### 1.2 `Scanner::from_config` silently drops an invalid path-class rule — FIXED (PR #197)
 
 `Scanner::from_config` copies `config.path_classes` into the scanner's
 options and builds the matcher without validating the globs
@@ -66,12 +66,32 @@ an invalid path-class rule, or a dedicated error enum for
 degrading. Add a regression that a bad glob in a `Config` is an error,
 not a warning.
 
-Decided and in flight in PR #197: the error surface is a
-`PatternError::InvalidPathClass` variant (the function already maps
-configuration problems such as an unknown category into `PatternError`),
-and `from_config` rejects the configuration naming the offending glob.
-Integration coverage over the public entry point is in the same
-change.
+The error surface is a `PatternError::InvalidPathClass` variant (the
+function already maps configuration problems such as an unknown category
+into `PatternError`), and `from_config` rejects the configuration
+naming the offending glob. Landed in PR #197, with integration coverage
+over the public entry point.
+
+### 1.3 A path class never matched anything on Windows — FIXED (PR #199)
+
+Found by PR #199's own Windows job, not by inspection: the daemon's new
+test asserted that a configured path class lowers a documentation
+finding to low severity, and on Windows the finding stayed at high.
+
+The cause is a separator mismatch. A rule is written with `/`, the
+separator a configuration file carries on every platform
+(`docs/guides/CONFIGURATION.md`), but the path it was matched against was
+the one the operating system built — `docs\example.md` on Windows. The
+matcher split on `/` only (`crates/aegis-core/src/path_class.rs`), so no
+rule containing a separator could ever match there and every path class
+was inert on Windows: a documentation or fixture path stayed reported as
+an ordinary finding.
+
+The path is now put into `/` before it is matched. Only the platform's
+own separator is replaced, so a backslash keeps its meaning as a legal
+character in a file name on Unix. The behaviour is exercised on every
+platform through a separator-explicit helper, and the Windows path
+itself is asserted by the Windows matrix.
 
 ---
 
@@ -222,7 +242,7 @@ change; worth remembering when the next contract sentence is written.
 
 ## 5. Gate gaps — P2
 
-### 5.1 Nothing enforces patch coverage — OPEN
+### 5.1 Nothing enforces patch coverage — IN FLIGHT (`feat/patch-coverage-floor`)
 
 `scripts/coverage-floor.sh` computes one project-wide line percentage
 over the counted set and fails below 97.0%; `codecov.yml` also declares
@@ -236,6 +256,16 @@ barely moves when a small uncovered file arrives.
 the lines added by the diff, and their hit counts — and fail the
 Coverage job below it. Keep the floor just below measured reality and
 ratchet it up, as the repository's own rule requires.
+
+In flight on `feat/patch-coverage-floor`: `scripts/patch-coverage-floor.py`
+intersects the lines a diff adds with the hit counts in the same lcov
+report and fails the Coverage job below the floor, which starts at the
+90% `codecov.yml` already declares. The diff is taken against the merge
+base, so a branch that lags its base still measures against the fork.
+`scripts/check-gate-parity.py` now tracks the floor, so it cannot be
+lowered or removed quietly — and its codecov-target reader, which
+stopped a scope's body at the next key of any kind and therefore never
+reached the `target:` line, was fixed in the same change.
 
 ### 5.2 External, recorded not fixable here — P3
 
@@ -272,9 +302,10 @@ Work in this order; each item is independently mergeable and each names
 the gate that proves it.
 
 1. **Land PR #195** (triage reason) — Clippy, Format, and the three-OS
-   test matrix are the gate.
+   test matrix are the gate. *Done: merged as `fea42f7`.*
 2. **Land PR #197** (reject an invalid path-class rule in
-   `from_config`, item 1.2) — the core test suite is the gate.
+   `from_config`, item 1.2) — the core test suite is the gate. *Done:
+   merged as `4511c84`.*
 3. **Resolve the inert `config` field on the daemon and the MCP server**
    (item 2.1) — apply it or delete it; the daemon's own test suite and
    the MCP wire conformance suite are the gate. *Done in PR #198 and
@@ -290,7 +321,8 @@ the gate that proves it.
    `docs/PLAN.md`'s current-state block, and cut `v0.6.5`** (items 3.1,
    3.2) — the release workflow is the gate.
 5. **Add a patch-coverage floor** to the Coverage job (item 5.1) — the
-   script's own report over a CI lcov file is the gate.
+   script's own report over a CI lcov file is the gate. *In flight on
+   `feat/patch-coverage-floor`.*
 6. **Add wire conformance fixtures for the triage ergonomics** (item
    2.2) — the daemon and MCP conformance suites are the gate.
 7. **Documentation cleanups** (items 4.1, 4.2) — the `Links` job and a
