@@ -45,6 +45,7 @@ be claimed.
 | Lints (`pedantic`, `missing_docs`, `unwrap`/`expect`/`panic` denied) | `cargo clippy --workspace --all-targets -- -D warnings` | CI "Clippy" |
 | Public API docs resolve | `cargo doc --workspace --no-deps` with `-D warnings` | CI "Rustdoc" |
 | Every enabled rule fires on a shipped example | `cargo test -p aegis-core --test pattern_liveness` | CI "Test" |
+| The report contract a CI gate reads | `cargo test -p aegis-cli --test ci_gate_contract` | CI "Test" |
 | Documented rule/category counts match the corpus | `cargo test -p aegis-patterns --test doc_count_drift` | CI "Test" |
 | Every lint suppression carries a dated, owned decision | `cargo test -p aegis-core --test lint_policy` and `scripts/check-allow-expiry.sh` | CI "Gate policy" |
 | A change does not weaken a configured gate | `scripts/check-gate-parity.py` | CI "Gate policy" |
