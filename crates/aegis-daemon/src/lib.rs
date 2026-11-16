@@ -165,6 +165,12 @@ pub struct DaemonState {
     /// holds zero patterns would approve everything, so requests must keep
     /// failing closed.
     patterns_init: tokio::sync::OnceCell<Result<(), String>>,
+    /// Serializes the two paths that build and install a scanner: the lazy
+    /// compilation on first use and [`Self::set_config`]. Without it, a
+    /// compilation that began before a configuration was applied would
+    /// install its scanner afterwards, silently undoing the change. It is
+    /// always the outermost lock, so the two paths cannot deadlock.
+    apply_lock: tokio::sync::Mutex<()>,
 }
 
 impl DaemonState {
@@ -225,6 +231,7 @@ impl DaemonState {
             socket_path,
             scan_root,
             patterns_init: tokio::sync::OnceCell::const_new(),
+            apply_lock: tokio::sync::Mutex::const_new(()),
         })
     }
 
@@ -261,6 +268,10 @@ impl DaemonState {
     /// and leaves the previous configuration and scanner in place, so a
     /// rejected configuration never leaves the daemon half-configured.
     pub async fn set_config(&self, config: Config) -> Result<(), String> {
+        // The lock keeps a lazy compilation that is already running from
+        // installing its scanner after this one; the configuration that is
+        // in force afterwards is the one that was applied here.
+        let _guard = self.apply_lock.lock().await;
         // Rebuilding the scanner compiles the whole rule set, which is
         // CPU-bound; `spawn_blocking` keeps it off the reactor so other
         // requests keep being served while the configuration changes.
@@ -271,6 +282,10 @@ impl DaemonState {
         let scanner = rebuilt?;
         *self.scanner.write().await = scanner;
         *self.config.write().await = config;
+        // The scanner in force is already built from this configuration, so
+        // the lazy compilation is marked as done. Without this the first
+        // request would compile the whole rule set a second time.
+        let _marked = self.patterns_init.set(Ok(()));
         Ok(())
     }
 
@@ -282,8 +297,9 @@ impl DaemonState {
     /// to every caller instead of degrading to a scanner with no patterns.
     ///
     /// The configuration in force when the patterns are compiled is the one
-    /// the scanner is built from, so a configuration applied before the
-    /// first request is honoured rather than overwritten.
+    /// the scanner is built from, and a configuration applied while that
+    /// compilation runs waits for it, so the configuration in force is
+    /// never overwritten by a scanner built from an earlier one.
     ///
     /// # Errors
     ///
@@ -295,6 +311,9 @@ impl DaemonState {
     pub async fn ensure_patterns_loaded(&self) -> Result<(), String> {
         self.patterns_init
             .get_or_init(|| async {
+                // The lock keeps a configuration applied while this
+                // compilation runs from being overwritten by it.
+                let _guard = self.apply_lock.lock().await;
                 let config = self.config.read().await.clone();
                 let compiled: Result<Scanner, String> =
                     match tokio::task::spawn_blocking(move || scanner_for(&config)).await {
@@ -1146,6 +1165,51 @@ mod tests {
                 .map(|finding| finding.category.as_str())
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn a_configuration_applied_while_the_rule_set_compiles_stays_in_force() {
+        // The lazy compilation and the configuration change each install a
+        // scanner. Whichever runs last, the configuration that was applied
+        // is the one in force afterwards: a compilation that began before
+        // the change must not install its scanner over it.
+        for order in [0_u8, 1] {
+            let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/test.sock")));
+            let config = Config {
+                enabled_categories: Some(vec!["secrets".to_string()]),
+                ..Config::default()
+            };
+            let apply = state.set_config(config);
+            let load = state.ensure_patterns_loaded();
+            let (applied, loaded) = if order == 0 {
+                tokio::join!(apply, load)
+            } else {
+                let (loaded, applied) = tokio::join!(load, apply);
+                (applied, loaded)
+            };
+            applied.expect("configuration applies");
+            loaded.expect("the rule set compiles");
+
+            let request = serde_json::json!({
+                "method": "scan_string",
+                "params": [mixed_category_fixture(), "test.txt"],
+                "id": 32
+            });
+            let response = handle_request(&request, &state).await;
+            assert!(response.success, "scan_string: {:?}", response.error);
+            assert!(
+                response
+                    .findings
+                    .iter()
+                    .all(|finding| finding.category == "secrets"),
+                "the configuration in force is the one that was applied: {:?}",
+                response
+                    .findings
+                    .iter()
+                    .map(|finding| finding.category.as_str())
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 
     #[tokio::test]

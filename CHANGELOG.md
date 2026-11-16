@@ -22,6 +22,21 @@ every release are attached to the matching GitHub release.
   verdicts. A file where several slop rules fire at once is the real
   signal.
 
+- The daemon and the MCP server now take an operator configuration at
+  startup. `AEGIS_DAEMON_CONFIG` and `AEGIS_MCP_CONFIG` name the same JSON
+  profile document the CLI reads with `aegis --config <file>`; the
+  categories, severity threshold, anomaly detectors, and path classes in
+  it are applied before the daemon binds its socket and before the MCP
+  server answers, so a deployment can choose what it scans for without a
+  code change. A configuration that cannot be applied stops the process
+  rather than leaving it serving scans it was not configured for, and an
+  empty variable is refused instead of being read as "no configuration".
+  The configuration stays operator-side: no request over either protocol
+  changes it, because a client that could set the severity threshold or
+  the category list could weaken the scan it was asked for. Applying a
+  configuration also marks the rule set as built, so the first request no
+  longer compiles the whole rule set a second time.
+
 ### Changed
 
 - Scan exit status now honors both receipt completeness and the finding

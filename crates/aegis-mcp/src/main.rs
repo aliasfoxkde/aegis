@@ -49,6 +49,13 @@ pub struct ServerState {
     /// lazy init is skipped entirely (and cannot clobber the bundle) even
     /// if a previous lazy compilation failed.
     bundle_swapped: AtomicBool,
+    /// Serializes the paths that build and install a scanner: the lazy
+    /// compilation on first use, `update_bundle`, and
+    /// [`ServerState::set_config`]. Without it, a compilation that began
+    /// before a configuration was applied would install its scanner
+    /// afterwards, silently undoing the change. It is always the outermost
+    /// lock, so the paths cannot deadlock.
+    apply_lock: tokio::sync::Mutex<()>,
 }
 
 impl ServerState {
@@ -66,6 +73,7 @@ impl ServerState {
             bundle_checksum: RwLock::new(String::new()),
             patterns_init: tokio::sync::OnceCell::const_new(),
             bundle_swapped: AtomicBool::new(false),
+            apply_lock: tokio::sync::Mutex::const_new(()),
         }
     }
 
@@ -95,6 +103,10 @@ impl ServerState {
     /// scanner in place, so a rejected configuration never leaves the
     /// server half-configured.
     pub async fn set_config(&self, config: Config) -> std::result::Result<(), String> {
+        // The lock keeps a lazy compilation that is already running from
+        // installing its scanner after this one; the configuration that is
+        // in force afterwards is the one that was applied here.
+        let _guard = self.apply_lock.lock().await;
         let bundle = self.current_bundle().await;
         // Rebuilding the scanner compiles the whole rule set, which is
         // CPU-bound; `spawn_blocking` keeps it off the reactor so other
@@ -106,6 +118,10 @@ impl ServerState {
         let scanner = rebuilt?;
         *self.scanner.write().await = scanner;
         *self.config.write().await = config;
+        // The scanner in force is already built from this configuration, so
+        // the lazy compilation is marked as done. Without this the first
+        // request would compile the whole rule set a second time.
+        let _marked = self.patterns_init.set(Ok(()));
         Ok(())
     }
 
@@ -126,8 +142,9 @@ impl ServerState {
     /// every request instead of degrading to a scanner with no patterns.
     ///
     /// The configuration in force when the patterns are compiled is the one
-    /// the scanner is built from, so a configuration applied before the
-    /// first request is honoured rather than overwritten.
+    /// the scanner is built from, and a configuration applied while that
+    /// compilation runs waits for it, so the configuration in force is
+    /// never overwritten by a scanner built from an earlier one.
     ///
     /// # Errors
     /// Returns `InternalError` when the pattern compilation task fails or
@@ -138,6 +155,9 @@ impl ServerState {
         }
         self.patterns_init
             .get_or_init(|| async {
+                // The lock keeps a configuration applied while this
+                // compilation runs from being overwritten by it.
+                let _guard = self.apply_lock.lock().await;
                 let bundle = self.current_bundle().await;
                 let config = self.config.read().await.clone();
                 let compiled: std::result::Result<Scanner, String> =
@@ -503,6 +523,10 @@ impl AegisRpcImpl {
             // Create the scanner from the bundle with the configuration in
             // force: an installed rule set answers what to scan, not how
             // to treat what is found.
+            //
+            // The lock keeps a lazy compilation that is already running
+            // from installing its scanner after this one.
+            let _guard = state.apply_lock.lock().await;
             let config = state.config.read().await.clone();
             let new_scanner = scanner_for(&bundle, &config).map_err(|e| jsonrpc_core::Error {
                 code: jsonrpc_core::ErrorCode::InternalError,
@@ -541,6 +565,27 @@ impl AegisRpcImpl {
                 pattern_count,
             })
         })
+    }
+}
+
+/// The operator configuration file the server applies at startup.
+///
+/// The configuration is operator-side on purpose: a client of the server
+/// must not be able to change it, because a client that could set the
+/// severity threshold or the category list could weaken the scan it was
+/// asked for.
+const CONFIG_ENV: &str = "AEGIS_MCP_CONFIG";
+
+/// The operator configuration file to apply, when one is named.
+///
+/// An empty value is refused rather than treated as "no configuration": a
+/// deployment that meant to configure the server and named nothing would
+/// otherwise run with the default configuration and say nothing.
+fn operator_config_path() -> anyhow::Result<Option<PathBuf>> {
+    match std::env::var_os(CONFIG_ENV) {
+        Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
+        Some(_) => Err(anyhow::anyhow!("{CONFIG_ENV} cannot be empty")),
+        None => Ok(None),
     }
 }
 
@@ -616,6 +661,14 @@ async fn main() -> anyhow::Result<()> {
         .try_init();
 
     let state = Arc::new(ServerState::new());
+
+    // An operator configuration is applied before the server answers, so a
+    // configuration that cannot be applied stops the server instead of
+    // leaving it serving scans it was not configured for.
+    if let Some(path) = operator_config_path()? {
+        let config = Config::load(&path)?;
+        state.set_config(config).await.map_err(anyhow::Error::msg)?;
+    }
 
     // Patterns compile lazily on the first request that needs them (see
     // `ServerState::ensure_patterns_loaded`); startup only wires the
@@ -1217,6 +1270,77 @@ mod tests {
                 .map(|finding| finding.category.as_str())
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[tokio::test]
+    async fn a_configuration_applied_while_the_rule_set_compiles_stays_in_force() {
+        // The lazy compilation and the configuration change each install a
+        // scanner. Whichever runs last, the configuration that was applied
+        // is the one in force afterwards: a compilation that began before
+        // the change must not install its scanner over it.
+        for order in [0_u8, 1] {
+            let state = Arc::new(ServerState::new());
+            let config = Config {
+                enabled_categories: Some(vec!["secrets".to_string()]),
+                ..Config::default()
+            };
+            let apply = state.set_config(config);
+            let load = state.ensure_patterns_loaded();
+            let (applied, loaded) = if order == 0 {
+                tokio::join!(apply, load)
+            } else {
+                let (loaded, applied) = tokio::join!(load, apply);
+                (applied, loaded)
+            };
+            applied.expect("configuration applies");
+            loaded.expect("the rule set compiles");
+
+            let rpc = AegisRpcImpl::new(state.clone());
+            let scanned = rpc
+                .scan_string(mixed_category_fixture(), "test.txt".to_string())
+                .await
+                .expect("scan_string must succeed");
+            assert!(
+                scanned
+                    .findings
+                    .iter()
+                    .all(|finding| finding.category == "secrets"),
+                "the configuration in force is the one that was applied: {:?}",
+                scanned
+                    .findings
+                    .iter()
+                    .map(|finding| finding.category.as_str())
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn the_operator_configuration_is_read_from_the_environment() {
+        // Env vars are process-global; the name is exercised in this one
+        // serialized test so parallel tests cannot race the mutation.
+        std::env::remove_var(CONFIG_ENV);
+        assert!(
+            operator_config_path()
+                .expect("unset is not an error")
+                .is_none(),
+            "no configuration is named when the variable is unset"
+        );
+
+        std::env::set_var(CONFIG_ENV, "/tmp/aegis-operator.json");
+        assert_eq!(
+            operator_config_path().expect("a named file is read"),
+            Some(PathBuf::from("/tmp/aegis-operator.json"))
+        );
+
+        std::env::set_var(CONFIG_ENV, "");
+        let error = operator_config_path().expect_err("an empty value must be rejected");
+        assert!(
+            error.to_string().contains(CONFIG_ENV),
+            "the rejection names the variable: {error}"
+        );
+
+        std::env::remove_var(CONFIG_ENV);
     }
 
     #[tokio::test]

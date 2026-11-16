@@ -37,6 +37,15 @@ const SOCKET_PATH_ENV: &str = "AEGIS_DAEMON_SOCKET_PATH";
 #[cfg(unix)]
 const SCAN_ROOT_ENV: &str = "AEGIS_DAEMON_SCAN_ROOT";
 
+/// The operator configuration file the daemon applies at startup.
+///
+/// The configuration is operator-side on purpose: a client of the socket
+/// must not be able to change it, because a client that could set the
+/// severity threshold or the category list could weaken the scan it was
+/// asked for.
+#[cfg(unix)]
+const CONFIG_ENV: &str = "AEGIS_DAEMON_CONFIG";
+
 /// Serialize a response, falling back to a framing-level error envelope if
 /// serialization itself fails (infallible in practice).
 #[cfg(unix)]
@@ -181,6 +190,20 @@ fn configured_path(env_name: &str, default: &str) -> std::io::Result<PathBuf> {
     }
 }
 
+/// The operator configuration file to apply, when one is named.
+///
+/// An empty value is refused rather than treated as "no configuration": a
+/// deployment that meant to configure the daemon and named nothing would
+/// otherwise run with the default configuration and say nothing.
+#[cfg(unix)]
+fn operator_config_path() -> anyhow::Result<Option<PathBuf>> {
+    match std::env::var_os(CONFIG_ENV) {
+        Some(value) if !value.is_empty() => Ok(Some(PathBuf::from(value))),
+        Some(_) => Err(anyhow::anyhow!("{CONFIG_ENV} cannot be empty")),
+        None => Ok(None),
+    }
+}
+
 #[cfg(unix)]
 fn remove_socket_if_present(path: &Path) {
     if let Ok(metadata) = fs::symlink_metadata(path) {
@@ -207,6 +230,15 @@ async fn main() -> Result<()> {
         socket_path.clone(),
         &scan_root,
     )?);
+
+    // An operator configuration is applied before the socket is bound, so a
+    // configuration that cannot be applied stops the daemon instead of
+    // leaving it serving scans it was not configured for.
+    if let Some(path) = operator_config_path()? {
+        let config = aegis_core::Config::load(&path)?;
+        state.set_config(config).await.map_err(anyhow::Error::msg)?;
+        println!("Configuration: {}", path.display());
+    }
 
     // Patterns compile lazily on the first request that needs them (see
     // `DaemonState::ensure_patterns_loaded`); startup only binds the socket.
@@ -490,6 +522,34 @@ mod tests {
         assert!(error.to_string().contains(SOCKET_PATH_ENV));
 
         std::env::remove_var(SOCKET_PATH_ENV);
+    }
+
+    #[test]
+    fn the_operator_configuration_is_read_from_the_environment() {
+        // Env vars are process-global; the name is exercised in this one
+        // serialized test so parallel tests cannot race the mutation.
+        std::env::remove_var(CONFIG_ENV);
+        assert!(
+            operator_config_path()
+                .expect("unset is not an error")
+                .is_none(),
+            "no configuration is named when the variable is unset"
+        );
+
+        std::env::set_var(CONFIG_ENV, "/tmp/aegis-operator.json");
+        assert_eq!(
+            operator_config_path().expect("a named file is read"),
+            Some(PathBuf::from("/tmp/aegis-operator.json"))
+        );
+
+        std::env::set_var(CONFIG_ENV, "");
+        let error = operator_config_path().expect_err("an empty value must be rejected");
+        assert!(
+            error.to_string().contains(CONFIG_ENV),
+            "the rejection names the variable: {error}"
+        );
+
+        std::env::remove_var(CONFIG_ENV);
     }
 
     #[tokio::test]
