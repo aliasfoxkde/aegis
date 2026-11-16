@@ -24,6 +24,10 @@
 //! `crates/docs/setup.md` alike, because the path is also tried with
 //! leading components removed at every directory boundary. A rule without
 //! a separator (`*.md`) matches the file name.
+//!
+//! Rules are written with `/`, the separator a configuration file carries
+//! on every platform. A path the operating system built uses that
+//! platform's separator, so it is put into `/` before it is matched.
 
 use crate::config::{PathClass, PathClassRule};
 use crate::finding::Finding;
@@ -84,14 +88,17 @@ impl PathClassMatcher {
         if self.rules.is_empty() {
             return None;
         }
-        let normalized = path.strip_prefix("./").unwrap_or(path);
-        let base = relative.map_or(normalized, |relative| {
-            relative.strip_prefix("./").unwrap_or(relative)
-        });
+        let normalized = normalize_separators(path.strip_prefix("./").unwrap_or(path));
+        let base = match relative {
+            Some(relative) => {
+                normalize_separators(relative.strip_prefix("./").unwrap_or(relative))
+            }
+            None => normalized,
+        };
 
         let mut candidates: Vec<&str> = Vec::new();
-        candidates.push(base);
-        candidates.extend(suffixes_at_directory_boundaries(base));
+        candidates.push(base.as_str());
+        candidates.extend(suffixes_at_directory_boundaries(&base));
         if let Some(name) = base.rsplit('/').next() {
             candidates.push(name);
         }
@@ -106,6 +113,33 @@ impl PathClassMatcher {
         None
     }
 }
+
+/// Put a path into the separators a glob is written with.
+///
+/// A rule is written with `/`, because that is what a configuration file
+/// carries on every platform. A path built by the operating system uses
+/// that platform's separator, which on Windows is `\`. Without this, a
+/// rule such as `docs/**` matched nothing on Windows, and a path class
+/// was inert there.
+///
+/// Only the platform's own separator is replaced: on Unix a backslash is
+/// a legal character in a file name, so it must not be read as a
+/// separator there.
+fn normalize_separators(path: &str) -> String {
+    normalize_separators_with(path, std::path::MAIN_SEPARATOR)
+}
+
+/// The separator-replacing form, with the separator given explicitly so
+/// the behaviour can be exercised on every platform.
+fn normalize_separators_with(path: &str, separator: char) -> String {
+    if separator == GLOB_SEPARATOR {
+        return path.to_owned();
+    }
+    path.replace(separator, GLOB_SEPARATOR)
+}
+
+/// The separator a glob is written with.
+const GLOB_SEPARATOR: char = '/';
 
 /// The path with leading components removed at every directory boundary.
 ///
@@ -230,5 +264,41 @@ mod tests {
         let matcher = PathClassMatcher::new(&[]);
         assert!(matcher.is_empty());
         assert_eq!(matcher.class_of("src/main.rs", None), None);
+    }
+
+    #[test]
+    fn the_platform_separator_is_replaced_with_the_glob_separator() {
+        assert_eq!(
+            normalize_separators_with("docs\\guides\\setup.md", '\\'),
+            "docs/guides/setup.md"
+        );
+    }
+
+    #[test]
+    fn the_glob_separator_is_left_alone() {
+        assert_eq!(
+            normalize_separators_with("docs/guides/setup.md", '/'),
+            "docs/guides/setup.md"
+        );
+    }
+
+    #[test]
+    fn a_backslash_is_not_a_separator_on_a_platform_that_does_not_use_one() {
+        assert_eq!(
+            normalize_separators_with("docs\\guides\\setup.md", '/'),
+            "docs\\guides\\setup.md"
+        );
+    }
+
+    /// A path built by the operating system uses that platform's
+    /// separator, so a rule written with `/` has to match it anyway.
+    #[cfg(windows)]
+    #[test]
+    fn a_windows_path_matches_a_rule_written_with_forward_slashes() {
+        let matcher = PathClassMatcher::new(&[rule("docs/**", PathClass::Docs)]);
+        assert_eq!(
+            matcher.class_of("C:\\repo\\docs\\intro.md", Some("docs\\intro.md")),
+            Some(PathClass::Docs)
+        );
     }
 }

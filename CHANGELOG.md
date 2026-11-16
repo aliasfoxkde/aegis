@@ -60,6 +60,15 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- A path class never matched anything on Windows. A rule is written with
+  `/`, the separator a configuration file carries on every platform, but
+  the path the scanner matched it against was the one the operating system
+  built, which uses `\` on Windows. Every rule was therefore inert there,
+  and a documentation or fixture path stayed reported as an ordinary
+  finding. The path is now put into `/` before it is matched. A backslash
+  is still a legal character in a file name on Unix, so only the
+  platform's own separator is replaced.
+
 - The daemon and the MCP server each held a configuration they never
   applied. The categories, severity threshold, anomaly detectors, and path
   classes it named had no effect on any scan, and no caller could change

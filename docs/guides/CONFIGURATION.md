@@ -41,7 +41,7 @@ A profile is a single JSON object with these keys:
 | `output_format` | string | `human`, `json`, or `sarif` |
 | `severity_threshold` | string or `null` | Minimum severity to report: `critical`, `high`, `medium`, or `low`; anything else fails the scan (`info` observations sit below every threshold) |
 | `anomaly_detectors` | array or `null` | Statistical anomaly detectors to run; `null` runs all four, `[]` disables the layer, and a list runs exactly the named detectors (`comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`) |
-| `path_classes` | array | Path classifications: `{"glob": "docs/**", "class": "docs"}` objects whose findings are reported at low severity. `class` is `docs` or `fixture`; secret findings keep their severity and carry the class as a tag. See [Triage](TRIAGE.md) |
+| `path_classes` | array | Path classifications: `{"glob": "docs/**", "class": "docs"}` objects whose findings are reported at low severity. `class` is `docs` or `fixture`; secret findings keep their severity and carry the class as a tag. A glob is written with `/` on every platform; a directory glob such as `docs/**` matches at any depth. See [Triage](TRIAGE.md) |
 
 Unknown keys are ignored; omitted keys fall back to their default.
 
