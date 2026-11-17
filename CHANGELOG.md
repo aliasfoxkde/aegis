@@ -9,6 +9,21 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- A patch-coverage floor now runs on every build. The project-wide floor
+  barely moves when a change adds one uncovered file, so a pull request
+  could add uncovered lines and stay green, and `codecov.yml`'s `patch`
+  target was never evaluated by anything (no `CODECOV_TOKEN`, so every
+  Codecov upload fails and is ignored). `scripts/patch-coverage-floor.py`
+  intersects the lines a diff adds with the hit counts in the same lcov
+  report and fails the Coverage job below the floor, which starts at the
+  90% `codecov.yml` already declares. The diff is taken against the merge
+  base, so a branch that lags its base still measures against the fork.
+  `scripts/check-gate-parity.py` tracks the floor, so it cannot be
+  lowered or removed quietly — and its codecov-target reader, which
+  stopped a scope's body at the next key of any kind and therefore never
+  reached the `target:` line, now reads a scope's body to the next line
+  at the same indentation.
+
 - New `ai-slop` detection category (7 rules) flagging LLM-prose style
   tells in source trees: em dashes and other typographic punctuation
   (curly quotes, the single-character ellipsis), AI attribution footers

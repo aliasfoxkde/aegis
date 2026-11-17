@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 677 across 35 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 818 tests across 25 binaries, `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines and a 90% patch floor enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.3 published; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish) |
 | Known defects | None open. Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -557,6 +557,20 @@ operator follow-up (outside repo): set a CODECOV_TOKEN secret so PR
 annotations resume, then re-validate the patch target, which has never
 had data. ✅
 
+**G. Patch coverage floor — MEDIUM, delivered 2026-11-16.** The
+project-wide floor barely moves when a change adds one uncovered file,
+so a pull request could add uncovered lines and stay green;
+`codecov.yml` declares a `patch` target of 90%, but no Codecov upload
+is ever evaluated (no `CODECOV_TOKEN`), so nothing enforced it.
+Delivered: `scripts/patch-coverage-floor.py`, wired into the Coverage
+job against the same CI lcov report. It intersects the lines a diff adds
+with the report's hit counts and fails the job below the floor, which
+starts at the 90% `codecov.yml` already declares. The diff is taken
+against the merge base, so a branch that lags its base still measures
+against the fork. `scripts/check-gate-parity.py` now tracks the floor,
+so it cannot be lowered or removed quietly. The floor is ratcheted up as
+the measured patch coverage rises — never down to make a change pass.
+
 **D. Link checking — MEDIUM, delivered 2026-09-24.** Delivered: a
 `Links` CI job (SHA-pinned lychee-action, README + docs/**/*.md, config
 in `lychee.toml`). The first local run justified the lane: **43 broken
@@ -588,10 +602,13 @@ than policy. Resuming this item means filing the feature upstream
 (status aggregation + ref-update policy hooks) in the GitForge repo. ☐
 
 **F. Release provenance gaps — MEDIUM, open.**
-- `scripts/release/Dockerfile` builds on `rust:1-bookworm` (floating
-  minor) while `docker/Dockerfile` pins `rust:1.88-slim` — same tag,
-  different toolchains over time, different binaries. Pin both to the
-  same digest or versioned tag.
+- Both build images pin the same Rust minor, so the floating-minor drift
+  this item recorded is resolved: `scripts/release/Dockerfile` builds on
+  `rust:1.88-bookworm` and `docker/Dockerfile` on `rust:1.88-slim`
+  (Phase 17H). What is left is that the two are different base
+  distributions and neither is pinned to a digest, so a rebuild of the
+  same tag is not guaranteed to reproduce the published binary. Pinning
+  both to a digest is the remaining step.
 - `checksums.txt` on the GitHub mirror is verified by
   `sha256sum -c` but itself unsigned; the GitForge path carries the
   minisign-signed attestation. Sign the mirror's checksums with the same
