@@ -602,10 +602,13 @@ than policy. Resuming this item means filing the feature upstream
 (status aggregation + ref-update policy hooks) in the GitForge repo. ☐
 
 **F. Release provenance gaps — MEDIUM, open.**
-- `scripts/release/Dockerfile` builds on `rust:1-bookworm` (floating
-  minor) while `docker/Dockerfile` pins `rust:1.88-slim` — same tag,
-  different toolchains over time, different binaries. Pin both to the
-  same digest or versioned tag.
+- Both build images pin the same Rust minor, so the floating-minor drift
+  this item recorded is resolved: `scripts/release/Dockerfile` builds on
+  `rust:1.88-bookworm` and `docker/Dockerfile` on `rust:1.88-slim`
+  (Phase 17H). What is left is that the two are different base
+  distributions and neither is pinned to a digest, so a rebuild of the
+  same tag is not guaranteed to reproduce the published binary. Pinning
+  both to a digest is the remaining step.
 - `checksums.txt` on the GitHub mirror is verified by
   `sha256sum -c` but itself unsigned; the GitForge path carries the
   minisign-signed attestation. Sign the mirror's checksums with the same
