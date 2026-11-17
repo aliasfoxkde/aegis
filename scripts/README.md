@@ -24,3 +24,4 @@ standalone; release scripts are driven by `.gitforce.yml`.
 | `test_check_gate_parity.py` | Deterministic stdlib unittest for `check-gate-parity.py`. |
 | `test_classify_aegis_sarif.py` | Deterministic stdlib unittest for `ci/classify_aegis_sarif.py` (`python3 scripts/test_classify_aegis_sarif.py`). |
 | `test_patch_coverage_floor.py` | Deterministic stdlib unittest for `patch-coverage-floor.py` (`python3 scripts/test_patch_coverage_floor.py`). |
+| `test_release_remap.py` | Deterministic stdlib unittest for the release scripts' path remapping (`python3 scripts/test_release_remap.py`). |

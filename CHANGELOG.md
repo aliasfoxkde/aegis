@@ -7,6 +7,18 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- A release is now byte-reproducible regardless of the directory it is
+  built in. The absolute build path was compiled into the binaries - it
+  appears in the panic locations - so two builds of one tag at different
+  paths produced different binaries and different tarball digests even
+  though the code was identical; the `v0.6.5` cross-build measured
+  exactly that, for the workspace path and for the dependency sources
+  under the cargo home alike. `scripts/release/build.sh` now remaps both
+  prefixes out of the compiled paths, so the same tag yields the same
+  bytes wherever it is built.
+
 ## [0.6.5] - 2026-11-17
 
 ### Added

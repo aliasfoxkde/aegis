@@ -89,6 +89,15 @@ be applied to `v0.6.5`, whose tag is immutable. Until it lands, two
 builds of one tag are comparable by the wasm module, the source archives,
 and the tarball *members*, not by the tarball digests.
 
+**Landed after the release:** `scripts/release/build.sh` now remaps the
+workspace path *and* the cargo home (the dependency sources carry the
+same property — a crate unpacked under `$CARGO_HOME` is compiled from
+that absolute path). Verified in `aegis-builder:1`: a build at `/pa`
+with `CARGO_HOME=/ca` and a build at `/pb` with `CARGO_HOME=/cb`
+produced the identical binary, while a third build that remapped only
+the workspace path produced a different one. The next release built
+this way is reproducible across directories.
+
 ## Residual scope
 
 - `CODECOV_TOKEN` is still unset, so every Codecov upload fails and is
