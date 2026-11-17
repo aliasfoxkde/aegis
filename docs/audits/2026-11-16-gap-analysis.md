@@ -21,6 +21,11 @@ documented contract is violated; **P2** — a real gap that costs
 correctness, review, or trust but is not currently wrong; **P3** —
 outside this repository's boundary.
 
+**Status, as the work order in §7 lands:** items 1.1, 1.2, 1.3, 2.1,
+2.2, 3.1, 3.2, 4.1, 4.2, and 5.1 are closed. §5.2 and §6 remain
+external or outside this repository's boundary, and cutting `v0.6.5` is
+the remaining step of item 3.1.
+
 ---
 
 ## 1. Correctness defects in shipped work — P1
@@ -97,7 +102,7 @@ itself is asserted by the Windows matrix.
 
 ## 2. Feature reach across surfaces — P1
 
-### 2.1 The daemon's and the MCP server's `config` is inert — RESOLVED (PRs #198, #199)
+### 2.1 The daemon's and the MCP server's `config` is inert — RESOLVED (PR #199)
 
 Both wire surfaces published a live configuration that was never read:
 
@@ -113,11 +118,13 @@ filters — and a host process that wrote `state.config` saw no effect and
 no error. The doc comment on the daemon field called it "live
 configuration"; it was not.
 
-**Resolved in PR #198** — the "apply" branch, because a control-plane
-consumer is the caller the field was promised to. Both surfaces now read
-the configuration when the scanner is built (the lazy first compilation
-included), publish the configuration in force (`config()`), and rebuild
-the scanner around a new configuration (`set_config()`).
+**Resolved in PR #199** — PR #198 carried the same fix on a separate
+branch and was closed unmerged as superseded by it; the "apply" approach
+was kept, because a control-plane consumer is the caller the field was
+promised to. Both surfaces now read the configuration when the scanner is
+built (the lazy first compilation included), publish the configuration in
+force (`config()`), and rebuild the scanner around a new configuration
+(`set_config()`).
 
 - A configuration that cannot be applied is rejected with the reason and
   the configuration already in force keeps serving: an unknown category,
@@ -156,81 +163,93 @@ to remove, reached by a different route. Both surfaces now serialize the
 two paths with one lock, and both carry a regression that asserts the
 configuration in force after the change is the one that was applied.
 
-### 2.2 The triage ergonomics are CLI-only — P2
+### 2.2 The triage ergonomics are CLI-only — FIXED (PR #202)
 
 Path classes, the `aegis:synthetic` annotation, and the secret-triage
-verdict all landed in PR #193. The verdict does reach the wire surfaces
+verdict all landed in PR #193. The verdict did reach the wire surfaces
 (the `Finding` struct serializes `secret_triage`,
 `crates/aegis-core/src/finding.rs:139-140`), but the *inputs* — path
-classes and the synthetic annotation — are configured only through the
-CLI (`--classify-path`, `crates/aegis-cli/src/main.rs:114`). The daemon
-and MCP conformance suites (Phase 15) have no fixture that pins the
-behaviour of any of the three.
+classes and the synthetic annotation — were configured only through the
+CLI (`--classify-path`, `crates/aegis-cli/src/main.rs:114`), and the
+daemon and MCP conformance suites (Phase 15) had no fixture that pinned
+the behaviour of any of the three.
 
-**Next step:** item 2.1 has landed, so the wire conformance fixtures for
-the path-class classification, the synthetic annotation, and a triage
-verdict on a secret finding can be written — the same shape as the
-existing daemon and MCP fixture suites.
+**Fixed in PR #202.** Item 2.1 has landed, so the path classes are
+reachable from both wire surfaces, and each of the three behaviours is
+now driven over the wire the way an operator reaches it: the daemon
+over its socket, the MCP server over its stdio stream, with the class
+configured in an operator profile (`AEGIS_DAEMON_CONFIG`,
+`AEGIS_MCP_CONFIG`) rather than in the scanner's construction. The
+assertions are on what the wire must carry — the class tag and the
+lowered severity, the synthetic tag with the finding still present, and
+the verdict with its reasons, none of which quotes the value it judged.
 
 ---
 
 ## 3. Release and changelog debt — P1
 
-### 3.1 Seven weeks of merged work, no release, and the changelog is silent about the largest feature of the period — OPEN
+### 3.1 Seven weeks of merged work, no release, and the changelog is silent about the largest feature of the period — CHANGELOG WRITTEN, RELEASE PENDING
 
 `v0.6.4` is dated 2026-09-27; `main` has carried 24 commits since,
 including the whole triage-ergonomics feature set from PR #193. The
-`[Unreleased]` section of `CHANGELOG.md` documents the `ai-slop`
+`[Unreleased]` section of `CHANGELOG.md` documented the `ai-slop`
 category, the exit-code-3 change, and the `llm-guardrails` fix — and
-says nothing about path classes, the synthetic annotation, or the secret
+said nothing about path classes, the synthetic annotation, or the secret
 triage verdict. A user reading the changelog between `v0.6.4` and today
-cannot learn that the scanner's triage behaviour changed.
+could not learn that the scanner's triage behaviour changed.
 
-**Next step:** write the `[Unreleased]` entries for PR #193's feature
-set, refresh the `Current state` header of `docs/PLAN.md` (still dated
-2026-09-24 and still naming v0.6.3), and cut `v0.6.5` through the
-GitForge-first release path documented in `docs/guides/RELEASES.md`.
+**Done in this branch:** the `[Unreleased]` entries for PR #193's feature
+set are written — path classes, the inline synthetic annotations, and the
+secret-triage verdict — and `docs/PLAN.md`'s current-state block is
+refreshed in the same change (item 3.2).
 
-### 3.2 The plan's current-state block and test count are stale — P2
+**Remaining:** cut `v0.6.5` through the GitForge-first release path
+documented in `docs/guides/RELEASES.md`. The release itself is not a
+documentation change and belongs to its own pull request, where the
+version bump and the lockfile refresh stand alone.
 
-`docs/PLAN.md:10` still reads "Current state (2026-09-24 … v0.6.3
-released)" and quotes "818 tests across 25 binaries". The tree now
+### 3.2 The plan's current-state block and test count are stale — FIXED (this branch)
+
+`docs/PLAN.md:10` still read "Current state (2026-09-24 … v0.6.3
+released)" and quoted "818 tests across 25 binaries". The tree now
 carries 875 `#[test]` functions across the same 25 test binaries (17
 integration test files plus 8 crate test binaries), and the pattern
 count of 677 across 35 categories is still current
 (`docs/patterns/README.md:3`).
 
-**Next step:** refresh those figures from a CI run (the CI total is
-authoritative, not the attribute count) in the same change that lands
-the changelog entries.
+**Done in this branch:** the current-state block is refreshed from a CI
+run — the CI total is authoritative, not the attribute count — and the
+same change carries the changelog entries of item 3.1.
 
 ---
 
 ## 4. Documentation drift — P2
 
-### 4.1 Phase 17F contradicts the tree — OPEN
+### 4.1 Phase 17F contradicts the tree — FIXED (PR #201)
 
-`docs/PLAN.md:591-594` records as an open item that
+`docs/PLAN.md:591-594` recorded as an open item that
 `scripts/release/Dockerfile` "builds on `rust:1-bookworm` (floating
 minor) while `docker/Dockerfile` pins `rust:1.88-slim`". The file pins
 `rust:1.88-bookworm` (`scripts/release/Dockerfile:16`), which Phase
-17H already records as delivered. The open item is stale: the
+17H already records as delivered. The open item was stale: the
 remaining honest content of 17F is the unsigned `checksums.txt` on the
 GitHub mirror, which was resolved by decision (the minisign-signed
 GitForge attestation is the provenance anchor).
 
-**Next step:** correct the bullet so the open item matches the tree.
+**Fixed in PR #201:** the bullet now matches the tree.
 
-### 4.2 `CONTRIBUTING.md` does not say how to keep a branch current — OPEN
+### 4.2 `CONTRIBUTING.md` does not say how to keep a branch current — FIXED (PR #201)
 
-`.github/CONTRIBUTING.md:147` says "Branch from `main` → PR to `main`",
+`.github/CONTRIBUTING.md:147` said "Branch from `main` → PR to `main`",
 and merges are squash-only (`:151`). With squash-only merges and no
 force-push policy, a long-lived branch has to *merge* `main` forward,
-which nobody is told. Two of the merges in this period were fix-forward
-after CI caught a regression on an already-pushed head — the recipe for
-that (merge `main` into the branch, never rebase) is worth writing down.
+which nobody was told. Two of the merges in this period were
+fix-forward after CI caught a regression on an already-pushed head — the
+recipe for that (merge `main` into the branch, never rebase) is worth
+writing down.
 
-**Next step:** add the branch-sync rule to `CONTRIBUTING.md`.
+**Fixed in PR #201:** the branch-sync rule is now in
+`.github/CONTRIBUTING.md`.
 
 ### 4.3 The triage guide's contract had no test behind it — see item 1.1
 
@@ -242,7 +261,7 @@ change; worth remembering when the next contract sentence is written.
 
 ## 5. Gate gaps — P2
 
-### 5.1 Nothing enforces patch coverage — IN FLIGHT (`feat/patch-coverage-floor`)
+### 5.1 Nothing enforces patch coverage — FIXED (PR #200)
 
 `scripts/coverage-floor.sh` computes one project-wide line percentage
 over the counted set and fails below 97.0%; `codecov.yml` also declares
@@ -252,20 +271,17 @@ effect: a pull request can add uncovered lines and stay green, because
 only the whole-project floor is enforced and the whole-project floor
 barely moves when a small uncovered file arrives.
 
-**Next step:** compute a patch floor from the same CI lcov report —
-the lines added by the diff, and their hit counts — and fail the
-Coverage job below it. Keep the floor just below measured reality and
-ratchet it up, as the repository's own rule requires.
-
-In flight on `feat/patch-coverage-floor`: `scripts/patch-coverage-floor.py`
-intersects the lines a diff adds with the hit counts in the same lcov
-report and fails the Coverage job below the floor, which starts at the
-90% `codecov.yml` already declares. The diff is taken against the merge
-base, so a branch that lags its base still measures against the fork.
+**Landed in PR #200:** `scripts/patch-coverage-floor.py` intersects the
+lines a diff adds with the hit counts in the same lcov report and fails
+the Coverage job below the floor, which starts at the 90% `codecov.yml`
+already declares. The diff is taken against the merge base, so a branch
+that lags its base still measures against the fork.
 `scripts/check-gate-parity.py` now tracks the floor, so it cannot be
 lowered or removed quietly — and its codecov-target reader, which
 stopped a scope's body at the next key of any kind and therefore never
 reached the `target:` line, was fixed in the same change.
+
+What remains is the Codecov half, which is operator-side: see 5.2.
 
 ### 5.2 External, recorded not fixable here — P3
 
@@ -308,25 +324,35 @@ the gate that proves it.
    merged as `4511c84`.*
 3. **Resolve the inert `config` field on the daemon and the MCP server**
    (item 2.1) — apply it or delete it; the daemon's own test suite and
-   the MCP wire conformance suite are the gate. *Done in PR #198 and
-   PR #199: both surfaces read the configuration when the scanner is
-   built, publish it, and rebuild the scanner around a new one; and an
-   operator profile file — `AEGIS_DAEMON_CONFIG`, `AEGIS_MCP_CONFIG` —
-   lets a deployment choose categories, a severity threshold, or path
-   classes at startup, without a wire method that would let a client
-   weaken its own scan. The two paths that install a scanner are now
-   serialized, so a compilation that began before a configuration was
-   applied cannot undo it.*
+   the MCP wire conformance suite are the gate. *Done in PR #199 (PR
+   #198 was closed unmerged as superseded by it): both surfaces read the
+   configuration when the scanner is built, publish it, and rebuild the
+   scanner around a new one; and an operator profile file —
+   `AEGIS_DAEMON_CONFIG`, `AEGIS_MCP_CONFIG` — lets a deployment choose
+   categories, a severity threshold, or path classes at startup, without
+   a wire method that would let a client weaken its own scan. The two
+   paths that install a scanner are now serialized, so a compilation
+   that began before a configuration was applied cannot undo it.*
 4. **Write the changelog entries for PR #193's features, refresh
    `docs/PLAN.md`'s current-state block, and cut `v0.6.5`** (items 3.1,
-   3.2) — the release workflow is the gate.
+   3.2) — the release workflow is the gate. *The changelog entries and
+   the plan refresh are done in this branch; `v0.6.5` is the remaining
+   step and belongs to its own pull request, where the version bump and
+   the lockfile refresh stand alone.*
 5. **Add a patch-coverage floor** to the Coverage job (item 5.1) — the
-   script's own report over a CI lcov file is the gate. *In flight on
-   `feat/patch-coverage-floor`.*
+   script's own report over a CI lcov file is the gate. *Done: merged
+   as PR #200 (`7ecbfb9`).*
 6. **Add wire conformance fixtures for the triage ergonomics** (item
-   2.2) — the daemon and MCP conformance suites are the gate.
+   2.2) — the daemon and MCP conformance suites are the gate. *Done in
+   PR #202: both surfaces are driven over the wire the way an operator
+   reaches them, with the class configured in an operator profile; the
+   class tag and the lowered severity, the synthetic tag with the
+   finding still present, and the triage verdict with its reasons all
+   cross the socket and the stdio stream.*
 7. **Documentation cleanups** (items 4.1, 4.2) — the `Links` job and a
-   reviewer's eye are the gate.
+   reviewer's eye are the gate. *Done in PR #201: the stale
+   release-provenance bullet is corrected and the branch-sync rule is
+   written down.*
 
 Items 1 and 2 are correctness work on shipped code. Items 3, 5, and 6
 are the work that keeps the shipped behaviour reachable and provable.
