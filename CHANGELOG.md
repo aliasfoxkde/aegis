@@ -9,6 +9,32 @@ every release are attached to the matching GitHub release.
 
 ### Added
 
+- **Path classes.** `--classify-path GLOB=KIND` classifies a path so
+  the findings below it are reported at low severity instead of at the
+  pattern's own severity, and carry the class as a tag. `KIND` is `docs`
+  or `fixture`; the flag repeats for more rules, and a profile file
+  carries the same rules. A rule is validated before use: a glob that
+  does not compile is an error, not a rule that quietly matches
+  nothing. Secret findings keep their severity under a path class — a
+  credential in a documentation file is still a credential — and carry
+  the class as a tag.
+
+- **Inline synthetic annotations.** `aegis:synthetic -- <reason>` on a
+  line, or `aegis:synthetic-file -- <reason>` for a whole file, marks
+  a deliberate example. The finding is kept, tagged `synthetic`, and
+  reported at low severity: visible in the report, no longer competing
+  with real signals.
+
+- **Secret triage.** A finding in the `secrets` category now carries a
+  verdict — `likely_real`, `likely_placeholder`, or `uncertain` — with
+  the confidence behind it and the signals that produced it: published
+  vendor examples, placeholder markers, template shapes, repeated
+  characters, and entropy. The verdict never quotes the value it
+  judged; the reasons name the signal only, because a report that
+  names a fragment of the credential is itself a disclosure. The
+  verdict appears in the human and JSON reports and in the SARIF
+  output. See `docs/guides/TRIAGE.md`.
+
 - A patch-coverage floor now runs on every build. The project-wide floor
   barely moves when a change adds one uncovered file, so a pull request
   could add uncovered lines and stay green, and `codecov.yml`'s `patch`
