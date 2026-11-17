@@ -152,18 +152,38 @@ chore: bump clap to 4.6.6
 
 ### Keeping a branch current
 
-Merges are squash-only, so `main`'s history is never replayed onto your
-branch and a long-lived branch drifts. Bring `main` **in**:
+`main` is squash-only, so it never contains the individual commits of a
+merged branch. A long-lived branch therefore drifts, and the pull
+request's diff is computed against the *merge base* of the branch and
+`main` — which means a stale branch shows changes that are not yours,
+and CI re-runs the whole gate set on the merge commit.
+
+**Merge `main` forward into your branch. Never rebase, never force-push.**
 
 ```bash
 git fetch origin
-git merge origin/main      # not rebase, not force-push
+git merge origin/main      # on your feature branch
+git push                   # a normal push, never a forced one
 ```
 
-Rebasing rewrites a pushed branch, which force-pushes need; merging
-keeps the pushed history intact and lets CI re-run on the new head.
-If CI caught a regression on an already-pushed head, fix it forward in
-a new commit on the same branch — do not rewrite the branch.
+Why the rules are what they are:
+
+- **Squash merges make rebasing lossy.** The commits on `main` are
+  squash commits, so replaying your branch onto them rewrites every
+  commit you have already pushed and invalidates the review history
+  that references those SHAs.
+- **Force-pushing a branch with an open pull request rewrites the
+  review.** The moment CI or a reviewer has looked at a head, that head
+  is the thing being judged. A new head is a new thing to judge.
+- **Fix forward when CI catches a regression.** When `main` has moved
+  and the pull request goes red, the repair is a new commit on the
+  branch (or a merge of `main` into it) — not an amend of a commit
+  that has already been pushed. The required status checks are
+  evaluated against the head SHA, so a new head re-runs them all; that
+  is the intended cost.
+- **The merge commit is part of the pull request.** Merging `main`
+  forward keeps the branch's diff limited to your own change, which is
+  what the reviewer reads and what the patch-coverage floor measures.
 
 ---
 

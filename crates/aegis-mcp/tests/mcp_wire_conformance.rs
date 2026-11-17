@@ -19,6 +19,31 @@ use std::time::{Duration, Instant};
 
 const FIXTURES: &str = include_str!("fixtures/mcp_wire_conformance.json");
 
+/// A planted documentation file: `eval` on unvalidated input is a finding
+/// in the `security-hardening` category, and it is *not* a secret, so a
+/// path class is allowed to lower it.
+const PLANTED_DOCS_FILE: &str = "result = eval(user_input)\n"; // aegis:ignore:eval-usage -- synthetic fixture
+
+/// A planted file whose credential is marked as a deliberate example with
+/// the `aegis:synthetic` annotation. The finding is kept, tagged, and
+/// reported at low severity — the annotation sets an example aside, it
+/// does not hide it.
+const PLANTED_SYNTHETIC_FILE: &str = "api_key = \"AKIAIOSFODNN7EXAMPLE\"  # aegis:synthetic\n"; // aegis:ignore:aws-access-key -- synthetic fixture
+
+/// A planted file whose credential is a placeholder.
+///
+/// The quotes are escaped in the Rust source, so the file written to disk
+/// carries a real credential assignment — the shape the rule matches —
+/// while this source line does not read as one to a scan of the
+/// repository's own sources.
+const PLANTED_PLACEHOLDER_FILE: &str = "password = \"changeme\"\n";
+
+/// The operator configuration the path-class case runs the server with:
+/// one glob that classifies documentation paths, exactly as an operator
+/// would write it in a profile.
+const DOCS_PATH_CLASS_CONFIG: &str =
+    r#"{"name":"conformance","path_classes":[{"glob":"docs/**","class":"docs"}]}"#;
+
 /// Sessions that end in a successful scan pay the one-time pattern
 /// compilation; on a loaded runner that can take a minute.
 const SESSION_DEADLINE: Duration = Duration::from_secs(180);
@@ -77,12 +102,29 @@ struct FixtureFile {
 /// collect all stdout produced before the server exits. Panics if the
 /// server outlives the deadline.
 fn run_session(requests: &[String]) -> Vec<String> {
-    let mut child = Command::new(mcp_binary())
+    run_session_in(requests, None, None)
+}
+
+/// Run one server session with the environment a case needs: a working
+/// directory (the sandbox root the server admits paths under) and an
+/// operator configuration file the server applies before it answers.
+fn run_session_in(
+    requests: &[String],
+    working_dir: Option<&std::path::Path>,
+    operator_config: Option<&std::path::Path>,
+) -> Vec<String> {
+    let mut command = Command::new(mcp_binary());
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn aegis-mcp");
+        .stderr(Stdio::null());
+    if let Some(directory) = working_dir {
+        command.current_dir(directory);
+    }
+    if let Some(config) = operator_config {
+        command.env("AEGIS_MCP_CONFIG", config);
+    }
+    let mut child = command.spawn().expect("spawn aegis-mcp");
 
     {
         let mut stdin = child.stdin.take().expect("stdin piped");
@@ -318,4 +360,130 @@ fn oversize_frame_is_answered_then_the_session_ends() {
         message.contains(&format!("exceeds maximum size ({MAX_FRAME_BYTES} bytes)")),
         "{frame}"
     );
+}
+
+/// The findings of one scan payload.
+fn findings_of(payload: &Value) -> Vec<&Value> {
+    payload["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .collect()
+}
+
+/// Whether a finding carries `tag`.
+fn has_tag(finding: &Value, tag: &str) -> bool {
+    finding["tags"]
+        .as_array()
+        .expect("tags array")
+        .iter()
+        .any(|value| value.as_str() == Some(tag))
+}
+
+/// Run one `tools/call` session and return the scan payload the server
+/// put into its text content.
+///
+/// The session runs in `working_dir` — the sandbox root the server admits
+/// paths under — with `operator_config` applied when one is named.
+fn scan_payload_in(
+    request: &str,
+    working_dir: Option<&std::path::Path>,
+    operator_config: Option<&std::path::Path>,
+) -> Value {
+    let lines = run_session_in(&[request.to_string()], working_dir, operator_config);
+    assert_eq!(lines.len(), 1, "one response frame: {lines:?}");
+    let frame: Value = serde_json::from_str(&lines[0]).expect("frame is JSON");
+    assert_eq!(frame["result"]["isError"], false, "{frame}");
+    let text = frame["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text content");
+    serde_json::from_str(text).expect("text content is the scan JSON")
+}
+
+/// A path the operator classified as documentation reports its findings at
+/// low severity, and the class is recorded on the finding — over the
+/// wire, with the class configured the way an operator configures it.
+///
+/// The rule is written with `/` and the path the server scans is the one
+/// the operating system built, so this case also pins the separator
+/// handling on the platform the test matrix runs it on.
+#[test]
+fn a_classified_path_lowers_its_findings_over_the_wire() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let docs = root.path().join("docs");
+    std::fs::create_dir(&docs).expect("create the docs directory");
+    std::fs::write(docs.join("example.md"), PLANTED_DOCS_FILE).expect("plant the docs file");
+    let config_path = root.path().join("operator.json");
+    std::fs::write(&config_path, DOCS_PATH_CLASS_CONFIG).expect("write the operator config");
+
+    let request = r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"scan_file","arguments":{"path":"docs/example.md"}},"id":7}"#;
+    let payload = scan_payload_in(request, Some(root.path()), Some(config_path.as_path()));
+
+    let finding = findings_of(&payload)
+        .into_iter()
+        .find(|finding| finding["pattern"] == "eval-usage")
+        .expect("the documentation file must still report the finding");
+    assert_eq!(finding["severity"], "low", "a classed path reports as low");
+    assert!(
+        has_tag(finding, "docs"),
+        "the class is recorded on the finding: {finding}"
+    );
+}
+
+/// The `aegis:synthetic` annotation keeps the finding, tags it, and
+/// reports it at low severity — over the wire.
+#[test]
+fn a_synthetic_annotation_keeps_its_finding_over_the_wire() {
+    let root = tempfile::tempdir().expect("tempdir");
+    std::fs::write(root.path().join("app.py"), PLANTED_SYNTHETIC_FILE).expect("plant the file");
+
+    let request = r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"scan_file","arguments":{"path":"app.py"}},"id":8}"#;
+    let payload = scan_payload_in(request, Some(root.path()), None);
+
+    let findings = findings_of(&payload);
+    assert!(
+        !findings.is_empty(),
+        "the annotation keeps the finding: {payload}"
+    );
+    let finding = findings
+        .into_iter()
+        .find(|finding| has_tag(finding, "synthetic"))
+        .expect("the finding must carry the synthetic tag");
+    assert_eq!(
+        finding["severity"], "low",
+        "a synthetic value reports as low"
+    );
+}
+
+/// A secret finding carries its triage verdict over the wire, and the
+/// verdict names the signal it judged without quoting the value it
+/// judged: a report that says the secret contains `changeme` is itself a
+/// disclosure.
+#[test]
+fn a_secret_finding_carries_its_triage_verdict_over_the_wire() {
+    let root = tempfile::tempdir().expect("tempdir");
+    std::fs::write(root.path().join("app.py"), PLANTED_PLACEHOLDER_FILE).expect("plant the file");
+
+    let request = r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"scan_file","arguments":{"path":"app.py"}},"id":9}"#;
+    let payload = scan_payload_in(request, Some(root.path()), None);
+
+    let finding = findings_of(&payload)
+        .into_iter()
+        .find(|finding| finding["pattern"] == "hardcoded-password")
+        .expect("the planted password must be reported");
+    assert_eq!(
+        finding["secret_triage"]["outcome"], "likely_placeholder",
+        "a known placeholder marker is a placeholder verdict: {finding}"
+    );
+    let reasons = finding["secret_triage"]["reasons"]
+        .as_array()
+        .expect("reasons array");
+    assert!(!reasons.is_empty(), "the verdict says why: {finding}");
+    for reason in reasons {
+        let reason = reason.as_str().expect("a reason is a string");
+        assert!(
+            !reason.contains("changeme"),
+            "a reason must not quote the value: {reason}"
+        );
+    }
 }
