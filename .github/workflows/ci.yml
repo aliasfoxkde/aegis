@@ -231,6 +231,10 @@ jobs:
           BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before }}
       - name: Check that no lint suppression expired
         run: scripts/check-allow-expiry.sh
+      - name: Test the patch coverage floor
+        run: python3 scripts/test_patch_coverage_floor.py
+      - name: Test the gate parity check
+        run: python3 scripts/test_check_gate_parity.py
 
   links:
     name: Links
@@ -256,8 +260,20 @@ jobs:
     name: Coverage
     needs: fmt
     runs-on: ubuntu-latest
+    env:
+      # The patch floor: the share of the lines this change adds that a test
+      # has to cover. It matches codecov.yml's `patch` target, and it is
+      # enforced here because no Codecov upload is ever evaluated (no
+      # CODECOV_TOKEN), so the codecov target is a declaration, not a gate.
+      # Ratchet it up as the measured patch coverage rises — never down to
+      # make a change pass.
+      PATCH_COVERAGE_FLOOR: 90.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The patch floor diffs the change against its base, so the whole
+          # history has to be present.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
@@ -277,6 +293,26 @@ jobs:
       # rises — never down to make a regression pass.
       - name: Enforce coverage floor
         run: scripts/coverage-floor.sh lcov.info 97.0
+      # The project-wide floor barely moves when a change adds one
+      # uncovered file, so the lines a change adds get their own floor.
+      # The base is the commit the change is measured against: the pull
+      # request's base tip, or the commit a push follows.
+      - name: Resolve the diff base
+        id: diff-base
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$base" ]; then
+            base="${{ github.event.before }}"
+          fi
+          # A push to a brand-new branch has no preceding commit, and a
+          # push to an empty repository has no base at all; both fall back
+          # to the commit the change follows.
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-parse HEAD~1)"
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+      - name: Enforce patch coverage floor
+        run: scripts/patch-coverage-floor.py lcov.info "${{ steps.diff-base.outputs.sha }}" HEAD "$PATCH_COVERAGE_FLOOR"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
