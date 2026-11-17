@@ -54,6 +54,7 @@ be claimed.
 | The fuzz lockfile pins the workspace | `scripts/check-fuzz-lock.sh` | CI "Dependency Policy" |
 | Known dependency vulnerabilities | `cargo audit` and `cargo deny check` | CI "Security Audit", CI "Dependency Policy" |
 | Line-coverage floor | `scripts/coverage-floor.sh` (97.0%) | CI "Coverage" |
+| Patch-coverage floor (the lines a change adds) | `scripts/patch-coverage-floor.py` (90.0%) | CI "Coverage"; its own unit test runs in CI "Gate policy" |
 | Vulnerabilities in this repository's own code | CodeQL and the repository's own scan | CI "CodeQL", `aegis-scan.yml` |
 | The WASM bindings still compile | `cargo build --target wasm32-unknown-unknown --package aegis-wasm` | CI "WASM" |
 | The declared MSRV | `cargo check --workspace` on 1.88 | CI "MSRV 1.88" |

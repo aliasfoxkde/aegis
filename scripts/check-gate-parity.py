@@ -93,17 +93,30 @@ def string_list(text: str, section: str, key: str) -> set[str]:
 
 
 def codecov_targets(text: str) -> dict[str, float]:
-    """Read the coverage targets out of codecov.yml."""
+    """Read the coverage targets out of codecov.yml.
+
+    A scope's body runs to the next line at the same indentation, not to
+    the next key of any kind: `project:` is followed by `default:` at a
+    deeper indentation, and a body that stopped there would never reach
+    the `target:` line.
+    """
     targets: dict[str, float] = {}
-    for scope in ("project", "patch"):
-        block = re.search(
-            r"^\s*" + scope + r":\s*$(.*?)(?=^\s*\w+:|\Z)", text, re.M | re.S
-        )
-        if not block:
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(\s*)(project|patch):\s*$", line)
+        if not match:
             continue
-        value = re.search(r"target:\s*([0-9.]+)%", block.group(1))
-        if value:
-            targets[scope] = float(value.group(1))
+        indent = len(match.group(1))
+        scope = match.group(2)
+        for body in lines[index + 1 :]:
+            if not body.strip() or body.lstrip().startswith("#"):
+                continue
+            if len(body) - len(body.lstrip()) <= indent:
+                break
+            value = re.search(r"target:\s*([0-9.]+)%", body)
+            if value:
+                targets[scope] = float(value.group(1))
+                break
     return targets
 
 
@@ -111,6 +124,17 @@ def coverage_floor(text: str) -> float | None:
     """Read the enforced coverage floor out of the CI workflow."""
     value = re.search(r"coverage-floor\.sh\s+\S+\s+([0-9.]+)", text)
     return float(value.group(1)) if value else None
+
+
+def patch_coverage_floor(text: str) -> float | None:
+    """Read the enforced patch-coverage floor out of the CI workflow."""
+    value = re.search(r"PATCH_COVERAGE_FLOOR:\s*([0-9.]+)", text)
+    return float(value.group(1)) if value else None
+
+
+def patch_floor_is_wired(text: str) -> bool:
+    """Report whether the CI workflow still runs the patch floor."""
+    return "patch-coverage-floor.py" in text
 
 
 def report(problems: list[str]) -> int:
@@ -164,6 +188,37 @@ def main() -> int:
             for added in sorted(head_list - base_list):
                 problems.append(f"deny.toml [{section}] {key} gained {added}")
 
+    base_ci = read_at(base, ".github/workflows/ci.yml")
+    head_ci = current(".github/workflows/ci.yml")
+    head_floor = head_patch = None
+    if base_ci and head_ci:
+        base_floor = coverage_floor(base_ci.decode())
+        head_floor = coverage_floor(head_ci.decode())
+        if base_floor is not None:
+            if head_floor is None:
+                problems.append("the coverage floor step was removed from ci.yml")
+            elif head_floor < base_floor:
+                problems.append(
+                    f"the coverage floor dropped from {base_floor}% to {head_floor}%"
+                )
+
+        base_patch = patch_coverage_floor(base_ci.decode())
+        head_patch = patch_coverage_floor(head_ci.decode())
+        if base_patch is not None:
+            if head_patch is None:
+                problems.append(
+                    "the patch coverage floor was removed from ci.yml"
+                )
+            elif head_patch < base_patch:
+                problems.append(
+                    f"the patch coverage floor dropped from {base_patch}% to "
+                    f"{head_patch}%"
+                )
+        if patch_floor_is_wired(base_ci.decode()) and not patch_floor_is_wired(
+            head_ci.decode()
+        ):
+            problems.append("the patch coverage floor step was removed from ci.yml")
+
     base_codecov = read_at(base, "codecov.yml")
     head_codecov = current("codecov.yml")
     if base_codecov and head_codecov:
@@ -176,18 +231,15 @@ def main() -> int:
                 problems.append(
                     f"codecov {scope} target dropped from {value}% to {head_targets[scope]}%"
                 )
-
-    base_ci = read_at(base, ".github/workflows/ci.yml")
-    head_ci = current(".github/workflows/ci.yml")
-    if base_ci and head_ci:
-        base_floor = coverage_floor(base_ci.decode())
-        head_floor = coverage_floor(head_ci.decode())
-        if base_floor is not None:
-            if head_floor is None:
-                problems.append("the coverage floor step was removed from ci.yml")
-            elif head_floor < base_floor:
+        # codecov.yml states the target; the CI floor is the one that
+        # actually fails a build. The enforced floor may not be the
+        # weaker of the two.
+        for scope, enforced in (("project", head_floor), ("patch", head_patch)):
+            declared = head_targets.get(scope)
+            if declared is not None and enforced is not None and enforced < declared:
                 problems.append(
-                    f"the coverage floor dropped from {base_floor}% to {head_floor}%"
+                    f"the enforced {scope} coverage floor ({enforced}%) is below "
+                    f"the codecov {scope} target ({declared}%)"
                 )
 
     print(f"gate-parity: compared HEAD against {ref} ({base[:12]})")

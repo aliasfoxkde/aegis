@@ -35,6 +35,21 @@ every release are attached to the matching GitHub release.
   verdict appears in the human and JSON reports and in the SARIF
   output. See `docs/guides/TRIAGE.md`.
 
+- A patch-coverage floor now runs on every build. The project-wide floor
+  barely moves when a change adds one uncovered file, so a pull request
+  could add uncovered lines and stay green, and `codecov.yml`'s `patch`
+  target was never evaluated by anything (no `CODECOV_TOKEN`, so every
+  Codecov upload fails and is ignored). `scripts/patch-coverage-floor.py`
+  intersects the lines a diff adds with the hit counts in the same lcov
+  report and fails the Coverage job below the floor, which starts at the
+  90% `codecov.yml` already declares. The diff is taken against the merge
+  base, so a branch that lags its base still measures against the fork.
+  `scripts/check-gate-parity.py` tracks the floor, so it cannot be
+  lowered or removed quietly — and its codecov-target reader, which
+  stopped a scope's body at the next key of any kind and therefore never
+  reached the `target:` line, now reads a scope's body to the next line
+  at the same indentation.
+
 - New `ai-slop` detection category (7 rules) flagging LLM-prose style
   tells in source trees: em dashes and other typographic punctuation
   (curly quotes, the single-character ellipsis), AI attribution footers
@@ -47,6 +62,21 @@ every release are attached to the matching GitHub release.
   contract of the sibling `ai-detection` category: triage signals, not
   verdicts. A file where several slop rules fire at once is the real
   signal.
+
+- The daemon and the MCP server now take an operator configuration at
+  startup. `AEGIS_DAEMON_CONFIG` and `AEGIS_MCP_CONFIG` name the same JSON
+  profile document the CLI reads with `aegis --config <file>`; the
+  categories, severity threshold, anomaly detectors, and path classes in
+  it are applied before the daemon binds its socket and before the MCP
+  server answers, so a deployment can choose what it scans for without a
+  code change. A configuration that cannot be applied stops the process
+  rather than leaving it serving scans it was not configured for, and an
+  empty variable is refused instead of being read as "no configuration".
+  The configuration stays operator-side: no request over either protocol
+  changes it, because a client that could set the severity threshold or
+  the category list could weaken the scan it was asked for. Applying a
+  configuration also marks the rule set as built, so the first request no
+  longer compiles the whole rule set a second time.
 
 ### Changed
 
@@ -71,6 +101,32 @@ every release are attached to the matching GitHub release.
 
 ### Fixed
 
+- A path class never matched anything on Windows. A rule is written with
+  `/`, the separator a configuration file carries on every platform, but
+  the path the scanner matched it against was the one the operating system
+  built, which uses `\` on Windows. Every rule was therefore inert there,
+  and a documentation or fixture path stayed reported as an ordinary
+  finding. The path is now put into `/` before it is matched. A backslash
+  is still a legal character in a file name on Unix, so only the
+  platform's own separator is replaced.
+
+- The daemon and the MCP server each held a configuration they never
+  applied. The categories, severity threshold, anomaly detectors, and path
+  classes it named had no effect on any scan, and no caller could change
+  it: the field was written once at startup and never read again. Both
+  surfaces now publish the configuration in force (`config()`), apply it
+  when the scanner is built, and rebuild the scanner around a new
+  configuration (`set_config()`), so a host process that retunes scanning
+  sees the change in what is reported. A configuration that cannot be
+  applied — an unknown category, a path-class rule whose glob does not
+  compile, a severity threshold no severity name matches, or an unknown
+  anomaly detector — is rejected with the reason, and the configuration
+  already in force keeps serving. Installing a bundle now builds around
+  the configuration in force as well, so the rule set and the
+  configuration cannot disagree. The daemon's `DaemonState::config` field
+  is now private: read the configuration in force with `config()` and
+  change it with `set_config()`, so the field can no longer be written
+  behind the scanner's back.
 - A secret-triage verdict no longer names the placeholder marker it
   matched. The reason read "contains the placeholder marker `changeme`",
   so every placeholder finding put a fragment of the matched credential
