@@ -10,6 +10,7 @@ numeric values:
     AEGIS_DAEMON_SCAN_ROOT=/srv/workspace
     AEGIS_DAEMON_ALLOWED_UIDS=1000,1001
     AEGIS_DAEMON_ALLOWED_GIDS=2000
+    AEGIS_DAEMON_CONFIG=/etc/aegis/daemon.json
 
 When AEGIS_DAEMON_ALLOWED_GIDS is set, the socket is mode 0660; otherwise it
 remains 0600. Peer authorization is still enforced in the process, so
@@ -20,6 +21,18 @@ and scan_dir requests are resolved and canonicalized beneath that root.
 Relative paths are root-relative. Absolute paths, .. traversal, and symlinks
 whose canonical target is outside the root are rejected before the scanner is
 called.
+
+AEGIS_DAEMON_CONFIG names a JSON profile document — the same format the CLI
+reads with `aegis --config <file>` — that the daemon applies at startup, before
+it binds its socket. Its `enabled_categories`, `severity_threshold`,
+`anomaly_detectors`, and `path_classes` fields decide what the daemon scans
+for. A configuration that cannot be applied (an unknown category, a path-class
+glob that does not compile, a severity threshold that does not parse, an
+unknown anomaly detector) stops the daemon rather than leaving it serving
+scans it was not configured for. The configuration is not reachable over the
+protocol: a client cannot change it, so changing it means editing the file and
+restarting the daemon. See `docs/guides/CONFIGURATION.md` for the profile
+fields.
 
 Migration requirements:
 
