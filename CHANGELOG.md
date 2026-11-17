@@ -7,6 +7,8 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-17
+
 ### Added
 
 - **Path classes.** `--classify-path GLOB=KIND` classifies a path so
