@@ -22,9 +22,10 @@ correctness, review, or trust but is not currently wrong; **P3** —
 outside this repository's boundary.
 
 **Status, as the work order in §7 lands:** items 1.1, 1.2, 1.3, 2.1,
-2.2, 3.1, 3.2, 4.1, 4.2, and 5.1 are closed. §5.2 and §6 remain
-external or outside this repository's boundary, and cutting `v0.6.5` is
-the remaining step of item 3.1.
+2.2, 3.1, 3.2, 4.1, 4.2, and 5.1 are closed, and `v0.6.5` was cut on
+2026-11-17 through the GitForge-first path — receipt:
+[progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md](../progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md).
+§5.2 and §6 remain external or outside this repository's boundary.
 
 ---
 
@@ -188,7 +189,7 @@ the verdict with its reasons, none of which quotes the value it judged.
 
 ## 3. Release and changelog debt — P1
 
-### 3.1 Seven weeks of merged work, no release, and the changelog is silent about the largest feature of the period — CHANGELOG WRITTEN, RELEASE PENDING
+### 3.1 Seven weeks of merged work, no release, and the changelog is silent about the largest feature of the period — FIXED (release cut as v0.6.5)
 
 `v0.6.4` is dated 2026-09-27; `main` has carried 24 commits since,
 including the whole triage-ergonomics feature set from PR #193. The
@@ -203,10 +204,13 @@ set are written — path classes, the inline synthetic annotations, and the
 secret-triage verdict — and `docs/PLAN.md`'s current-state block is
 refreshed in the same change (item 3.2).
 
-**Remaining:** cut `v0.6.5` through the GitForge-first release path
-documented in `docs/guides/RELEASES.md`. The release itself is not a
-documentation change and belongs to its own pull request, where the
-version bump and the lockfile refresh stand alone.
+**Done:** `v0.6.5` was cut on 2026-11-17 through the GitForge-first path
+documented in `docs/guides/RELEASES.md` — the version bump landed as PR
+#203 (`0ffe29e`), the pipeline built all ten assets, `publish.sh`
+mirrored them to the GitHub release, and the published set verifies
+against its own `checksums.txt`. The receipt, including the one
+cross-build difference the release exposed, is
+[progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md](../progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md).
 
 ### 3.2 The plan's current-state block and test count are stale — FIXED (this branch)
 
@@ -335,10 +339,11 @@ the gate that proves it.
    that began before a configuration was applied cannot undo it.*
 4. **Write the changelog entries for PR #193's features, refresh
    `docs/PLAN.md`'s current-state block, and cut `v0.6.5`** (items 3.1,
-   3.2) — the release workflow is the gate. *The changelog entries and
-   the plan refresh are done in this branch; `v0.6.5` is the remaining
-   step and belongs to its own pull request, where the version bump and
-   the lockfile refresh stand alone.*
+   3.2) — the release workflow is the gate. *Done: the changelog entries
+   and the plan refresh landed in PR #196, the version bump and the
+   lockfile refresh in PR #203 (`0ffe29e`), and `v0.6.5` was cut on
+   2026-11-17 by the GitForge pipeline and published — see the
+   [release receipt](../progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md).*
 5. **Add a patch-coverage floor** to the Coverage job (item 5.1) — the
    script's own report over a CI lcov file is the gate. *Done: merged
    as PR #200 (`7ecbfb9`).*
