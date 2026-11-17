@@ -94,22 +94,29 @@ the tag's commit time — and gzips with `-n` so no wall clock enters the
 header. Before that fix the tarball digests drifted across builders even
 with identical contents (each builder's uid/gid leaked into the archive).
 
-**One caveat, measured on v0.6.5:** the tarballs are byte-identical
-across builds only when the build *directory* is the same. The absolute
-source path is compiled into the binaries (it appears in the panic
-locations), so a build at `/workspace` and a build at `/src` produce
-equal-sized binaries whose only differing bytes are those path strings
-- and therefore different build-ids and different tarball digests. The
+**The build path is remapped away.** The absolute source path would
+otherwise be compiled into the binaries - it appears in the panic
+locations - so two builds of one tag at different paths produced
+equal-sized binaries whose only differing bytes were those path strings,
+and therefore different build-ids and different tarball digests. This
+was measured on v0.6.5, where the pipeline build at `/workspace` and an
+independent build at `/src` differed exactly that way. The dependency
+sources carry the same property: a crate unpacked under `$CARGO_HOME`
+is compiled from that absolute path, so two builders with different
+cargo homes drift the same way. `scripts/release/build.sh` therefore
+passes `--remap-path-prefix` for the workspace *and* for the cargo home
+(`remap_path_prefix` in `scripts/release/lib.sh`), which makes the
+compiled paths relative and a release byte-reproducible wherever it is
+built. Verified in `aegis-builder:1`: builds of one tag at two
+different paths, with two different cargo homes, produce the identical
+binary, while a build that remaps only the workspace path does not. The
 `aegis-wasm.wasm` module and the `source.tar.gz`/`source.zip` archives
-are unaffected and stay byte-identical. Until `build.sh` remaps the path
-prefix, compare a cross-build by the wasm module, the source archives,
-and the tarball members, not by the tarball digests.
+were never affected and stay byte-identical.
 
 The one intentionally volatile asset is `attestation.json`: its
 `built_at` records the real build time, and it embeds the asset digests.
 To cross-check two builds of the same tag, compare the binaries and
-tarball digests, with the build-path caveat above; expect `built_at`
-(and only it) to differ.
+tarball digests; expect `built_at` (and only it) to differ.
 
 ## The attestation
 

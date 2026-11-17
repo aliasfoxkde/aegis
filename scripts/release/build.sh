@@ -51,6 +51,18 @@ tag_epoch="$(git show -s --format=%ct "$commit")"
 # attestation note below rather than papered over.
 export SOURCE_DATE_EPOCH="$tag_epoch"
 
+# The absolute build path is compiled into the binaries - it appears in
+# the panic locations - so two builds of one tag at different paths
+# produce different bytes, and the tarball digests drift even though
+# the code is identical. Measured on v0.6.5: a pipeline build at
+# /workspace and an independent build at /src differed only in those
+# path strings (see
+# docs/progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md). The
+# dependency sources carry the same property, so the cargo home is
+# remapped as well; see remap_path_prefix in lib.sh for the reasoning.
+remap_path_prefix "$repo" "the workspace path"
+remap_path_prefix "${CARGO_HOME:-$HOME/.cargo}" "the cargo home"
+
 cd "$repo"
 
 missing=0

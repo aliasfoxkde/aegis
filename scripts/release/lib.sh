@@ -89,6 +89,34 @@ bin_name() {
     if [[ "$target" == *windows* ]]; then printf '%s.exe\n' "$bin"; else printf '%s\n' "$bin"; fi
 }
 
+# Remap an absolute source prefix out of the compiled paths.
+#
+# The absolute path of a source file is compiled into the binary - it
+# appears in the panic locations - so two builds of one tag in different
+# directories produce different bytes even when the code is identical,
+# and the platform tarball digests drift with them. The dependency
+# sources carry the same property: a crate unpacked under $CARGO_HOME is
+# compiled from that absolute path, so two builders with different cargo
+# homes drift the same way. Remapping both prefixes away is what makes a
+# release byte-reproducible wherever it is built.
+#
+# RUSTFLAGS is appended to, never replaced: a caller that sets it keeps
+# it. A prefix containing whitespace cannot be remapped - RUSTFLAGS is
+# split on spaces - so this refuses instead of silently producing
+# path-dependent binaries.
+remap_path_prefix() {
+    local prefix="$1" what="${2:-path}"
+    if [[ -z "$prefix" ]]; then
+        return 0
+    fi
+    if [[ "$prefix" == *[[:space:]]* ]]; then
+        printf '%s contains whitespace: %s\n' "$what" "$prefix" >&2
+        printf 'RUSTFLAGS is split on spaces, so the path prefix cannot be remapped; build from a path without whitespace\n' >&2
+        return 1
+    fi
+    export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$prefix="
+}
+
 # Cross-compilation goes through `cargo zigbuild` (zig's linker covers
 # aarch64 glibc, both darwin targets and windows-gnu); the native host and
 # wasm use plain `cargo build`. cargo-zigbuild wraps `cargo build` and takes
