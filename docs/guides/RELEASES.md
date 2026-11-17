@@ -94,10 +94,22 @@ the tag's commit time — and gzips with `-n` so no wall clock enters the
 header. Before that fix the tarball digests drifted across builders even
 with identical contents (each builder's uid/gid leaked into the archive).
 
+**One caveat, measured on v0.6.5:** the tarballs are byte-identical
+across builds only when the build *directory* is the same. The absolute
+source path is compiled into the binaries (it appears in the panic
+locations), so a build at `/workspace` and a build at `/src` produce
+equal-sized binaries whose only differing bytes are those path strings
+- and therefore different build-ids and different tarball digests. The
+`aegis-wasm.wasm` module and the `source.tar.gz`/`source.zip` archives
+are unaffected and stay byte-identical. Until `build.sh` remaps the path
+prefix, compare a cross-build by the wasm module, the source archives,
+and the tarball members, not by the tarball digests.
+
 The one intentionally volatile asset is `attestation.json`: its
 `built_at` records the real build time, and it embeds the asset digests.
 To cross-check two builds of the same tag, compare the binaries and
-tarball digests; expect `built_at` (and only it) to differ.
+tarball digests, with the build-path caveat above; expect `built_at`
+(and only it) to differ.
 
 ## The attestation
 
