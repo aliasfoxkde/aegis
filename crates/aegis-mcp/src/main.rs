@@ -1153,6 +1153,7 @@ async fn write_response<W: tokio::io::AsyncWrite + Unpin>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_init_scanner_has_patterns() {
@@ -1202,9 +1203,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn blocking_task_panic_maps_to_internal_error() {
+        let spawned = tokio::task::spawn_blocking(|| -> std::result::Result<(), &str> {
+            panic!("synthetic blocking worker failure")
+        })
+        .await;
+        let error = spawn_blocking_result(spawned, "fixture worker failed")
+            .expect_err("a worker panic must become an RPC error");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InternalError);
+        assert!(error.message.contains("fixture worker failed"));
+    }
+
+    #[tokio::test]
     async fn saturated_transport_rejects_requests_with_retryable_error() {
         let request = br#"{"jsonrpc":"2.0","method":"ping","id":42}"#;
-        let reader = tokio::io::BufReader::new(&request[..]);
+        let reader = BufReader::new(&request[..]);
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
         read_frames(
             reader,

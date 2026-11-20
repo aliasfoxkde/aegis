@@ -116,7 +116,7 @@ Marketing hype register that LLM READMEs and landing pages default to (harness t
 (?i)\b(?:harness(?:ing)?\s+the\s+power|unleash(?:es|ing)?|revolution(?:ize|izing|ises?)|supercharg\w+|look\s+no\s+further|whether\s+you'?re\s+(?:a|an|building)|in\s+today'?s\s+(?:fast-?paced\s+)?(?:world|digital\s+landscape)|game-?chang\w+)\b
 ```
 
-**Reference**: <https://doi.org/10.1038/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -143,7 +143,7 @@ Narrative filler from the LLM lexicon (tapestry, delve into, in the realm of, pl
 (?i)\b(?:(?:rich|vibrant|woven)\s+tapestry|testament\s+to|in\s+the\s+realm\s+of|delv(?:e|es|ed|ing)\s+into|deep\s+dive|myriad\s+of|plethora\s+of|ever-?evolving|paradigm\s+shift|fast-?paced\s+(?:world|environment)|navigat\w+\s+the\s+(?:complexities|nuances|landscape|intricacies))\b
 ```
 
-**Reference**: <https://doi.org/10.1038/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 
