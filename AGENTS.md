@@ -4,7 +4,7 @@ This file provides guidance for AI agents working on the Aegis project.
 
 ## Project Overview
 
-Aegis is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust with 670 detection patterns across 34 categories.
+Aegis is a high-performance security scanning tool for DevOps, CI/CD pipelines, and AI systems. Built in Rust with 677 detection patterns across 35 categories.
 
 ## Key Commands
 
@@ -30,7 +30,65 @@ cargo fmt --all
 cargo llvm-cov --workspace
 ```
 
-`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code`/`unwrap_used`/`expect_used`/`panic` denied) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Unwinding panics are denied in production code — errors must be values; test code is exempt via `clippy.toml`. Fix the code; do not add an allow (the few deliberate exceptions carry an inline `#[allow]` with the invariant it protects). A `Rustdoc` CI job runs `cargo doc` with `-D warnings`, enforcing the `[lints.rustdoc]` table.
+`cargo clippy --workspace --all-targets -- -D warnings` is an **enforced gate**, not an aspiration. It runs as a dedicated CI job on every PR and push to `main` and currently passes clean. Every workspace crate also opts into a shared `[lints]` block (`pedantic`, `rust_2018_idioms`, `missing_docs`, `unsafe_code`/`unwrap_used`/`expect_used`/`panic` denied) from the root `Cargo.toml`, so most lint findings surface as errors during a plain build too. Unwinding panics are denied in production code — errors must be values; test code is exempt via `clippy.toml`. Fix the code; do not add an allow (the few deliberate exceptions carry an inline `#[allow]` with the invariant it protects, recorded in the `aegis-allow:` format described under *Quality Gates and What Enforces Them*). A `Rustdoc` CI job runs `cargo doc` with `-D warnings`, enforcing the `[lints.rustdoc]` table.
+
+## Quality Gates and What Enforces Them
+
+Every rule this repository claims to enforce has exactly one gate that
+proves it, and a change that weakens a gate is itself a failure. If a rule
+has no row here, it is not enforced — either it should be, or it should not
+be claimed.
+
+| Rule | Gate | Where it runs |
+|---|---|---|
+| Formatting | `cargo fmt --all -- --check` | CI "Format" |
+| Lints (`pedantic`, `missing_docs`, `unwrap`/`expect`/`panic` denied) | `cargo clippy --workspace --all-targets -- -D warnings` | CI "Clippy" |
+| Public API docs resolve | `cargo doc --workspace --no-deps` with `-D warnings` | CI "Rustdoc" |
+| Every enabled rule fires on a shipped example | `cargo test -p aegis-core --test pattern_liveness` | CI "Test" |
+| The report contract a CI gate reads | `cargo test -p aegis-cli --test ci_gate_contract` | CI "Test" |
+| Documented rule/category counts match the corpus | `cargo test -p aegis-patterns --test doc_count_drift` | CI "Test" |
+| Every lint suppression carries a dated, owned decision | `cargo test -p aegis-core --test lint_policy` and `scripts/check-allow-expiry.sh` | CI "Gate policy" |
+| A change does not weaken a configured gate | `scripts/check-gate-parity.py` | CI "Gate policy" |
+| License allow-list parity (cargo-deny ↔ cargo-about) | `scripts/check-license-parity.sh` | CI "Third-Party Notices" |
+| Advisory waivers parity (cargo-audit ↔ cargo-deny) | `scripts/check-advisory-parity.sh` | CI "Dependency Policy" |
+| The fuzz lockfile pins the workspace | `scripts/check-fuzz-lock.sh` | CI "Dependency Policy" |
+| Known dependency vulnerabilities | `cargo audit` and `cargo deny check` | CI "Security Audit", CI "Dependency Policy" |
+| Line-coverage floor | `scripts/coverage-floor.sh` (97.0%) | CI "Coverage" |
+| Patch-coverage floor (the lines a change adds) | `scripts/patch-coverage-floor.py` (90.0%) | CI "Coverage"; its own unit test runs in CI "Gate policy" |
+| Vulnerabilities in this repository's own code | CodeQL and the repository's own scan | CI "CodeQL", `aegis-scan.yml` |
+| The WASM bindings still compile | `cargo build --target wasm32-unknown-unknown --package aegis-wasm` | CI "WASM" |
+| The declared MSRV | `cargo check --workspace` on 1.88 | CI "MSRV 1.88" |
+| No unused dependencies | `cargo machete` | CI "Unused Dependencies" |
+
+Two settings outside the repository's files decide whether these gates can
+report at all:
+
+- **CodeQL.** The "CodeQL" job in `ci.yml` is an *advanced configuration*
+  analysis, and GitHub refuses to process an advanced analysis while the
+  repository's default code-scanning setup is enabled. The default setup is
+  therefore switched off (`code-scanning/default-setup` -> `not-configured`);
+  the CI job is the scanning that counts. Re-enabling the default setup
+  silently breaks the CodeQL gate with an upload error.
+- **MSRV.** `Cargo.toml` declares 1.88 and CI checks it, so no dependency may
+  require a newer compiler. `parking_lot` is pinned to the 0.12 line for this
+  reason - 0.13 requires rustc 1.95.
+
+### Lint suppressions are decisions, not scars
+
+A `#[allow(...)]` suppresses a rule the workspace enforces, so every one of
+them is a decision somebody has to own. Each suppression in `crates/*/src`
+therefore carries a machine-readable annotation on the attribute line or
+the line below it:
+
+```text
+// aegis-allow: <reason> | expires=YYYY-MM-DD | approver=<who>
+```
+
+`crates/aegis-core/tests/lint_policy.rs` fails when a suppression has no
+such annotation (or one that is missing a field), and
+`scripts/check-allow-expiry.sh` fails when an expiry has passed or is
+within 45 days. Renewing a suppression means re-deciding it: fix the code,
+or move the date and — if the reasoning changed — the reason with it.
 
 ## Architecture
 
@@ -51,7 +109,7 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
 - **WASM**: The aegis-wasm crate provides WASM bindings. It must be built with `cargo build --target wasm32-unknown-unknown --package aegis-wasm` (a normal `cargo build --workspace` does not produce it). The browser binding keeps `matched_text` on each finding, unlike the native serialization, which strips it.
 - **Daemon**: aegis-daemon is Unix-only due to Unix domain sockets. Every code path is `#[cfg(unix)]`; on Windows the binary builds but exits 1 with an explanatory message.
 - **Tokio**: aegis-core uses tokio with only the `sync`, `fs`, `io-util`, and `rt` features, and they are optional. Other crates use `features = ["full"]`.
-- **Pattern count**: 670 enabled patterns across 34 categories. `aegis list` reflects enabled rules only; do not quote counts from memory, since the set is actively pruned.
+- **Pattern count**: 677 enabled patterns across 35 categories (source of truth: `docs/patterns/README.md`). `aegis list` reflects enabled rules only; do not quote counts from memory, since the set is actively pruned.
 - **Self-scan**: The repository scans itself in CI at high severity over `secrets,security-hardening,web-security`:
 
   ```bash
@@ -59,7 +117,7 @@ The workspace root package itself only contributes the `aegis-bootstrap` placeho
     --categories secrets,security-hardening,web-security --severity-threshold high
   ```
 
-  This currently reports **0 findings**. It exits 1 when it reports findings (exit 1 means "findings", not "tool failure"). Synthetic test credentials (the AWS documentation example key) appear in a few `#[cfg(test)]` fixtures and are suppressed with a same-line `aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures` directive — the directive must sit on the **same line as the finding**, or it does not take effect. Check this list before assuming a new finding is yours.
+  This currently reports **0 findings**. It exits 1 when it reports findings (exit 1 means "findings", not "tool failure"). Synthetic test credentials (the AWS documentation example key) appear in a few `#[cfg(test)]` fixtures and are suppressed with a same-line `aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures` directive — the directive must sit on the **same line as the finding**, or it does not take effect.  Check this list before assuming a new finding is yours. A deliberate example may also be marked with a same-line `aegis:synthetic` annotation: the finding is kept, tagged `synthetic`, and reported at low severity instead of being hidden — the path classes, the annotation, and the secret triage are documented in [docs/guides/TRIAGE.md](docs/guides/TRIAGE.md).
 
 ## Branch and Commit Policy
 
@@ -80,7 +138,7 @@ Note: a tag that was already published once cannot be reused — deleting and re
 
 ## License
 
-Apache-2.0 (NOT MIT OR Apache-2.0)
+Apache-2.0 (see `LICENSE`; `Cargo.toml` declares `license = "Apache-2.0"`)
 
 ## Quality Requirements
 

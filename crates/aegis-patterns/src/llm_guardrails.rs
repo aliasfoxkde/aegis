@@ -476,10 +476,19 @@ pub fn get() -> Vec<Pattern> {
             exclude: None,
             file_extensions: Vec::new(),
         },
+        // The token needs a boundary on its left. The bare alternative
+        // matched the `ssN` inside `className`/`classNames`, so every
+        // camelCase React attribute reported a high-severity PII marker
+        // (issue #186). `\b` alone would still miss the snake_case forms
+        // (`ssn_field`, `user_ssn`), hence the explicit `_ssn` branch;
+        // the right-hand side stays open so the camelCase forms
+        // (`ssnNumber`) keep firing. The `regex` crate has no lookaround,
+        // so a right-hand boundary cannot be expressed without dropping
+        // them.
         Pattern {
             name: "pii-output-marker".to_string(),
             category: "llm-guardrails".to_string(),
-            match_pattern: r"(?i)(ssn|social\s*security|credit\s*card|bank\s+account)"
+            match_pattern: r"(?i)(?:\bssn|_ssn|social\s*security|credit\s*card|bank\s+account)"
                 .to_string(),
             enabled: true,
             severity: "high".to_string(),

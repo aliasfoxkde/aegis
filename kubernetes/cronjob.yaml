@@ -10,6 +10,11 @@
 # The container exits 1 when findings survive the profile's filters — the
 # Job is then recorded as failed, which is the intended signal for
 # alerting (restartPolicy is Never so findings are not retried away).
+# An incomplete scan exits 3 and fails the Job the same way: the receipt
+# does not certify that every required inspection completed — a required
+# file was unreadable, skipped by the size limit, or had no analyzer at
+# all (a binary, for instance). An unproven pass is a signal, not a
+# success.
 #
 # Usage:
 #   kubectl apply -f kubernetes/cronjob.yaml

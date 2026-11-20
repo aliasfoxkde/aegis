@@ -14,14 +14,16 @@ use walkdir::WalkDir;
 use crate::anomalies::{self, FileMetrics};
 use crate::clone::{CloneDetector, CloneReport};
 use crate::entropy::shannon_entropy;
-use crate::suppression::SuppressionManager;
+use crate::suppression::{SuppressionManager, SYNTHETIC_TAG};
 
 use crate::ast::{AstAnalyzer, AstInspectionStatus};
 use crate::bundle::Bundle;
-use crate::config::Config;
+use crate::config::{Config, PathClassRule};
 use crate::finding::{Finding, FindingKind, InspectionStatus, Location, ScanStats};
 use crate::ignore::IgnoreManager;
+use crate::path_class::{apply_path_class, PathClassMatcher};
 use crate::pattern::{PatternDefinition, PatternRegistry, Severity};
+use crate::secret_triage::{triage_secret, SECRET_CATEGORY};
 
 fn ast_findings_to_findings(
     inspection: &crate::ast::AstInspection,
@@ -58,12 +60,63 @@ fn distinct_patterns(findings: &[Finding]) -> usize {
         .len()
 }
 
+/// Undo git's C-style path quoting (`"name"`) into a path string.
+///
+/// Recognizes the escapes git emits — `\\`, `\"`, `\a \b \f \n \r \t \v`,
+/// and three-digit octal escapes for arbitrary bytes (high bytes arrive as
+/// UTF-8 octal pairs under `core.quotepath`) — and requires a real closing
+/// quote; anything after it, such as a timestamp, is dropped. Octal escapes
+/// decode to raw bytes, so multi-byte UTF-8 sequences reassemble into their
+/// original characters. Returns `None` when the input does not open with a
+/// quote, the closing quote is missing, an escape is unknown, or the
+/// decoded bytes are not UTF-8, or an octal value exceeds one byte — the
+/// caller then drops attribution instead of guessing a path.
+fn unquote_c_style(raw: &str) -> Option<String> {
+    let mut out: Vec<u8> = Vec::with_capacity(raw.len());
+    // Consume the opening quote first: the loop treats every `"` as the
+    // closing terminator, so decoding the raw string would return an empty
+    // path on its very first character.
+    let mut chars = raw.strip_prefix('"')?.chars();
+    loop {
+        let c = chars.next()?;
+        match c {
+            '"' => return String::from_utf8(out).ok(),
+            '\\' => {
+                let byte = match chars.next()? {
+                    'a' => 0x07,
+                    'b' => 0x08,
+                    'f' => 0x0c,
+                    'n' => b'\n',
+                    'r' => b'\r',
+                    't' => b'\t',
+                    'v' => 0x0b,
+                    '\\' => b'\\',
+                    '"' => b'"',
+                    first @ '0'..='7' => {
+                        let mid = chars.next()?.to_digit(8)?;
+                        let low = chars.next()?.to_digit(8)?;
+                        let value = (first.to_digit(8)? << 6) | (mid << 3) | low;
+                        u8::try_from(value).ok()?
+                    }
+                    _ => return None,
+                };
+                out.push(byte);
+            }
+            other => {
+                let mut buf = [0u8; 4];
+                out.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
+            }
+        }
+    }
+}
+
 /// Scan options
 ///
 /// The booleans mirror the CLI's flag set one-to-one; a settings enum
 /// would force every caller to translate back to per-option flags.
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
+// aegis-allow: the booleans mirror the CLI scan flag set one-to-one | expires=2027-12-31 | approver=maintainers
 pub struct ScanOptions {
     /// Maximum file size to scan
     pub max_file_size: u64,
@@ -105,6 +158,11 @@ pub struct ScanOptions {
     /// output are unaffected. Off by default: detection is a full second
     /// token-and-LCS pass over each file.
     pub detect_clones: bool,
+    /// Path classifications: globs whose findings are reported at low
+    /// severity because the paths hold documentation or test fixtures
+    /// rather than shipped code. Secret findings keep their severity and
+    /// carry the class as a tag.
+    pub path_classes: Vec<PathClassRule>,
 }
 
 impl Default for ScanOptions {
@@ -123,6 +181,7 @@ impl Default for ScanOptions {
             diff_file: None,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         }
     }
 }
@@ -162,6 +221,8 @@ pub struct Scanner {
     registry: Arc<PatternRegistry>,
     ignore_manager: Arc<IgnoreManager>,
     options: ScanOptions,
+    /// Compiled path classifications, applied to every scanned file.
+    path_classes: PathClassMatcher,
     /// Cached category scanners for performance
     /// Per-extension category scanners ("" = sources without an extension);
     /// values contain only patterns applicable to that extension
@@ -260,6 +321,7 @@ impl Scanner {
             registry: Arc::new(PatternRegistry::new()),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -281,6 +343,7 @@ impl Scanner {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -304,6 +367,7 @@ impl Scanner {
             registry: Arc::new(registry),
             ignore_manager: Arc::new(IgnoreManager::new()),
             options: ScanOptions::default(),
+            path_classes: PathClassMatcher::default(),
             extension_scanners: RwLock::new(std::collections::HashMap::new()),
             last_include_disabled: AtomicBool::new(false),
             loaded_user_pattern_files: Mutex::new(HashSet::new()),
@@ -318,10 +382,11 @@ impl Scanner {
     /// # Errors
     ///
     /// Returns [`PatternError`](crate::pattern::PatternError) when the
-    /// bundle cannot be loaded (invalid regex, duplicate name) or when
-    /// `enabled_categories` names a category absent from the registry.
+    /// bundle cannot be loaded (invalid regex, duplicate name), when
+    /// `enabled_categories` names a category absent from the registry, or
+    /// when a path-class rule names a glob that does not compile.
     pub fn from_config(config: &Config) -> Result<Self, crate::pattern::PatternError> {
-        let scanner = Self::from_bundle(&config.bundle)?;
+        let mut scanner = Self::from_bundle(&config.bundle)?;
 
         if let Some(categories) = &config.enabled_categories {
             // Only meaningful against a populated registry; an empty bundle
@@ -334,6 +399,25 @@ impl Scanner {
                 scanner.registry.set_category_enabled(cat, true);
             }
         }
+
+        // A profile may classify paths; the classifications apply to every
+        // file this scanner reads. The rules are kept in the options as
+        // well as in the matcher, so a caller that reads the options back
+        // sees exactly the rules the matcher was built from.
+        //
+        // A rule whose glob does not compile classifies nothing. The
+        // matcher would drop it, and the caller would go on believing a
+        // path class was in force, so the configuration is rejected here
+        // instead: a rule that cannot fire is a bug, not a warning.
+        for rule in &config.path_classes {
+            rule.validate()
+                .map_err(crate::pattern::PatternError::InvalidPathClass)?;
+        }
+        scanner
+            .options
+            .path_classes
+            .clone_from(&config.path_classes);
+        scanner.path_classes = PathClassMatcher::new(&config.path_classes);
 
         Ok(scanner)
     }
@@ -366,6 +450,12 @@ impl Scanner {
         self.ignore_manager.should_ignore(path)
     }
 
+    /// Maximum byte size accepted for a single file by this scanner.
+    #[must_use]
+    pub fn max_file_size(&self) -> u64 {
+        self.options.max_file_size
+    }
+
     /// Update options and rebuild category scanners if needed
     ///
     /// # Panics
@@ -381,6 +471,9 @@ impl Scanner {
         self.extension_scanners.write().clear();
         let baseline = options.baseline.clone();
         self.options = options;
+        // Compile the path classes once: a broken glob is skipped with a
+        // warning here rather than failing a scan in the middle of a walk.
+        self.path_classes = PathClassMatcher::new(&self.options.path_classes);
         if let Some(path) = baseline {
             // Load once here so scans pay no per-file I/O and a broken
             // baseline is reported instead of silently ignored. `set` only
@@ -434,131 +527,319 @@ impl Scanner {
         scanners
     }
 
-    /// Parse a diff and return each added line as `(file_path, line_content)`.
+    /// Parse a diff file and extract only the added lines with their
+    /// positions in the target file.
+    ///
+    /// Returns a `(file_path, line_content, line_number)` triple per added
+    /// line. `line_number` is the 1-based line of the target (post-image)
+    /// file, taken from the enclosing hunk's `@@ -a,b +c,d @@` header, so
+    /// findings stay anchored to real file positions across multiple hunks.
+    /// Additions with no header anchor — before any file header, or outside
+    /// every hunk, including the body of a binary patch — are dropped rather
+    /// than reported against a guessed position, as are deleted files
+    /// (`+++ /dev/null`), which have no post-image to attribute to, and
+    /// additions under a `+++` header whose quoted path cannot be decoded.
     #[must_use]
-    pub fn parse_diff(diff_content: &str) -> Vec<(String, String)> {
-        Self::parse_diff_with_line_numbers(diff_content)
+    pub fn parse_diff(diff_content: &str) -> Vec<(String, String, usize)> {
+        Self::parse_diff_hunks(diff_content)
             .into_iter()
-            .map(|(file, _, line)| (file, line))
+            .flat_map(|(file, lines)| {
+                lines
+                    .into_iter()
+                    .map(move |(lineno, line)| (file.clone(), line, lineno))
+            })
             .collect()
     }
 
-    /// Keep each added line's 1-indexed destination-file line for scan results.
-    fn parse_diff_with_line_numbers(diff_content: &str) -> Vec<(String, usize, String)> {
-        let mut results = Vec::new();
-        let mut current_file = String::new();
-        let mut in_hunk = false;
-        let mut new_line = 1;
-        let mut old_lines_remaining = 0;
-        let mut new_lines_remaining = 0;
-
-        for line in diff_content.lines() {
-            if line.starts_with("diff --git ") {
-                current_file.clear();
-                in_hunk = false;
-                continue;
+    /// Parse a diff into the added lines of each hunk: one
+    /// `(file, [(target line, line)])` entry per hunk that added anything
+    /// to a known file, in diff order.
+    ///
+    /// Hunk parsing fails closed: additions are only trusted while the
+    /// hunk header still counts unaccounted body lines. A `@@ ` or
+    /// `diff --git ` header arriving before those counts are exhausted —
+    /// the signature of a truncated or malformed diff — ends the hunk and
+    /// is then parsed as the header it is, so it is never attributed to
+    /// the previous file as source, and the next file's first hunk stays
+    /// with the next file. `--- `/`+++ ` shapes need more care: a body
+    /// line whose source text itself starts with `-- `/`++ ` diffs to
+    /// exactly that shape, so ending the hunk on every such line would
+    /// drop the hunk's remaining additions and hand a `+++ ` body line to
+    /// `header_target_file` as a phantom path. Those shapes are therefore
+    /// read as headers only when the header grammar (a `+++ ` partner
+    /// after a `--- `, a header follower after a `+++ `) and the hunk's
+    /// counts agree — see `is_file_header_in_hunk`. Every shape the
+    /// counts cannot account for as body still fails closed to the
+    /// header reading.
+    fn parse_diff_hunks(diff_content: &str) -> Vec<(String, Vec<(usize, String)>)> {
+        // Flush the hunk under construction; hunks that added nothing to
+        // a known file are dropped.
+        fn flush_hunk(
+            hunks: &mut Vec<(String, Vec<(usize, String)>)>,
+            open_hunk: &mut Option<(String, Vec<(usize, String)>)>,
+        ) {
+            if let Some((file, lines)) = open_hunk.take() {
+                if !file.is_empty() && !lines.is_empty() {
+                    hunks.push((file, lines));
+                }
             }
+        }
 
-            if !in_hunk {
-                if let Some(stripped) = line.strip_prefix("+++ ") {
-                    current_file = stripped
-                        .strip_prefix("a/")
-                        .or_else(|| stripped.strip_prefix("b/"))
-                        .unwrap_or(stripped)
-                        .to_string();
-                    if current_file == "/dev/null" {
-                        current_file.clear();
+        let mut hunks: Vec<(String, Vec<(usize, String)>)> = Vec::new();
+        let mut current_file = String::new();
+        // The hunk under construction: its target path, captured at open
+        // so a later `+++` header can never re-attribute its lines, plus
+        // the additions so far.
+        let mut open_hunk: Option<(String, Vec<(usize, String)>)> = None;
+        // Hunk state: the target-file line the next added/context body line
+        // sits on, plus how many old/new body lines the header still
+        // accounts for. Additions are only trusted inside this window.
+        let mut in_hunk = false;
+        let mut new_lineno = 0usize;
+        let mut remaining_old = 0usize;
+        let mut remaining_new = 0usize;
+
+        let mut diff_lines = diff_content.lines().peekable();
+        while let Some(line) = diff_lines.next() {
+            if in_hunk {
+                // `@@ ` and `diff --git ` cannot be body lines — body lines
+                // always carry a `+`/`-`/space/`\` prefix — so those shapes
+                // are real headers even while the counts still claim body.
+                // Fail closed: end the hunk and fall through so the line is
+                // parsed as the header it is — never as the previous file's
+                // source — and the next file's first hunk stays with the
+                // next file. `--- `/`+++ ` shapes are not self-evident: a
+                // body line whose source text itself starts with `-- `/`++ `
+                // diffs to exactly that shape, so `is_file_header_in_hunk`
+                // reads them as headers only when the header grammar and
+                // the hunk's counts agree; otherwise they are counted body
+                // and the hunk survives them.
+                if line.starts_with("@@ ")
+                    || line.starts_with("diff --git ")
+                    || Self::is_file_header_in_hunk(
+                        line,
+                        diff_lines.peek().copied(),
+                        remaining_old,
+                        remaining_new,
+                    )
+                {
+                    in_hunk = false;
+                } else {
+                    let mut chars = line.chars();
+                    match chars.next() {
+                        Some('+') if remaining_new > 0 => {
+                            if let Some((_, lines)) = open_hunk.as_mut() {
+                                lines.push((new_lineno, chars.as_str().to_string()));
+                            }
+                            new_lineno = new_lineno.saturating_add(1);
+                            remaining_new -= 1;
+                        }
+                        Some(' ') if remaining_new > 0 && remaining_old > 0 => {
+                            new_lineno = new_lineno.saturating_add(1);
+                            remaining_new -= 1;
+                            remaining_old -= 1;
+                        }
+                        Some('-') if remaining_old > 0 => remaining_old -= 1,
+                        // "\ No newline at end of file" annotates the previous
+                        // line and consumes none of the counted body lines.
+                        Some('\\') => {}
+                        // A body line the header cannot account for (count
+                        // overrun or a blank line) ends the hunk: nothing
+                        // after it may be attributed until a fresh hunk
+                        // header re-anchors the state.
+                        _ => in_hunk = false,
+                    }
+                    if in_hunk && remaining_old == 0 && remaining_new == 0 {
+                        in_hunk = false;
                     }
                     continue;
                 }
             }
-
-            if line.starts_with("@@") {
-                let mut ranges = line.split_whitespace();
-                let parsed = ranges
-                    .nth(1)
-                    .and_then(|range| Self::parse_unified_range(range, '-'))
-                    .zip(
-                        ranges
-                            .next()
-                            .and_then(|range| Self::parse_unified_range(range, '+')),
-                    );
-                if let Some(((_, old_count), (start, new_count))) = parsed {
-                    new_line = start;
-                    old_lines_remaining = old_count;
-                    new_lines_remaining = new_count;
+            if let Some(rest) = line.strip_prefix("@@ ") {
+                if let Some((start, old_count, new_count)) = Self::parse_hunk_header(rest) {
+                    // Flush the previous hunk so the parsed hunks keep
+                    // diff order.
+                    flush_hunk(&mut hunks, &mut open_hunk);
+                    new_lineno = start;
+                    remaining_old = old_count;
+                    remaining_new = new_count;
                     in_hunk = true;
-                } else {
-                    in_hunk = false;
+                    open_hunk = Some((current_file.clone(), Vec::new()));
                 }
-                continue;
+            } else if let Some(target) = line.strip_prefix("+++ ") {
+                current_file = Self::header_target_file(target);
             }
-
-            match line.as_bytes().first() {
-                Some(b'+') => {
-                    if !current_file.is_empty() {
-                        results.push((current_file.clone(), new_line, line[1..].to_string()));
-                    }
-                    if in_hunk {
-                        new_lines_remaining = new_lines_remaining.saturating_sub(1);
-                    }
-                    new_line = new_line.saturating_add(1);
-                }
-                Some(b' ') if in_hunk => {
-                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
-                    new_lines_remaining = new_lines_remaining.saturating_sub(1);
-                    new_line = new_line.saturating_add(1);
-                }
-                Some(b'-') if in_hunk => {
-                    old_lines_remaining = old_lines_remaining.saturating_sub(1);
-                }
-                _ => {}
-            }
-
-            if in_hunk && old_lines_remaining == 0 && new_lines_remaining == 0 {
-                in_hunk = false;
-            }
+            // Removed lines (`-`), context lines, `---` headers, and the
+            // `diff --git`/`index`/`rename` prologue carry no additions.
         }
 
-        results
+        flush_hunk(&mut hunks, &mut open_hunk);
+
+        hunks
     }
 
-    fn parse_unified_range(range: &str, prefix: char) -> Option<(usize, usize)> {
-        let range = range.strip_prefix(prefix)?;
+    /// Decide whether a `--- `- or `+++ `-shaped line inside an open hunk
+    /// is a real file header rather than a body line.
+    ///
+    /// Source text starting with `-- `/`++ ` diffs to exactly these shapes
+    /// (deleting `-- comment` yields `--- comment`, adding `++ setup`
+    /// yields `+++ setup`), so shape alone cannot decide. Two grammar
+    /// facts do most of the work: a real `--- ` header is always
+    /// immediately followed by its `+++ ` partner, and a real `+++ `
+    /// header is always followed by the new file's first `@@ ` header, the
+    /// next `diff --git `, or the end of the diff. The hunk counts settle
+    /// the rest: a well-formed diff never places a file header while the
+    /// open hunk's counts still expect body, so the header reading only
+    /// wins when the body reading cannot be accounted for at all — a
+    /// `--- `/`+++ ` pair with no deletion and no addition left to spend,
+    /// or a `+++ ` whose header-follower arrives while counting the line
+    /// as the hunk's final addition would still leave the counts
+    /// unfulfilled. When the counts do account for the body reading —
+    /// including the exact case where the line completes the hunk — it
+    /// wins, keeping hunks that replace a `-- ` line with a `++ ` line
+    /// lossless. The residue this accepts: a truncated diff whose
+    /// over-counted hunk happens to sit exactly one old and one new line
+    /// above its true end at the next file's header pair is textually
+    /// identical to that well-formed reading, and the count-consistent
+    /// interpretation is the strongest evidence available at this layer.
+    fn is_file_header_in_hunk(
+        line: &str,
+        next_line: Option<&str>,
+        remaining_old: usize,
+        remaining_new: usize,
+    ) -> bool {
+        if line.starts_with("--- ") {
+            matches!(next_line, Some(follow) if follow.starts_with("+++ "))
+                && (remaining_old == 0 || remaining_new == 0)
+        } else if line.starts_with("+++ ") {
+            match next_line {
+                Some(follow) if follow.starts_with("@@ ") || follow.starts_with("diff --git ") => {
+                    remaining_new != 1 || remaining_old != 0
+                }
+                // The end of the diff is a header follower too: a real
+                // `+++ ` header may close the diff outright. The same
+                // count predicate decides — the body reading only wins
+                // when the line is the hunk's final addition and
+                // completes the counts exactly; a truncated hunk that
+                // still owes body loses the line to the header reading
+                // instead of recording the next file's path as source.
+                None => remaining_new != 1 || remaining_old != 0,
+                // Any other line after it disqualifies the header
+                // reading: a real `+++ ` header is never followed by
+                // other diff content.
+                _ => false,
+            }
+        } else {
+            // Plain body shapes (`+`, `-`, space, `\`) are never headers.
+            false
+        }
+    }
+
+    /// Parse the ranges of a hunk header — the text after the leading
+    /// `@@ `, e.g. `-12,5 +12,6 @@ section` — into
+    /// `(newStart, oldCount, newCount)`. A count of one may omit the
+    /// `",1"` suffix. Malformed headers return `None` so the lines after
+    /// them stay unattributed instead of guessed.
+    fn parse_hunk_header(rest: &str) -> Option<(usize, usize, usize)> {
+        let old_range = rest.strip_prefix('-')?;
+        let (old_range, rest) = old_range.split_once(" +")?;
+        let (new_range, _section) = rest.split_once(" @@")?;
+        let (_old_start, old_count) = Self::parse_hunk_range(old_range)?;
+        let (new_start, new_count) = Self::parse_hunk_range(new_range)?;
+        Some((new_start, old_count, new_count))
+    }
+
+    /// Parse one `start[,count]` hunk range; the count defaults to 1.
+    fn parse_hunk_range(range: &str) -> Option<(usize, usize)> {
         let (start, count) = range.split_once(',').unwrap_or((range, "1"));
         Some((start.parse().ok()?, count.parse().ok()?))
     }
 
-    /// Scan added diff lines and map findings back to destination-file locations.
+    /// Resolve the text after a `+++ ` header into the target file path.
+    ///
+    /// Handles git's C-style quoting (used for paths with tabs, quotes,
+    /// backslashes, control characters, or non-ASCII bytes) and the
+    /// tab-separated timestamp that plain `diff -u` output appends after
+    /// the path. Only git's target-side prefix `b/` is stripped: this is
+    /// the post-image side, so a leading `a/` here is a real path
+    /// component — plain unified diffs carry no prefixes at all, and
+    /// stripping one would corrupt a target genuinely named `a/...`. A
+    /// `/dev/null` target — a deleted file with no post-image — resolves
+    /// to an empty path, the same "no current file" state as content
+    /// before any header; a quoted header that fails to decode
+    /// (unterminated quote, unknown escape, non-UTF-8 bytes) resolves to
+    /// that state too rather than attributing additions to a guessed path.
+    fn header_target_file(raw: &str) -> String {
+        let path = if raw.starts_with('"') {
+            unquote_c_style(raw).unwrap_or_default()
+        } else {
+            raw.split('\t').next().unwrap_or(raw).to_string()
+        };
+        let path = path.strip_prefix("b/").unwrap_or(&path);
+        if path == "/dev/null" {
+            String::new()
+        } else {
+            path.to_string()
+        }
+    }
+
+    /// Scan only the added lines of a diff, reporting each finding against
+    /// its real position in the target file.
+    ///
+    /// Each hunk's additions are scanned on their own: a file's hunks can
+    /// sit far apart in the target, so joining them into one buffer would
+    /// let a multiline pattern match an adjacency the target file never
+    /// has — two unrelated hunk-boundary lines rendered consecutive — and
+    /// manufacture a finding absent from the source. Only lines that are
+    /// consecutive within one hunk are ever joined, so a multiline match
+    /// spans added lines the diff itself holds adjacent.
+    ///
+    /// Baseline filtering is applied exactly once, after remapping: baseline
+    /// fingerprints are keyed by pattern, file, line, and matched content, so
+    /// filtering before the remap would test synthetic joined-text lines
+    /// against real-file baselines — missing baselined findings at their
+    /// true lines while suppressing findings whose synthetic line collides
+    /// with an unrelated baseline entry.
     pub fn scan_diff(&self, diff_content: &str, _source: &str) -> Vec<Finding> {
-        let changed_lines = Self::parse_diff_with_line_numbers(diff_content);
         let mut all_findings = Vec::new();
 
-        // Group by file and scan each file's changed lines
-        let mut by_file: std::collections::HashMap<String, Vec<(usize, String)>> =
-            std::collections::HashMap::new();
-        for (file, line_number, line) in changed_lines {
-            by_file.entry(file).or_default().push((line_number, line));
+        // Group by file in path order so multi-file output is deterministic;
+        // within a file, hunks keep their diff order.
+        let mut by_file: std::collections::BTreeMap<String, Vec<Vec<(usize, String)>>> =
+            std::collections::BTreeMap::new();
+        for (file, lines) in Self::parse_diff_hunks(diff_content) {
+            by_file.entry(file).or_default().push(lines);
         }
 
-        for (file, lines) in by_file {
-            let source_lines: Vec<_> = lines.iter().map(|(line, _)| *line).collect();
-            let content = lines
-                .into_iter()
-                .map(|(_, line)| line)
-                .collect::<Vec<_>>()
-                .join("\n");
-            let mut findings = self.scan_string(&content, &file);
-            // Findings are located within the compacted changed-line text;
-            // restore the 1-indexed line number from the unified diff hunk.
-            for finding in &mut findings {
-                finding.location.file.clone_from(&file);
-                if let Some(source_line) = source_lines.get(finding.location.line.saturating_sub(1))
-                {
-                    finding.location.line = *source_line;
+        for (file, hunks) in by_file {
+            let ext = Self::extension_of_source(&file);
+            for lines in hunks {
+                let content = lines
+                    .iter()
+                    .map(|(_, line)| line.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                // Scan without baseline filtering; the addition-only text
+                // only has synthetic line numbers, which no baseline was
+                // written against.
+                let (mut findings, _, _) =
+                    self.scan_string_with_inspection_ext(&content, &file, ext.as_deref(), false);
+                for finding in &mut findings {
+                    finding.location.file.clone_from(&file);
+                    // Map the position inside the hunk's addition-only text
+                    // back to the target-file line the hunk header recorded.
+                    if let Some((real_lineno, _)) =
+                        lines.get(finding.location.line.saturating_sub(1))
+                    {
+                        finding.location.line = *real_lineno;
+                    }
+                    finding.recompute_identity();
                 }
+                // Now that identities reflect real target coordinates, apply
+                // the baseline — the single filtering pass for the diff
+                // pipeline.
+                all_findings.extend(self.filter_baseline(findings));
             }
-            all_findings.extend(findings);
         }
 
         all_findings
@@ -584,7 +865,7 @@ impl Scanner {
         source: &str,
     ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         let ext = Self::extension_of_source(source);
-        self.scan_string_with_inspection_ext(content, source, ext.as_deref())
+        self.scan_string_with_inspection_ext(content, source, ext.as_deref(), true)
     }
 
     fn scan_string_with_inspection_ext(
@@ -592,6 +873,7 @@ impl Scanner {
         content: &str,
         source: &str,
         ext: Option<&str>,
+        apply_baseline: bool,
     ) -> (Vec<Finding>, crate::ast::AstInspection, u64) {
         // Parse suppressions from content
         let mut suppression_mgr = SuppressionManager::new();
@@ -635,31 +917,52 @@ impl Scanner {
 
         let ast_inspection = AstAnalyzer::inspect_source(content, source);
         let mut findings = findings;
-        findings.extend(
+        // A synthetic annotation marks the value as a deliberate example.
+        // The finding stays in the report, tagged, but at low severity so
+        // it stops competing with real signals. It is applied before the
+        // severity gate so a downgraded finding is judged by the severity
+        // it ends up with.
+        for finding in &mut findings {
+            Self::apply_synthetic_annotation(finding, &suppression_mgr);
+        }
+        let mut ast_findings: Vec<Finding> =
             ast_findings_to_findings(&ast_inspection, content, source)
                 .into_iter()
                 .filter(|finding| {
                     // Inline directives must reach AST-emitted findings
                     // just as they do regex-path findings.
-                    if suppression_mgr.is_suppressed(
+                    !suppression_mgr.is_suppressed(
                         &finding.pattern,
                         u32::try_from(finding.location.line).unwrap_or(u32::MAX),
-                    ) {
-                        return false;
-                    }
-                    self.passes_post_filters(finding)
-                }),
-        );
+                    )
+                })
+                .collect();
+        for finding in &mut ast_findings {
+            Self::apply_synthetic_annotation(finding, &suppression_mgr);
+        }
+        findings.extend(ast_findings);
 
         // Apply category and severity-threshold gates before baseline
         // filtering.
-        let findings: Vec<Finding> = findings
+        let mut findings: Vec<Finding> = findings
             .into_iter()
             .filter(|finding| self.passes_post_filters(finding))
             .collect();
 
-        // Filter findings against baseline if configured
-        let findings = self.filter_baseline(findings);
+        // Secret-shaped findings carry a triage verdict, so the set a
+        // human has to review is bounded by evidence rather than by volume.
+        for finding in &mut findings {
+            Self::apply_secret_triage(finding);
+        }
+
+        // Filter findings against baseline if configured. `scan_diff` opts
+        // out here and filters itself once findings carry real target
+        // coordinates — see [`Scanner::scan_diff`].
+        let findings = if apply_baseline {
+            self.filter_baseline(findings)
+        } else {
+            findings
+        };
 
         // Safety net against duplicate emission: one finding per
         // pattern+file+line+content fingerprint
@@ -671,6 +974,30 @@ impl Scanner {
 
         let suppressed_count = suppression_mgr.suppressed_count();
         (findings, ast_inspection, suppressed_count)
+    }
+
+    /// Mark a finding whose line carries a synthetic-value annotation.
+    ///
+    /// The finding is kept and tagged, not hidden: a repository full of
+    /// deliberate examples should still show what was set aside, and why.
+    fn apply_synthetic_annotation(finding: &mut Finding, suppression_mgr: &SuppressionManager) {
+        let line = u32::try_from(finding.location.line).unwrap_or(u32::MAX);
+        if suppression_mgr.is_synthetic(line) {
+            finding.add_tag(SYNTHETIC_TAG);
+            finding.downgrade_to_low();
+        }
+    }
+
+    /// Attach a triage verdict to a secret-shaped finding.
+    ///
+    /// Only findings in the `secrets` category are judged, and only when
+    /// there is matched text to judge: a finding without it carries no
+    /// verdict rather than a fabricated one.
+    fn apply_secret_triage(finding: &mut Finding) {
+        if finding.category != SECRET_CATEGORY || finding.matched_content.is_empty() {
+            return;
+        }
+        finding.secret_triage = Some(triage_secret(&finding.matched_content));
     }
 
     /// Category and severity-threshold gates shared by the per-file pipeline
@@ -685,6 +1012,15 @@ impl Scanner {
         {
             return false;
         }
+        self.passes_severity_threshold(finding)
+    }
+
+    /// Whether the finding reaches the configured severity threshold.
+    ///
+    /// Separate from the category gate so it can run again after a
+    /// classification lowered a finding's severity: a finding that ends up
+    /// below the operator's threshold must not survive the report.
+    fn passes_severity_threshold(&self, finding: &Finding) -> bool {
         let Some(threshold) = self.options.severity_threshold.as_deref() else {
             return true;
         };
@@ -855,6 +1191,25 @@ impl Scanner {
     /// Panics if the metrics-sink lock was poisoned by a panic in another
     /// thread.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
+        self.scan_file_with_root(path, None)
+    }
+
+    /// Scan a single file, classifying its path relative to `root`.
+    ///
+    /// `root` is the scan root when the file was found by a directory
+    /// walk: a path classification is written relative to the root, and
+    /// the relative path is what makes `docs/**` mean "the docs
+    /// directory of this repository".
+    ///
+    /// # Panics
+    ///
+    /// Panics if the metrics-sink lock was poisoned by a panic in another
+    /// thread.
+    fn scan_file_with_root(
+        &self,
+        path: &Path,
+        root: Option<&Path>,
+    ) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         // Options are validated before any file access so a typo in the
         // threshold is reported even when the path is also wrong.
         self.options.validate().map_err(ScanError::InvalidOptions)?;
@@ -942,8 +1297,23 @@ impl Scanner {
             }
         }
 
-        let (findings, ast_inspection, suppressed_count) =
+        let (mut findings, ast_inspection, suppressed_count) =
             self.scan_string_with_inspection(&content, &source);
+
+        // A classified path — documentation, test fixtures — reports its
+        // findings at low severity so they stop competing with real
+        // signals. The severity gate runs again afterwards, because a
+        // finding the classification lowered below the operator's
+        // threshold must not survive the report.
+        let relative = root
+            .and_then(|root| path.strip_prefix(root).ok())
+            .map(|relative| relative.to_string_lossy().into_owned());
+        if let Some(class) = self.path_classes.class_of(&source, relative.as_deref()) {
+            for finding in &mut findings {
+                apply_path_class(finding, class);
+            }
+            findings.retain(|finding| self.passes_severity_threshold(finding));
+        }
 
         // Clone detection runs inside the measured scan window so its cost
         // is visible in `scan_time_ms`. A detector failure is recorded in
@@ -1147,7 +1517,9 @@ impl Scanner {
         // failure becomes an explicit ledger record rather than disappearing.
         let scan_one = |entry: &walkdir::DirEntry| {
             let path = entry.path().to_path_buf();
-            let result = self.scan_file(&path);
+            // The root travels with the file so a path classification can
+            // be written relative to the repository.
+            let result = self.scan_file_with_root(&path, Some(root));
             (path, result)
         };
         let outcomes: Vec<_> = match self.scan_pool.get_or_init(|| {
@@ -1901,6 +2273,7 @@ mod tests {
             diff_file: Some(PathBuf::from("/diff.txt")),
             anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
             detect_clones: true,
+            path_classes: Vec::new(),
         };
 
         assert_eq!(options.max_file_size, 5 * 1024 * 1024);
@@ -1934,6 +2307,7 @@ mod tests {
         });
         // Should not panic
         assert_eq!(scanner.options.max_file_size, 1024 * 1024);
+        assert_eq!(scanner.max_file_size(), 1024 * 1024);
     }
 
     #[test]

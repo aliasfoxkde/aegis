@@ -29,6 +29,7 @@ aegis scan [path] [options]
 | `--anomaly-detectors` | Comma-separated allow-list of statistical anomaly detectors: `comment-ratio-outlier`, `comment-concentration`, `identifier-diversity-outlier`, `file-size-outlier`; unknown names fail with the valid list | all |
 | `--no-anomalies` | Disable the statistical anomaly layer entirely (conflicts with `--anomaly-detectors`) | `false` |
 | `--detect-clones` | Also detect copy-paste code clones (Type 1–3) within each scanned file. Pairs render in a `Code clones` section (human) and under `stats.clones` (JSON) with kind, description, similarity, token count, and line ranges. Pairing stops at 256 pairs per file, so pathological minified or generated files stay bounded. SARIF omits them; they never affect findings or the exit code | `false` |
+| `--classify-path` | Classify a path so findings below it are reported at low severity; repeat the flag for more rules. The value is `GLOB=KIND`, where KIND is `docs` or `fixture`. Secret findings keep their severity and carry the class as a tag. See [Triage](TRIAGE.md) | none |
 
 **Global flags:** `-f, --format <human|json|sarif>` is a top-level
 option, so it must come **before** the subcommand
@@ -76,6 +77,11 @@ aegis scan . --staged
 # Also surface copy-paste code clones; reported separately, never
 # part of the exit code
 aegis scan . --detect-clones
+
+# Quiet documentation prose and test fixtures: findings below a
+# classified path are reported at low severity, and secrets keep
+# their severity
+aegis scan . --classify-path "docs/**=docs" --classify-path "**/tests/**=fixture"
 ```
 
 ### aegis list
@@ -202,13 +208,52 @@ for custom patterns exactly as for bundled ones.
 
 | Code | Description |
 |------|-------------|
-| 0 | Scan completed, no findings |
-| 1 | Scan completed with findings. Also used when a scan itself fails (for example an unreadable scan root or an invalid `.aegis.yml`) |
+| 0 | Complete scan, no blocking findings (informational findings do not count) |
+| 1 | Complete scan with findings. Also used when a scan itself fails before producing a receipt (for example an unreadable scan root or an invalid `.aegis.yml`) |
 | 2 | Usage error: unknown subcommand or flag, or an invalid value for a global flag such as `--format` |
+| 3 | Incomplete scan: the receipt does not certify that every required inspection completed (`ScanReceipt::allows_safe()` is false — a required file could not be read, was skipped by the size limit, or had no analyzer such as a binary). Reported findings stay in the output and receipt, but an unproven inspection never passes as clean |
 
-With `--baseline`, code 1 means the scan produced findings that are not
-in the baseline; findings already recorded there do not affect the exit
-code.
+The exit code is decided from the scan's own receipt, so it always agrees
+with both the inspection completeness and the finding policy the receipt
+records; informational (`info`) severity findings never affect it. With
+`--baseline`, code 1 means the scan produced findings that are not in the
+baseline; findings already recorded there do not affect the exit code.
+
+### Binaries and unsupported files
+
+Aegis analyzes text sources. Binary files have no analyzer and are not
+scanned, and the CLI exposes no flag that changes this. A binary is
+still a required inspection in the receipt, so one unignored binary
+anywhere in the scanned tree leaves the receipt incomplete and the scan
+exits 3 — even when zero findings were reported. Findings from the
+files that were inspected remain in the output and receipt.
+
+For directory scans, the supported remediation for a binary or other
+unsupported asset that is intentionally present is an explicit
+`.aegisignore` rule in the scan root. A directory scan loads
+`.aegisignore` from the scan root before it walks, and ignored paths are
+excluded before inspection and recorded as excluded — never as a
+required failure — so they do not block the receipt. Rules are
+gitignore-style globs; see
+[Configuration](CONFIGURATION.md#ignoring-files) for the full syntax:
+
+```text
+# Intentionally shipped binaries and assets with no analyzer
+assets/logo.png
+fixtures/*.bin
+```
+
+This remediation applies to directory scans only. Single-file scans —
+`scan --file <file>`, or `scan <file>` naming a file — do not read
+`.aegisignore`: there is no tree to exclude from, and the named file is
+the whole required inspection. A binary named on the command line
+therefore fails closed either way: `scan --file <file>` exits 3 with an
+incomplete receipt, while bare `scan <file>` uses directory-walk mode and
+returns a scan error (exit 1, no receipt) when that lone required file is
+unsupported. Keep
+`.aegisignore` rules narrow so they cover only the named assets. The
+fail-closed exit is the guarantee that everything the scan was asked to
+inspect was actually inspected, and there is no flag that turns it off.
 
 ## Configuration
 

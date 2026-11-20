@@ -55,6 +55,7 @@ pub struct ControlFlowGraph {
     entry_id: usize,
     /// Exit node ID
     #[allow(dead_code)]
+    // aegis-allow: CFG exit node id is part of the graph shape and is kept for graph consumers | expires=2027-12-31 | approver=maintainers
     exit_id: usize,
 }
 
@@ -149,6 +150,7 @@ impl std::fmt::Display for CfgIssueType {
 /// CFG analyzer
 pub struct CfgAnalyzer {
     #[allow(dead_code)]
+    // aegis-allow: analyzer language is kept so language-specific CFG passes can be added without a breaking change | expires=2027-12-31 | approver=maintainers
     language: super::ast::Language,
 }
 
@@ -178,6 +180,7 @@ impl CfgAnalyzer {
     // `&self` is kept so `CfgAnalyzer` stays a single instance-style entry
     // point alongside `analyze_file`.
     #[allow(clippy::unused_self)]
+    // aegis-allow: method signature stays parallel to analyze_file so both entry points stay interchangeable | expires=2027-12-31 | approver=maintainers
     pub fn analyze_content(&self, content: &str, source: &str) -> Result<CfgAnalysis, CfgError> {
         let cfg = Self::build_cfg(content);
         let resources = Self::track_resources(content);

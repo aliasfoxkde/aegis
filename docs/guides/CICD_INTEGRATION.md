@@ -45,6 +45,55 @@ key is followed by a space. Because the scan already exits non-zero when
 it produces findings, the "Fail on Critical" step is only needed when you
 want to gate on one severity rather than on any finding.
 
+## GitHub Code Scanning (SARIF)
+
+To publish Aegis findings in the repository's **Security → Code scanning**
+view, emit SARIF and upload it with the GitHub code-scanning action. The
+workflow needs `security-events: write`; the scan step keeps Aegis's exit
+status so findings at or above the selected threshold can fail the job.
+
+```yaml
+name: Aegis security scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  aegis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Aegis
+        run: |
+          curl -fsSLO https://github.com/aliasfoxkde/aegis/releases/latest/download/aegis-linux-x86_64.tar.gz
+          tar -xzf aegis-linux-x86_64.tar.gz
+          sudo install -m 0755 aegis /usr/local/bin/aegis
+
+      - name: Scan and write SARIF
+        run: aegis --format sarif scan . --severity-threshold high --output-file aegis-results.sarif
+
+      - name: Upload SARIF to GitHub code scanning
+        if: always() && hashFiles('aegis-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: aegis-results.sarif
+          category: aegis
+```
+
+The upload step is conditional so a missing report does not cause a second
+failure that hides the original scan error. Confirm that code scanning is
+available for the repository and that the workflow token has the permissions
+shown above. For artifact retention without code-scanning integration, use
+the JSON artifact example below.
+
 ## GitLab CI
 
 ```yaml
@@ -192,12 +241,32 @@ Cluster usage is the scheduled-scan CronJob in `kubernetes/cronjob.yaml`
    aegis scan . --severity-threshold=critical
    ```
 
-5. **Exit Codes**: Use for pipeline failure
-   - 0: no findings at or above the threshold (`info` observations never
-     trip the exit code)
-   - 1: findings present (with `--baseline`, only findings that are new
-     relative to the baseline); also used when a scan itself fails
+5. **Exit Codes**: Use for pipeline failure (the full table lives in
+   [docs/guides/CLI.md](CLI.md#exit-codes))
+   - 0: complete scan, no findings at or above the threshold (`info`
+     observations never trip the exit code)
+   - 1: complete scan with findings (with `--baseline`, only findings
+     that are new relative to the baseline); also used when a scan fails
+     before producing a receipt (for example an unreadable scan root or
+     an invalid `.aegis.yml`)
    - 2: usage error (unknown flag or subcommand)
+   - 3: incomplete scan: the receipt does not certify that every required
+     inspection completed (`ScanReceipt::allows_safe()` is false — a
+     required file could not be read, was skipped by the size limit, or
+     had no analyzer such as a binary). Reported findings stay in the
+     output and receipt, but an unproven inspection never passes as
+     clean, so gate on `3` even when zero findings are reported. The
+     usual trigger is a binary or otherwise unsupported asset: Aegis
+     does not scan binaries, so one unignored binary in the scanned
+     tree fails the receipt closed. When such an asset is intentional
+     and the integration runs a directory scan, add a matching
+     gitignore-style rule to `.aegisignore` in the scan root — excluded
+     paths are not required inspections, so they cannot force exit 3.
+     `.aegisignore` is loaded only for directory scans: a single-file
+     scan (`--file`, or a path naming a file) never reads it, so there
+     an unsupported file fails closed regardless — filter it out of the
+     integration's file list or scan its directory instead. Full syntax:
+     [docs/guides/CONFIGURATION.md](CONFIGURATION.md#ignoring-files)
 
 6. **Pin the Version**: Patterns ship inside the binary, so pinning the
    release pins the detection set. Use a versioned download URL instead
@@ -234,3 +303,25 @@ The canonical JSON lives in
 the built-ins by a test; see
 [Configuration](CONFIGURATION.md#profiles) for the full field
 reference and the shipped presets.
+
+---
+
+## Gate Report Contract
+
+A gate that parses Aegis's output depends on a small, fixed set of
+fields. The JSON report is `{"findings": [...], "stats": {...}}`, and
+each finding carries `id`, `pattern`, `category`, `severity`,
+`location.file`, and `location.line`. The matched secret itself is
+never serialized, so a report is safe to persist.
+
+Three exit codes drive a gate: `0` means the scan completed cleanly, `1`
+means it completed and found something, and `3` means the scan could not
+prove it inspected everything it was asked to. A gate should treat any
+non-zero exit as a failure, and `3` in particular is a failure, not a
+clean pass.
+
+Those fields, the redaction, and the exit codes are pinned by
+`crates/aegis-cli/tests/ci_gate_contract.rs`, so a change to the report
+shape fails here rather than in the gate that reads it. The evidence
+record for the Control Center / GitForge integration is
+[the GitForge integration audit](../audits/2026-11-16-gitforge-integration-evidence.md).

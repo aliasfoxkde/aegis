@@ -106,6 +106,13 @@ enum Commands {
         /// (does not affect the exit code)
         #[arg(long)]
         detect_clones: bool,
+
+        /// Classify a path so findings below it are reported at low
+        /// severity; repeat the flag for more rules. The value is
+        /// `GLOB=KIND`, where KIND is `docs` or `fixture`. Rules given here
+        /// take precedence over the ones a profile supplies.
+        #[arg(long = "classify-path", value_name = "GLOB=KIND")]
+        classify_path: Vec<String>,
     },
 
     /// List patterns
@@ -195,6 +202,7 @@ async fn main() -> Result<()> {
             anomaly_detectors,
             no_anomalies,
             detect_clones,
+            classify_path,
         } => {
             // A `-c/--config` profile supplies defaults for flags the
             // operator did not set; explicit flags always win.
@@ -238,6 +246,21 @@ async fn main() -> Result<()> {
                         .map(|detectors| detectors.join(","))
                 })
             };
+            // Path classifications come from the command line first and
+            // from the profile second: the first rule that matches a path
+            // wins, so an explicit rule overrides the profile's.
+            let mut path_classes = config::parse_path_class_specs(&classify_path)?;
+            if let Some(profile) = profile.as_ref() {
+                for rule in &profile.path_classes {
+                    rule.validate().map_err(|message| {
+                        anyhow::anyhow!(
+                            "invalid path class in profile `{}`: {message}",
+                            profile.name
+                        )
+                    })?;
+                }
+                path_classes.extend(profile.path_classes.iter().cloned());
+            }
             scanner::run_scan(scanner::ScanOptions {
                 path,
                 scan_file: file,
@@ -253,6 +276,7 @@ async fn main() -> Result<()> {
                 staged,
                 anomaly_detectors,
                 detect_clones,
+                path_classes,
                 format,
                 quiet: cli.quiet,
             })

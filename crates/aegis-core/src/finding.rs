@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
+use crate::pattern::Severity;
+use crate::secret_triage::SecretTriage;
+
 /// Location in source code
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
@@ -128,6 +131,13 @@ pub struct Finding {
     /// Stable identity for correlating the same rule/location across scans.
     #[serde(default)]
     pub stable_id: String,
+    /// Triage verdict for a secret-shaped finding.
+    ///
+    /// Present only for findings in the `secrets` category; `None` for
+    /// every other finding and for secret findings whose matched text was
+    /// not available to judge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_triage: Option<SecretTriage>,
 }
 
 impl Finding {
@@ -144,21 +154,8 @@ impl Finding {
         let pattern_str = pattern.into();
         let category_str = category.into();
         let matched_content_str = matched_content.into();
-        let matched_digest = hex::encode(Sha256::digest(matched_content_str.as_bytes()));
-        let fingerprint = format!(
-            "{}:{}:{}:{}",
-            pattern_str, location.file, location.line, matched_digest
-        );
-        let stable_material = format!(
-            "{}|{}|{}|{}|{}",
-            pattern_str, category_str, location.file, location.line, location.column
-        );
-        let stable_id = format!(
-            "aegis-{}",
-            hex::encode(Sha256::digest(stable_material.as_bytes()))
-        );
 
-        Self {
+        let mut finding = Self {
             id: uuid_v4(),
             pattern: pattern_str,
             category: category_str,
@@ -171,9 +168,40 @@ impl Finding {
             remediation: None,
             tags: Vec::new(),
             kind: FindingKind::Pattern,
-            fingerprint,
-            stable_id,
-        }
+            fingerprint: String::new(),
+            stable_id: String::new(),
+            secret_triage: None,
+        };
+        finding.recompute_identity();
+        finding
+    }
+
+    /// Recompute the derived `fingerprint` and `stable_id` from the current
+    /// pattern, category, and location.
+    ///
+    /// Both identities are pure functions of those fields, so a caller that
+    /// rewrites a location after creation — the diff scanner maps positions
+    /// inside its joined addition-only text back to target-file lines — must
+    /// refresh them to keep the correlation keys in step with what is
+    /// reported.
+    pub fn recompute_identity(&mut self) {
+        let matched_digest = hex::encode(Sha256::digest(self.matched_content.as_bytes()));
+        self.fingerprint = format!(
+            "{}:{}:{}:{}",
+            self.pattern, self.location.file, self.location.line, matched_digest
+        );
+        let stable_material = format!(
+            "{}|{}|{}|{}|{}",
+            self.pattern,
+            self.category,
+            self.location.file,
+            self.location.line,
+            self.location.column
+        );
+        self.stable_id = format!(
+            "aegis-{}",
+            hex::encode(Sha256::digest(stable_material.as_bytes()))
+        );
     }
 
     /// Set the reference URL
@@ -202,6 +230,43 @@ impl Finding {
     pub fn with_kind(mut self, kind: FindingKind) -> Self {
         self.kind = kind;
         self
+    }
+
+    /// Set the triage verdict for a secret-shaped finding
+    #[must_use]
+    pub fn with_secret_triage(mut self, triage: SecretTriage) -> Self {
+        self.secret_triage = Some(triage);
+        self
+    }
+
+    /// Report the finding at `low` severity.
+    ///
+    /// Used by the triage features: a finding that is true of the text but
+    /// irrelevant to the risk — a credential-shaped example in a
+    /// documentation file, a synthetic value in a test — should not compete
+    /// with a real signal. A finding that is already at `low` or `info`
+    /// keeps its severity, so the operation never raises a severity.
+    pub fn downgrade_to_low(&mut self) {
+        let Some(severity) = Severity::parse(&self.severity) else {
+            // A severity a future producer stores outside the enum is left
+            // alone: downgrading an unknown label could hide a finding
+            // whose weight nobody can reason about.
+            return;
+        };
+        if severity.weight() > Severity::Low.weight() {
+            self.severity = Severity::Low.to_string();
+        }
+    }
+
+    /// Record `tag` once, keeping the first occurrence.
+    ///
+    /// Tags come from several sources — the pattern, a path class, a
+    /// synthetic annotation — and the same tag may be contributed twice.
+    pub fn add_tag(&mut self, tag: impl Into<String>) {
+        let tag = tag.into();
+        if !self.tags.contains(&tag) {
+            self.tags.push(tag);
+        }
     }
 }
 

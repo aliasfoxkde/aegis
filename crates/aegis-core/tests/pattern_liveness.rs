@@ -123,6 +123,51 @@ fn ci_bypass_requires_explicit_configuration_syntax() {
         .any(|finding| finding.pattern == "ci-bypass"));
 }
 
+/// The PII-output marker must fire on a standalone token and stay silent
+/// on the camel-case React attribute that carries the same three letters
+/// (issue #186).
+#[test]
+fn pii_output_marker_requires_a_token_boundary() {
+    let pattern = aegis_patterns::all_patterns()
+        .into_iter()
+        .find(|pattern| pattern.name == "pii-output-marker")
+        .expect("pii-output-marker pattern must exist");
+    let scanner = Scanner::from_definitions(vec![convert(&pattern)])
+        .expect("pii-output-marker pattern must compile");
+
+    // Standalone markers and the identifier shapes that name the field.
+    for source in [
+        "SSN",
+        "ssn:",
+        "social security number",
+        "ssn_field",
+        "user_ssn",
+        "ssnNumber",
+    ] {
+        assert!(
+            scanner
+                .scan_string(source, "example.txt")
+                .iter()
+                .any(|finding| finding.pattern == "pii-output-marker"),
+            "must still detect the PII marker in {source:?}"
+        );
+    }
+
+    // The camel-case React attribute and ordinary identifiers.
+    for source in [
+        "className",
+        "classNames",
+        "myClassName",
+        "<button className=\"save-button\">",
+        "assignment",
+    ] {
+        assert!(
+            scanner.scan_string(source, "example.jsx").is_empty(),
+            "must not report the PII marker in {source:?}"
+        );
+    }
+}
+
 #[test]
 fn dockerfile_secret_rule_requires_a_directive_line() {
     let pattern = aegis_patterns::all_patterns()

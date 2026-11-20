@@ -100,6 +100,24 @@ impl Output {
                     finding.location.column
                 )?;
                 writeln!(self, "  {}", finding.description)?;
+                // The tags say why a finding was reported the way it was:
+                // a path class, a synthetic annotation, or both.
+                if !finding.tags.is_empty() {
+                    writeln!(self, "  tags: {}", finding.tags.join(", "))?;
+                }
+                // A secret-shaped value carries a triage verdict, so a
+                // reader can see whether the hit looks like a live
+                // credential or a published example.
+                if let Some(triage) = &finding.secret_triage {
+                    writeln!(
+                        self,
+                        "  secret triage: {} ({} confidence)",
+                        triage.outcome, triage.confidence
+                    )?;
+                    for reason in &triage.reasons {
+                        writeln!(self, "    - {reason}")?;
+                    }
+                }
             }
         }
 
@@ -215,6 +233,27 @@ impl Output {
             level: String,
             message: SarifMessage,
             locations: Vec<SarifLocation>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            properties: Option<SarifResultProperties>,
+        }
+
+        /// The classification and triage evidence for one result.
+        ///
+        /// The property bag is omitted entirely when a result carries
+        /// neither, so an ordinary scan keeps the SARIF shape it had.
+        #[derive(serde::Serialize)]
+        struct SarifResultProperties {
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            tags: Vec<String>,
+            #[serde(rename = "secretTriage", skip_serializing_if = "Option::is_none")]
+            secret_triage: Option<SarifTriage>,
+        }
+
+        #[derive(serde::Serialize)]
+        struct SarifTriage {
+            outcome: String,
+            confidence: String,
+            reasons: Vec<String>,
         }
 
         #[derive(serde::Serialize)]
@@ -246,6 +285,24 @@ impl Output {
             start_line: usize,
             #[serde(rename = "startColumn")]
             start_column: usize,
+        }
+
+        // The property bag is only worth carrying when the result says
+        // something the level does not: why it was classified, and how a
+        // secret-shaped value was triaged.
+        fn sarif_result_properties(finding: &Finding) -> Option<SarifResultProperties> {
+            let triage = finding.secret_triage.as_ref().map(|triage| SarifTriage {
+                outcome: triage.outcome.as_str().to_string(),
+                confidence: triage.confidence.clone(),
+                reasons: triage.reasons.clone(),
+            });
+            if finding.tags.is_empty() && triage.is_none() {
+                return None;
+            }
+            Some(SarifResultProperties {
+                tags: finding.tags.clone(),
+                secret_triage: triage,
+            })
         }
 
         // Build unique rules
@@ -282,6 +339,7 @@ impl Output {
                         },
                     },
                 }],
+                properties: sarif_result_properties(f),
             })
             .collect();
 

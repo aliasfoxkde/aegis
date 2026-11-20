@@ -3,8 +3,8 @@
 use crate::output::Output;
 use crate::OutputFormat;
 use aegis_core::{
-    Finding, PatternDefinition, RiskScore, ScanOptions as CoreOptions, ScanReceipt, ScanStats,
-    Scanner,
+    Finding, InspectionStatus, PathClassRule, PatternDefinition, RiskScore,
+    ScanOptions as CoreOptions, ScanReceipt, ScanStats, Scanner,
 };
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -13,6 +13,7 @@ use tokio::io::AsyncReadExt;
 /// The booleans mirror the CLI's scan flag set one-to-one; a settings enum
 /// would force every caller to translate back into per-flag fields.
 #[allow(clippy::struct_excessive_bools)]
+// aegis-allow: the booleans mirror the CLI scan flag set one-to-one | expires=2027-12-31 | approver=maintainers
 pub struct ScanOptions {
     /// Target of the scan: the repository or directory root, or the single
     /// file when `scan_file` is set.
@@ -51,6 +52,10 @@ pub struct ScanOptions {
     /// `ScanStats::clones` and are rendered by the human and JSON formats
     /// without affecting findings or the exit code.
     pub detect_clones: bool,
+    /// Path classifications: findings below a classified path are reported
+    /// at low severity, so documentation prose and test fixtures stop
+    /// competing with real signals.
+    pub path_classes: Vec<PathClassRule>,
     /// Renderer for the report buffer, mirroring the `--format` flag.
     pub format: OutputFormat,
     /// Suppress header and stats blocks so the buffer carries findings only.
@@ -122,6 +127,7 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         baseline: opts.baseline.clone(),
         anomaly_detectors,
         detect_clones: opts.detect_clones,
+        path_classes: opts.path_classes.clone(),
         ..Default::default()
     };
 
@@ -164,7 +170,7 @@ fn stats_with_findings(mut stats: ScanStats, findings: &[Finding]) -> ScanStats 
 ///
 /// Returns an error when the diff file cannot be read, when the target file
 /// or directory cannot be scanned, or when `--staged` runs outside a git
-/// repository.
+/// repository or contains an oversized/unreadable staged blob.
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
         // Scan only changed lines from a diff file
@@ -210,8 +216,8 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
 }
 
 /// List the paths staged in the git index at `root` (added, copied,
-/// modified, renamed). Paths are relative to the repository root, which is
-/// also the form `git show :<path>` expects.
+/// modified, renamed, or changed file type). Paths are relative to the
+/// repository root, which is also the form `git show :<path>` expects.
 fn staged_file_list(root: &Path) -> Result<Vec<String>> {
     let output = std::process::Command::new("git")
         .arg("-C")
@@ -221,7 +227,7 @@ fn staged_file_list(root: &Path) -> Result<Vec<String>> {
             "--cached",
             "--name-only",
             "-z",
-            "--diff-filter=ACMR",
+            "--diff-filter=ACMRT",
         ])
         .output()
         .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
@@ -239,17 +245,67 @@ fn staged_file_list(root: &Path) -> Result<Vec<String>> {
 }
 
 /// Read the staged blob for one index path.
-fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
+fn staged_blob(root: &Path, file: &str, max_file_size: u64) -> Result<Vec<u8>> {
+    // Resolve the index entry once. Using the object ID for both the size
+    // query and content read avoids an index mutation swapping in a larger
+    // blob between those operations.
+    let oid_output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["rev-parse", "--verify", "--end-of-options"])
+        .arg(format!(":{file}"))
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to resolve staged blob for {file}: {e}"))?;
+    if !oid_output.status.success() {
+        anyhow::bail!(
+            "failed to resolve staged blob for {file}: {}",
+            String::from_utf8_lossy(&oid_output.stderr).trim()
+        );
+    }
+    let oid = String::from_utf8_lossy(&oid_output.stdout)
+        .trim()
+        .to_string();
+    if !matches!(oid.len(), 40 | 64) || !oid.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        anyhow::bail!("git returned an invalid staged blob object ID for {file}");
+    }
+
+    let size_output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["cat-file", "-s", &oid])
+        .output()
+        .map_err(|e| anyhow::anyhow!("failed to inspect staged blob size: {e}"))?;
+    if !size_output.status.success() {
+        anyhow::bail!(
+            "failed to inspect staged blob size for {file}: {}",
+            String::from_utf8_lossy(&size_output.stderr).trim()
+        );
+    }
+    let size = String::from_utf8_lossy(&size_output.stdout)
+        .trim()
+        .parse::<u64>()
+        .map_err(|e| anyhow::anyhow!("invalid staged blob size for {file}: {e}"))?;
+    if size > max_file_size {
+        anyhow::bail!(
+            "staged file {file} is {size} bytes, exceeding the {max_file_size} byte scan limit"
+        );
+    }
+
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(root)
-        .args(["show", &format!(":{file}")])
+        .args(["cat-file", "blob", &oid])
         .output()
-        .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to read staged blob for {file}: {e}"))?;
     if !output.status.success() {
         anyhow::bail!(
-            "git show :{file} failed: {}",
+            "failed to read staged blob for {file}: {}",
             String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    if output.stdout.len() as u64 > max_file_size {
+        anyhow::bail!(
+            "staged file {file} grew beyond the {max_file_size} byte scan limit while reading"
         );
     }
     Ok(output.stdout)
@@ -261,6 +317,15 @@ fn staged_blob(root: &Path, file: &str) -> Result<Vec<u8>> {
 /// can differ from the working tree, so blobs are read with
 /// `git show :<path>` rather than from disk. Nothing staged means nothing
 /// to scan and a clean result.
+///
+/// Every disposition lands in the inspection ledger, mirroring the
+/// engine's own bookkeeping, so the receipt certifies what the pre-commit
+/// pass did and did not inspect: the index enumeration itself is a
+/// required analyzed unit (a repository with nothing staged was still
+/// fully inspected), scanned blobs are required analyzed units, ignored
+/// paths are non-required exclusions, and binary blobs are required
+/// unsupported units — content the scanner cannot inspect must not exit
+/// as a clean commit.
 fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
     let files = staged_file_list(&opts.path).map_err(|e| {
         anyhow::anyhow!(
@@ -271,25 +336,49 @@ fn scan_staged(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, S
 
     let mut findings = Vec::new();
     let mut stats = ScanStats::default();
+    // `staged_file_list` succeeded, so the requested source — the git
+    // index — was fully enumerated, entries or not. Recording it keeps the
+    // receipt safe for the documented nothing-staged clean result instead
+    // of an empty ledger that no consumer may treat as evidence.
+    stats
+        .inspection_ledger
+        .record("git-index", InspectionStatus::Analyzed, true, None);
+    let max_file_size = scanner.max_file_size();
     for file in files {
         // Staged blobs bypass `scan_file`, so ignore rules are applied
         // here explicitly; otherwise a staged `.aegis/baseline.json`
         // would re-flag every secret the artifact documents.
         if scanner.should_ignore(Path::new(&file)) {
             stats.files_skipped += 1;
+            stats.inspection_ledger.record(
+                file.clone(),
+                InspectionStatus::Excluded,
+                false,
+                Some("ignore_rule".to_string()),
+            );
             continue;
         }
-        let blob = staged_blob(&opts.path, &file)?;
+        let blob = staged_blob(&opts.path, &file, max_file_size)?;
         // Same NUL-sniff the engine applies to files on disk; skipped
         // staged blobs are counted exactly like `scan_dir` skips binaries.
         if aegis_core::scanner::is_binary_blob(&blob) {
             stats.files_skipped += 1;
+            stats.inspection_ledger.record(
+                file.clone(),
+                InspectionStatus::Unsupported,
+                true,
+                Some("binary_file".to_string()),
+            );
             continue;
         }
-        let content = String::from_utf8_lossy(&blob);
-        let file_findings = scanner.scan_string(&content, &file);
+        let content = std::str::from_utf8(&blob)
+            .map_err(|e| anyhow::anyhow!("staged file {file} is not valid UTF-8: {e}"))?;
+        let file_findings = scanner.scan_string(content, &file);
         stats.files_scanned += 1;
         stats.bytes_scanned += blob.len() as u64;
+        stats
+            .inspection_ledger
+            .record(file.clone(), InspectionStatus::Analyzed, true, None);
         findings.extend(file_findings);
     }
 
@@ -306,7 +395,10 @@ pub struct ScanResult {
     pub stats: ScanStats,
     /// Rendered report, exactly as it is echoed to stdout.
     pub output: String,
-    /// Whether any finding survived; it becomes the process exit code.
+    /// Whether any non-info finding survived. Informational findings never
+    /// contribute; the process exit code itself is decided by
+    /// [`scan_exit_code`] from the receipt, so a reported finding and the
+    /// exit status can never disagree.
     pub has_findings: bool,
     /// Provenance receipt persisted to `AEGIS_RECEIPT_FILE` when set.
     pub receipt: ScanReceipt,
@@ -376,7 +468,7 @@ pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Resul
 /// build the receipt, and package the result. Informational findings are
 /// reported but never fail a CI run.
 fn finish(opts: &ScanOptions, findings: Vec<Finding>, stats: ScanStats) -> Result<ScanResult> {
-    let has_findings = findings.iter().any(|f| f.severity != "info");
+    let has_findings = findings.iter().any(|f| !is_info_severity(&f.severity));
     let receipt = build_receipt(opts, &findings, stats.clone());
     let risk = RiskScore::new(
         &findings,
@@ -399,7 +491,7 @@ fn finish(opts: &ScanOptions, findings: Vec<Finding>, stats: ScanStats) -> Resul
 /// # Errors
 ///
 /// Returns an error when the scan fails; exits the process with the
-/// findings exit code when it is non-zero.
+/// computed scan exit code (see [`scan_exit_code`]) when it is non-zero.
 pub async fn run_scan(opts: ScanOptions) -> Result<()> {
     let exit_code = run_scan_and_get_exit_code(opts).await?;
     if exit_code != 0 {
@@ -419,7 +511,87 @@ fn retire_receipt_if_configured() {
     }
 }
 
+/// Exit status for a complete scan with no policy-blocking findings.
+pub const EXIT_CLEAN: i32 = 0;
+
+/// Exit status for a complete scan whose surviving findings include at
+/// least one non-info severity. Informational findings never reach this
+/// code, per the documented severity policy.
+pub const EXIT_FINDINGS: i32 = 1;
+
+/// Exit status for a scan whose receipt does not certify that every
+/// required inspection completed — [`ScanReceipt::allows_safe`] is false
+/// because a required unit failed, was skipped (for example by the file
+/// size limit), had no analyzer (a binary file), or nothing was inspected
+/// at all. Deliberately distinct from [`EXIT_FINDINGS`] so "findings were
+/// reported" and "the scan could not inspect what it was asked to inspect"
+/// stay separable; consumers that only branch on non-zero still fail
+/// closed either way.
+pub const EXIT_INCOMPLETE: i32 = 3;
+
+/// Whether a finding severity is `info`: the one severity that never fails
+/// a run. Informational observations are reported and receipted but must
+/// not gate `has_findings` or [`scan_exit_code`]; this predicate is the
+/// single authority for that policy, so the report and exit paths cannot
+/// drift apart over what counts as blocking.
+#[must_use]
+fn is_info_severity(severity: &str) -> bool {
+    severity == "info"
+}
+
+/// Decide the process exit code for a completed scan from the receipt
+/// alone, so the exit status agrees with both halves of the fail-closed
+/// contract and can never disagree with the evidence a downstream consumer
+/// validates:
+///
+/// - receipt completeness first: [`ScanReceipt::allows_safe`] false means
+///   the requested source was not fully inspected, and the scan is
+///   [`EXIT_INCOMPLETE`] even when zero findings survived — an incomplete
+///   scan must never pass as clean;
+/// - then finding policy: a complete receipt carrying a non-info finding
+///   is [`EXIT_FINDINGS`]; otherwise [`EXIT_CLEAN`].
+#[must_use]
+pub fn scan_exit_code(receipt: &ScanReceipt) -> i32 {
+    if !receipt.allows_safe() {
+        EXIT_INCOMPLETE
+    } else if receipt
+        .findings
+        .iter()
+        .any(|finding| !is_info_severity(&finding.severity))
+    {
+        EXIT_FINDINGS
+    } else {
+        EXIT_CLEAN
+    }
+}
+
+/// Remove a previous report before scanning so consumers cannot mistake it
+/// for output from a scan that fails before rendering a replacement.
+fn retire_output_file(path: Option<&Path>) -> Result<()> {
+    if let Some(path) = path {
+        match std::fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                anyhow::bail!(
+                    "failed to retire previous scan report {}: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Run scan and return exit code (testable async wrapper)
+///
+/// The exit code comes from [`scan_exit_code`] on the scan's own receipt:
+/// a complete scan exits [`EXIT_CLEAN`] or [`EXIT_FINDINGS`] per the
+/// finding policy (informational findings never fail the run), and a scan
+/// whose receipt does not certify that every required inspection completed
+/// exits [`EXIT_INCOMPLETE`] even with zero findings. Scan start-up and
+/// write failures propagate as errors and exit non-zero through the
+/// caller, before any receipt can be misread as evidence.
 ///
 /// # Errors
 ///
@@ -429,6 +601,7 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
     // Fail-closed: remove any existing receipt before scan so a failed scan
     // cannot be confused with a successful one whose result we never persisted.
     retire_receipt_if_configured();
+    retire_output_file(opts.output_file.as_deref())?;
 
     let result = if opts.scan_stdin {
         let content = read_stdin_content().await?;
@@ -439,16 +612,17 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
 
     persist_receipt_if_configured(&result.receipt)?;
 
+    let exit_code = scan_exit_code(&result.receipt);
+
     // Print to stdout
     println!("{}", result.output);
 
     // Write to file if specified
     if let Some(ref path) = opts.output_file {
-        std::fs::write(path, result.output)?;
+        std::fs::write(path, result.output.as_bytes())?;
     }
 
-    // Return exit code based on findings
-    Ok(i32::from(result.has_findings))
+    Ok(exit_code)
 }
 
 /// Read stdin content (extracted for testing)
@@ -527,6 +701,7 @@ mod tests {
             quiet: false,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         };
 
         assert!(!opts.scan_file);
@@ -555,6 +730,7 @@ mod tests {
             staged: false,
             anomaly_detectors: None,
             detect_clones: false,
+            path_classes: Vec::new(),
         };
 
         assert_eq!(opts.categories.as_ref().unwrap(), "secrets,pii");
@@ -578,6 +754,7 @@ mod tests {
             staged: false,
             anomaly_detectors: list.map(str::to_string),
             detect_clones: false,
+            path_classes: Vec::new(),
             format: OutputFormat::Human,
             quiet: false,
         }
@@ -632,6 +809,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -657,6 +835,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -682,6 +861,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -712,6 +892,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -736,6 +917,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -761,6 +943,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -790,6 +973,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -818,6 +1002,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -848,6 +1033,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -880,6 +1066,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -908,6 +1095,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -950,6 +1138,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -979,6 +1168,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1014,6 +1204,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1046,6 +1237,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1058,7 +1250,9 @@ mod tests {
 
     #[test]
     fn test_scan_result_exit_code_logic() {
-        // Test that has_findings correctly determines exit code
+        // The exit code is decided from the receipt (see `scan_exit_code`);
+        // on a safe receipt it must equal EXIT_FINDINGS exactly when a
+        // non-info finding survived, and EXIT_CLEAN otherwise.
         let scan_path = scan_fixture_path();
         let opts = ScanOptions {
             path: scan_path.clone(),
@@ -1076,25 +1270,79 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts).unwrap();
-        // Exit code should be 1 if has_findings, 0 otherwise
-        let expected_exit = i32::from(result.has_findings);
-        assert!(expected_exit == 0 || expected_exit == 1);
+        assert!(result.receipt.allows_safe(), "precondition: clean fixture");
+        let expected_exit = if result.has_findings {
+            EXIT_FINDINGS
+        } else {
+            EXIT_CLEAN
+        };
+        assert_eq!(scan_exit_code(&result.receipt), expected_exit);
+        assert_eq!(result.receipt.finding_count, result.findings.len());
         std::fs::remove_dir_all(scan_path).ok();
     }
 
-    /// Regression test: a failing scan must not leave a stale receipt.
-    /// The old receipt is removed before the scan; if the scan fails, the
-    /// file is simply absent — not a mix of old and new data.
+    /// Receipt-derived fail-closed regression: required work that was not
+    /// analyzed must yield `EXIT_INCOMPLETE`, while optional failures do not
+    /// invalidate an otherwise complete receipt.
+    #[test]
+    fn required_incomplete_receipt_units_fail_closed() {
+        let opts = ScanOptions {
+            path: PathBuf::from("/test"),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: true,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            path_classes: Vec::new(),
+            anomaly_detectors: None,
+        };
+        let clean = execute_scan_with_stdin(&opts, "clean input\n").expect("scan succeeds");
+        assert_eq!(scan_exit_code(&clean.receipt), EXIT_CLEAN);
+
+        for status in [
+            InspectionStatus::Failed,
+            InspectionStatus::Skipped,
+            InspectionStatus::Unsupported,
+        ] {
+            let mut receipt = clean.receipt.clone();
+            receipt.inspection_ledger.record(
+                format!("synthetic-required-{status:?}"),
+                status,
+                true,
+                Some("regression_test".to_string()),
+            );
+            assert_eq!(scan_exit_code(&receipt), EXIT_INCOMPLETE, "{status:?}");
+        }
+
+        let mut optional_failure = clean.receipt;
+        optional_failure.inspection_ledger.record(
+            "optional-failure",
+            InspectionStatus::Failed,
+            false,
+            Some("regression_test".to_string()),
+        );
+        assert_eq!(scan_exit_code(&optional_failure), EXIT_CLEAN);
+    }
     #[tokio::test]
-    async fn test_failing_scan_does_not_leave_stale_receipt() {
-        // Use a process-unique temp path to avoid races between parallel test
-        // invocations. process::id is embedded in the receipt tmp-name so we
-        // further isolate by including a monotonic fixture counter.
-        static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
+    async fn test_receipt_file_failures_retire_stale_and_fail_closed() {
+        // Mode 1: stale-receipt retirement. Use a process-unique temp path
+        // to avoid races between parallel test invocations; process::id is
+        // embedded in the receipt tmp-name so we further isolate by
+        // including a monotonic fixture counter.
         let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let receipt_path = std::env::temp_dir().join(format!(
             "aegis_stale_receipt_test_{}_{}",
@@ -1141,6 +1389,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
@@ -1153,10 +1402,102 @@ mod tests {
             "stale receipt must be retired; found {} which should not exist",
             receipt_path.display()
         );
+        // Release the first binding before re-pointing the same variable.
+        drop(guard);
 
-        // Keep the guard alive until the end of the test so it can restore
-        // the process-global environment.
+        // Mode 2: unusable receipt target. A directory cannot be replaced
+        // by the receipt file: the atomic rename at persist time fails on
+        // every platform.
+        let outside = tempfile::tempdir().unwrap();
+        let receipt_target = outside.path().join("receipt.json");
+        std::fs::create_dir(&receipt_target).unwrap();
+        let scan_path = scan_fixture_path();
+
+        let guard = OnDropEnvVar::new(
+            "AEGIS_RECEIPT_FILE",
+            receipt_target.to_string_lossy().as_ref(),
+        );
+
+        let outcome = run_scan_and_get_exit_code(dir_scan_opts(scan_path.clone())).await;
+        assert!(
+            outcome.is_err(),
+            "a receipt that cannot be persisted must fail the scan, not pass"
+        );
+        assert!(
+            receipt_target.is_dir(),
+            "the failed persist must not clobber the configured target"
+        );
+
+        // Keep the guard alive until the end of the test so its drop can
+        // clean up the process-global environment.
         let _guard = guard;
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    #[tokio::test]
+    async fn test_failing_scan_does_not_leave_stale_output_file() {
+        let fixture = tempfile::tempdir().unwrap();
+        let report_path = fixture.path().join("report.sarif");
+        std::fs::write(&report_path, "stale report").unwrap();
+        let opts = ScanOptions {
+            path: fixture.path().join("missing-input"),
+            scan_file: true,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: Some(report_path.clone()),
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Sarif,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            path_classes: Vec::new(),
+            anomaly_detectors: None,
+        };
+
+        let result = run_scan_and_get_exit_code(opts).await;
+        assert!(result.is_err(), "missing scan input must fail");
+        assert!(
+            !report_path.exists(),
+            "a failed scan must not leave the previous report available"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_successful_scan_writes_replacement_output_file() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("clean.rs"), "fn main() {}\n").unwrap();
+        let report_path = fixture.path().join("report.sarif");
+        std::fs::write(&report_path, "stale report").unwrap();
+        let opts = ScanOptions {
+            path: fixture.path().to_path_buf(),
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: Some(report_path.clone()),
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Sarif,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            path_classes: Vec::new(),
+            anomaly_detectors: None,
+        };
+
+        let exit_code = run_scan_and_get_exit_code(opts).await.unwrap();
+        assert_eq!(exit_code, 0);
+        let report = std::fs::read_to_string(report_path).unwrap();
+        assert!(report.contains("\"version\": \"2.1.0\""));
+        assert!(!report.contains("stale report"));
     }
 
     /// RAII guard that sets an env var on construction and removes it on drop.
@@ -1214,6 +1555,7 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
         }
     }
 
@@ -1439,6 +1781,7 @@ mod tests {
             diff: None,
             staged: true,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
             format: OutputFormat::Human,
             quiet: false,
@@ -1543,6 +1886,81 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_staged_scan_includes_file_type_changes() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture.path())
+            .output()
+            .expect("git init must succeed");
+        let path = fixture.path().join("config.env"); // aegis:ignore:env-file-in-git
+        symlink("safe", &path).unwrap();
+        let add_symlink = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "config.env"])
+            .output()
+            .unwrap();
+        assert!(add_symlink.status.success());
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, STAGED_SECRET).unwrap(); // aegis:ignore:env-file-in-git
+        let add_file = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "--", "config.env"])
+            .output()
+            .unwrap();
+        assert!(add_file.status.success());
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let (findings, _) = perform_scan(&scanner, &opts).unwrap();
+        assert_eq!(findings.len(), 1, "a staged type change must be scanned");
+    }
+
+    #[test]
+    fn test_staged_scan_respects_configured_blob_limit_before_read() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("clean.rs", "x")]);
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts)
+            .unwrap()
+            .with_options(CoreOptions {
+                max_file_size: 0,
+                ..Default::default()
+            });
+        let error = perform_scan(&scanner, &opts).unwrap_err();
+        assert!(error.to_string().contains("exceeding"));
+    }
+
+    #[test]
+    fn test_staged_scan_rejects_invalid_utf8() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(fixture.path())
+            .output()
+            .expect("git init must succeed");
+        std::fs::write(fixture.path().join("invalid.txt"), [0xff]).unwrap();
+        let add = std::process::Command::new("git")
+            .args(["-C"])
+            .arg(fixture.path())
+            .args(["add", "invalid.txt"])
+            .output()
+            .unwrap();
+        assert!(add.status.success());
+
+        let opts = staged_scan_opts(fixture.path().into());
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let error = perform_scan(&scanner, &opts).unwrap_err();
+        assert!(error.to_string().contains("not valid UTF-8"));
+    }
+
     #[test]
     fn test_baseline_malformed_file_is_an_error() {
         let fixture = baseline_fixture_path();
@@ -1605,11 +2023,15 @@ mod tests {
             quiet: false,
             staged: false,
             detect_clones: false,
+            path_classes: Vec::new(),
             anomaly_detectors: None,
         };
 
         let result = execute_scan(&opts).unwrap();
-        let blocking = result.findings.iter().any(|f| f.severity != "info");
+        let blocking = result
+            .findings
+            .iter()
+            .any(|f| !is_info_severity(&f.severity));
         assert_eq!(
             result.has_findings, blocking,
             "info findings must not flip the exit code; only non-info findings may"
@@ -1621,6 +2043,416 @@ mod tests {
                 .any(|f| f.category == "statistical-anomaly"),
             "the narrated outlier should surface as an info observation"
         );
+        // Case-matrix guard (informational): a safe receipt carrying only
+        // info findings still exits clean — the policy is decided from the
+        // receipt, so it must agree with `has_findings` here too.
+        assert!(
+            result.receipt.allows_safe(),
+            "precondition: the info-only scan must be complete"
+        );
+        assert_eq!(
+            scan_exit_code(&result.receipt),
+            EXIT_CLEAN,
+            "info-only findings on a complete scan must stay exit 0"
+        );
         std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    // ------------------------------------------------------------------
+    // R4 fail-closed exit case matrix
+    //
+    // The exit status must agree with both receipt completeness
+    // (`ScanReceipt::allows_safe`) and the finding policy, decided from the
+    // same receipt a downstream gate validates. Each test names the matrix
+    // case it pins: clean / finding / informational (above) / blocked /
+    // skipped-or-timed-out / exit-disagreement / empty-diff / staged
+    // coverage. The two `AEGIS_RECEIPT_FILE` failure modes — stale-receipt
+    // retirement and the unusable receipt target — share the one
+    // serialized env test
+    // `test_receipt_file_failures_retire_stale_and_fail_closed`; the
+    // repeated-scan baseline ratchet by the `test_baseline_*` suite.
+    // ------------------------------------------------------------------
+
+    /// Directory-scan options rooted at `path`, the shape shared by the
+    /// exit-code case-matrix tests.
+    fn dir_scan_opts(path: PathBuf) -> ScanOptions {
+        ScanOptions {
+            path,
+            scan_file: false,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            staged: false,
+            detect_clones: false,
+            path_classes: Vec::new(),
+            anomaly_detectors: None,
+            format: OutputFormat::Human,
+            quiet: false,
+        }
+    }
+
+    /// A fixture finding for receipt-construction tests.
+    fn matrix_finding(severity: &str) -> Finding {
+        Finding::new(
+            "matrix-rule",
+            "secrets",
+            severity,
+            "high",
+            aegis_core::Location::new("fixture.rs", 4, 2, "matrix = value"),
+            "value",
+            "case-matrix fixture finding",
+        )
+    }
+
+    /// Stats whose ledger records one required analyzed unit, the shape
+    /// every real content scan path produces.
+    fn safe_stats() -> ScanStats {
+        ScanStats::for_content("string:case-matrix", 0)
+    }
+
+    /// Case matrix, decision level: the exit code is a function of the
+    /// receipt alone, covering completeness first and finding policy second.
+    #[test]
+    fn scan_exit_code_decision_covers_both_contract_dimensions() {
+        // Clean and complete: zero findings over a safe ledger.
+        let clean =
+            ScanReceipt::from_scan("fixture.rs", "cli_scan", "matrix", None, &[], safe_stats());
+        assert_eq!(scan_exit_code(&clean), EXIT_CLEAN);
+
+        // Findings and complete: a non-info finding is exit 1.
+        let blocking = matrix_finding("high");
+        let found = ScanReceipt::from_scan(
+            "fixture.rs",
+            "cli_scan",
+            "matrix",
+            None,
+            std::slice::from_ref(&blocking),
+            safe_stats(),
+        );
+        assert_eq!(scan_exit_code(&found), EXIT_FINDINGS);
+
+        // Informational-only and complete: policy keeps it exit 0.
+        let info = matrix_finding("info");
+        let info_only = ScanReceipt::from_scan(
+            "fixture.rs",
+            "cli_scan",
+            "matrix",
+            None,
+            &[info],
+            safe_stats(),
+        );
+        assert_eq!(scan_exit_code(&info_only), EXIT_CLEAN);
+
+        // Blocked and incomplete: a required failed unit must not pass as
+        // clean even with zero findings (the zero-exit/incomplete
+        // regression).
+        let mut failed_stats = safe_stats();
+        failed_stats.inspection_ledger.record(
+            "unreadable.txt",
+            InspectionStatus::Failed,
+            true,
+            Some("unreadable".to_string()),
+        );
+        let blocked =
+            ScanReceipt::from_scan("fixture.rs", "cli_scan", "matrix", None, &[], failed_stats);
+        assert!(!blocked.allows_safe());
+        assert_eq!(scan_exit_code(&blocked), EXIT_INCOMPLETE);
+
+        // Completeness dominates findings: an unproven inspection cannot
+        // certify the findings it did see, so the blocked code wins.
+        let mut blocked_with_findings_stats = safe_stats();
+        blocked_with_findings_stats.inspection_ledger.record(
+            "unreadable.txt",
+            InspectionStatus::Failed,
+            true,
+            Some("unreadable".to_string()),
+        );
+        let blocked_with_findings = ScanReceipt::from_scan(
+            "fixture.rs",
+            "cli_scan",
+            "matrix",
+            None,
+            &[blocking],
+            blocked_with_findings_stats,
+        );
+        assert_eq!(scan_exit_code(&blocked_with_findings), EXIT_INCOMPLETE);
+
+        // Nothing inspected at all is not a clean pass: an empty ledger
+        // carries no evidence.
+        let empty_ledger = ScanReceipt::from_scan(
+            "fixture.rs",
+            "cli_scan",
+            "matrix",
+            None,
+            &[],
+            ScanStats::default(),
+        );
+        assert_eq!(scan_exit_code(&empty_ledger), EXIT_INCOMPLETE);
+    }
+
+    /// Case matrix (clean): a readable fixture is a complete scan, and the
+    /// receipt is safe with the exit to prove it.
+    #[test]
+    fn clean_complete_scan_exits_zero_with_safe_receipt() {
+        let scan_path = scan_fixture_path();
+        let result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert!(
+            result.receipt.allows_safe(),
+            "a readable tree must inspect fully"
+        );
+        assert_eq!(result.receipt.finding_count, 0);
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_CLEAN);
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Case matrix (finding + exit-disagreement guard): the exit code, the
+    /// result findings, and the receipt findings must all agree.
+    #[test]
+    fn blocking_findings_exit_one_and_agree_with_the_receipt() {
+        let fixture = baseline_fixture_path();
+        let result = execute_scan(&dir_scan_opts(fixture.clone())).unwrap();
+        assert!(
+            result.has_findings,
+            "precondition: the fixture carries AWS example keys"
+        );
+        assert_eq!(
+            result.receipt.finding_count,
+            result.findings.len(),
+            "receipt and result must embed the same finding set"
+        );
+        assert_eq!(result.receipt.findings.len(), result.findings.len());
+        assert!(
+            result
+                .receipt
+                .findings
+                .iter()
+                .any(|finding| !is_info_severity(&finding.severity)),
+            "precondition: at least one finding is policy-blocking"
+        );
+        assert!(result.receipt.allows_safe());
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_FINDINGS);
+        std::fs::remove_dir_all(fixture).ok();
+    }
+
+    /// Case matrix (blocked): a directory holding one unreadable required
+    /// file among readable ones returns a partial result — which must exit
+    /// blocked with zero findings, never as a clean pass.
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_required_file_blocks_a_zero_finding_scan() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture_id = FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let scan_path = std::env::temp_dir().join(format!(
+            "aegis_cli_blocked_exit_{}_{}",
+            std::process::id(),
+            fixture_id
+        ));
+        std::fs::create_dir_all(&scan_path).unwrap();
+        std::fs::write(scan_path.join("readable.rs"), "fn main() {}\n").unwrap();
+        let unreadable = scan_path.join("unreadable.txt");
+        std::fs::write(&unreadable, "present but not inspectable\n").unwrap();
+        let original_mode = std::fs::metadata(&unreadable).unwrap().permissions().mode();
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o0)).unwrap();
+        if std::fs::read_to_string(&unreadable).is_ok() {
+            // Root bypasses mode bits; do not claim coverage the
+            // environment cannot exercise.
+            std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+                .unwrap();
+            std::fs::remove_dir_all(scan_path).ok();
+            return;
+        }
+
+        let result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert!(
+            result.findings.is_empty(),
+            "the fixture must stay finding-free"
+        );
+        assert!(
+            !result.receipt.allows_safe(),
+            "the unreadable required file must make the receipt unsafe"
+        );
+        assert_eq!(
+            scan_exit_code(&result.receipt),
+            EXIT_INCOMPLETE,
+            "regression: an incomplete scan with zero findings must not exit 0"
+        );
+        let failed = result
+            .receipt
+            .inspection_ledger
+            .units
+            .iter()
+            .find(|unit| unit.unit_id == unreadable.to_string_lossy())
+            .expect("the unreadable file must be a ledger unit");
+        assert_eq!(failed.status, InspectionStatus::Failed);
+        assert!(failed.required);
+
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(original_mode))
+            .unwrap();
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Case matrix (skipped / timed-out inspection): a required unit that
+    /// was skipped, left pending, or had no analyzer gates the exit code,
+    /// while the same statuses on non-required units gate nothing.
+    #[test]
+    fn required_skipped_pending_and_unsupported_units_block_the_exit() {
+        let scan_path = scan_fixture_path();
+        let result = execute_scan(&dir_scan_opts(scan_path.clone())).unwrap();
+        assert_eq!(
+            scan_exit_code(&result.receipt),
+            EXIT_CLEAN,
+            "precondition: the readable fixture is a clean pass"
+        );
+
+        // A size-limit skip (`Skipped`, required) is the shape a
+        // policy-skipped or timed-out inspection records.
+        let mut skipped = result.receipt.clone();
+        skipped.inspection_ledger.record(
+            "huge.env",
+            InspectionStatus::Skipped,
+            true,
+            Some("file_size_limit".to_string()),
+        );
+        assert!(!skipped.allows_safe());
+        assert_eq!(scan_exit_code(&skipped), EXIT_INCOMPLETE);
+
+        // A binary has no analyzer (`Unsupported`, required): content the
+        // scan never inspected.
+        let mut binary = result.receipt.clone();
+        binary.inspection_ledger.record(
+            "asset.bin",
+            InspectionStatus::Unsupported,
+            true,
+            Some("binary_file".to_string()),
+        );
+        assert_eq!(scan_exit_code(&binary), EXIT_INCOMPLETE);
+
+        // A discovered-but-pending unit is not an inspected one.
+        let mut pending = result.receipt.clone();
+        pending
+            .inspection_ledger
+            .record("later.rs", InspectionStatus::Discovered, true, None);
+        assert_eq!(scan_exit_code(&pending), EXIT_INCOMPLETE);
+
+        // The same statuses on non-required units change nothing.
+        let mut optional = result.receipt.clone();
+        optional.inspection_ledger.record(
+            "optional.bin",
+            InspectionStatus::Unsupported,
+            false,
+            Some("binary_file".to_string()),
+        );
+        optional.inspection_ledger.record(
+            "optional.env",
+            InspectionStatus::Skipped,
+            false,
+            Some("file_size_limit".to_string()),
+        );
+        assert!(optional.allows_safe());
+        assert_eq!(scan_exit_code(&optional), EXIT_CLEAN);
+        std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// Case matrix (empty-diff): an empty diff file is a completed scan of
+    /// a legitimately empty change set — a clean pass with evidence — and
+    /// must stay distinct from a diff that cannot be read at all.
+    #[test]
+    fn empty_diff_is_a_completed_clean_scan_and_missing_diff_is_an_error() {
+        let outside = tempfile::tempdir().unwrap();
+
+        let empty_diff = outside.path().join("empty.diff");
+        std::fs::write(&empty_diff, "").unwrap();
+        let mut opts = dir_scan_opts(outside.path().to_path_buf());
+        opts.diff = Some(empty_diff);
+        let result = execute_scan(&opts).unwrap();
+        assert!(result.findings.is_empty());
+        assert!(
+            result.receipt.allows_safe(),
+            "scanning an empty diff is a complete inspection of it"
+        );
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_CLEAN);
+
+        // A diff that cannot be discovered/read is a scan fault, never a
+        // silent no-op clean pass.
+        let mut missing = dir_scan_opts(outside.path().to_path_buf());
+        missing.diff = Some(outside.path().join("absent.diff"));
+        assert!(
+            execute_scan(&missing).is_err(),
+            "an unreadable diff file must fail the scan, not pass clean"
+        );
+    }
+
+    /// The staged (pre-commit) path must leave the same kind of evidence as
+    /// every other mode: staged blobs are required analyzed units, so the
+    /// receipt is safe and the exit agrees with the finding policy.
+    #[test]
+    fn staged_scan_receipt_covers_what_it_inspected() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("config.env", STAGED_SECRET)]); // aegis:ignore:env-file-in-git
+        let opts = staged_scan_opts(fixture.path().into());
+        let result = execute_scan(&opts).unwrap();
+        assert_eq!(result.findings.len(), 1);
+        let unit = result
+            .receipt
+            .inspection_ledger
+            .units
+            .iter()
+            .find(|unit| unit.unit_id == "config.env")
+            .expect("the staged blob must be a ledger unit");
+        assert_eq!(unit.status, InspectionStatus::Analyzed);
+        assert!(unit.required);
+        assert!(result.receipt.allows_safe());
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_FINDINGS);
+    }
+
+    /// Nothing staged means the index was fully enumerated and found
+    /// empty: a complete inspection, recorded as such, and a clean exit.
+    #[test]
+    fn staged_scan_with_nothing_staged_is_clean_and_safe() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[]);
+        let opts = staged_scan_opts(fixture.path().into());
+        let result = execute_scan(&opts).unwrap();
+        assert!(result.findings.is_empty());
+        assert!(
+            result.receipt.allows_safe(),
+            "an enumerated empty index is a complete inspection"
+        );
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_CLEAN);
+    }
+
+    /// A staged binary blob is content the pre-commit pass cannot inspect;
+    /// committing it must not exit as a clean pass.
+    #[test]
+    fn staged_binary_blob_blocks_the_pre_commit_exit() {
+        let fixture = tempfile::tempdir().unwrap();
+        git_repo_with_staged(fixture.path(), &[("asset.bin", "\u{0}\u{1}\u{2}")]);
+        let opts = staged_scan_opts(fixture.path().into());
+        let result = execute_scan(&opts).unwrap();
+        assert!(
+            result.findings.is_empty(),
+            "binary content is not pattern-scanned"
+        );
+        assert!(
+            !result.receipt.allows_safe(),
+            "the skipped binary blob must make the receipt unsafe"
+        );
+        let unit = result
+            .receipt
+            .inspection_ledger
+            .units
+            .iter()
+            .find(|unit| unit.unit_id == "asset.bin")
+            .expect("the binary blob must be a ledger unit");
+        assert_eq!(unit.status, InspectionStatus::Unsupported);
+        assert!(unit.required);
+        assert_eq!(scan_exit_code(&result.receipt), EXIT_INCOMPLETE);
     }
 }

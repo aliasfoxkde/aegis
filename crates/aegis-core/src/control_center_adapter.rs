@@ -347,6 +347,7 @@ pub enum AdapterError {
 pub struct ControlCenterAdapter {
     /// Internal scanner instance (not stored, recreated per scan for panic safety)
     #[allow(dead_code)]
+    // aegis-allow: scanner field is kept so tests can inject a panicking scanner and prove the fail-closed path | expires=2027-12-31 | approver=maintainers
     scanner: Scanner,
     /// Builds the per-scan scanner instance. Indirected so tests can inject a
     /// scanner that panics and prove the fail-closed path end to end.

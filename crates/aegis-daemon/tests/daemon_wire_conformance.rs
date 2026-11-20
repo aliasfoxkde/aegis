@@ -38,19 +38,44 @@ const SESSION_DEADLINE: Duration = Duration::from_secs(180);
 /// example key) so `aws-access-key` provably fires.
 const PLANTED_LEAK: &str = "aws_key: AKIAIOSFODNN7EXAMPLE\n"; // aegis:ignore:aws-access-key -- synthetic fixture
 
+/// A planted documentation file: `eval` on unvalidated input is a finding
+/// in the `security-hardening` category, and it is *not* a secret, so a
+/// path class is allowed to lower it.
+const PLANTED_DOCS_FILE: &str = "result = eval(user_input)\n"; // aegis:ignore:eval-usage -- synthetic fixture
+
+/// A planted file whose credential is marked as a deliberate example with
+/// the `aegis:synthetic` annotation. The finding is kept, tagged, and
+/// reported at low severity — the annotation sets an example aside, it
+/// does not hide it.
+const PLANTED_SYNTHETIC_FILE: &str = "api_key = \"AKIAIOSFODNN7EXAMPLE\"  # aegis:synthetic\n"; // aegis:ignore:aws-access-key -- synthetic fixture
+
+/// A planted file whose credential is a placeholder.
+///
+/// The quotes are escaped in the Rust source, so the file written to disk
+/// carries a real credential assignment — the shape the rule matches —
+/// while this source line does not read as one to a scan of the
+/// repository's own sources.
+const PLANTED_PLACEHOLDER_FILE: &str = "password = \"changeme\"\n";
+
+/// The operator configuration the path-class case runs the daemon with:
+/// one glob that classifies documentation paths, exactly as an operator
+/// would write it in a profile.
+const DOCS_PATH_CLASS_CONFIG: &str =
+    r#"{"name":"conformance","path_classes":[{"glob":"docs/**","class":"docs"}]}"#;
+
 /// The frame cap the daemon enforces (see `crates/aegis-daemon/src/main.rs`).
 const MAX_FRAME_BYTES: usize = 10 * 1024 * 1024;
 
+/// Path to the daemon binary under test.
+///
+/// Cargo exports `CARGO_BIN_EXE_<name>` to the integration tests of the
+/// package that owns a binary, with `<name>` the target name exactly as
+/// written in `Cargo.toml` — so the hyphen is part of the name. The
+/// variable is read at compile time on purpose: it does not depend on
+/// where Cargo puts the test executable, which has changed between
+/// releases (`target/<profile>/deps/` is no longer the only layout).
 fn daemon_binary() -> PathBuf {
-    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_aegis_daemon") {
-        return path.into();
-    }
-    let test_binary = std::env::current_exe().expect("test executable path is available");
-    test_binary
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("integration test runs under target/<profile>/deps")
-        .join("aegis-daemon")
+    PathBuf::from(env!("CARGO_BIN_EXE_aegis-daemon"))
 }
 
 /// A spawned daemon process killed on drop, so a failing assertion cannot
@@ -70,17 +95,28 @@ impl Drop for DaemonProcess {
 /// wait for its socket to appear. The daemon runs as the test user, so the
 /// owner-only peer policy admits the test's connections. `label` keeps
 /// concurrent tests' sockets apart.
-async fn start_daemon(root: &std::path::Path, label: &str) -> (DaemonProcess, PathBuf) {
+///
+/// `operator_config` names the profile the daemon applies at startup; the
+/// daemon reads it before it binds the socket, so the configuration is in
+/// force for every request the socket answers.
+async fn start_daemon(
+    root: &std::path::Path,
+    label: &str,
+    operator_config: Option<&std::path::Path>,
+) -> (DaemonProcess, PathBuf) {
     let socket_path =
         std::env::temp_dir().join(format!("ad-conf-{}-{label}.sock", std::process::id()));
-    let mut child = Command::new(daemon_binary())
+    let mut command = Command::new(daemon_binary());
+    command
         .env("AEGIS_DAEMON_SOCKET_PATH", &socket_path)
         .env("AEGIS_DAEMON_SCAN_ROOT", root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn aegis-daemon");
+        .stderr(Stdio::null());
+    if let Some(config) = operator_config {
+        command.env("AEGIS_DAEMON_CONFIG", config);
+    }
+    let mut child = command.spawn().expect("spawn aegis-daemon");
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
     loop {
@@ -241,7 +277,7 @@ async fn wire_conformance_cases_replay() {
     std::fs::write(root.path().join("outside.txt"), b"outside the boundary\n")
         .expect("plant outside.txt");
 
-    let (daemon, socket_path) = start_daemon(&scan_root, "replay").await;
+    let (daemon, socket_path) = start_daemon(&scan_root, "replay", None).await;
 
     for case in &cases {
         let raw_frames = run_case(&socket_path, &case.requests).await;
@@ -273,7 +309,7 @@ async fn wire_conformance_cases_replay() {
 #[tokio::test]
 async fn scan_string_detects_a_planted_credential() {
     let root = tempfile::tempdir().expect("scan-root tempdir");
-    let (daemon, socket_path) = start_daemon(root.path(), "detect").await;
+    let (daemon, socket_path) = start_daemon(root.path(), "detect", None).await;
 
     let request = "{\"method\":\"scan_string\",\"params\":[\"aws_key: AKIAIOSFODNN7EXAMPLE\",\"planted.rs\"],\"id\":42}"; // aegis:ignore:aws-access-key -- synthetic fixture
     let raw_frames = run_case(&socket_path, &[request.to_string()]).await;
@@ -300,7 +336,7 @@ async fn scan_string_detects_a_planted_credential() {
 #[tokio::test]
 async fn oversize_frame_is_answered_then_connection_ends() {
     let root = tempfile::tempdir().expect("scan-root tempdir");
-    let (daemon, socket_path) = start_daemon(root.path(), "oversize").await;
+    let (daemon, socket_path) = start_daemon(root.path(), "oversize", None).await;
 
     // One byte past the cap; the frame is rejected on size before any JSON
     // parsing, so the payload can be filler.
@@ -345,5 +381,129 @@ async fn oversize_frame_is_answered_then_connection_ends() {
     assert_eq!(raw_frames.len(), 1, "daemon still serves: {raw_frames:?}");
     let frame: Value = serde_json::from_str(&raw_frames[0]).expect("frame is JSON");
     assert_eq!(frame["success"], true, "{frame}");
+    drop(daemon);
+}
+
+/// The findings of one scan response, as the wire carries them.
+fn findings_of(frame: &Value) -> Vec<&Value> {
+    frame["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .collect()
+}
+
+/// Whether a finding carries `tag`.
+fn has_tag(finding: &Value, tag: &str) -> bool {
+    finding["tags"]
+        .as_array()
+        .expect("tags array")
+        .iter()
+        .any(|value| value.as_str() == Some(tag))
+}
+
+/// A path the operator classified as documentation reports its findings at
+/// low severity, and the class is recorded on the finding — over the
+/// wire, with the class configured the way an operator configures it.
+///
+/// The rule is written with `/` and the path the daemon scans is the one
+/// the operating system built, so this case also pins the separator
+/// handling on the platform the test matrix runs it on.
+#[tokio::test]
+async fn a_classified_path_lowers_its_findings_over_the_wire() {
+    let root = tempfile::tempdir().expect("scan-root tempdir");
+    let docs = root.path().join("docs");
+    std::fs::create_dir(&docs).expect("create the docs directory");
+    std::fs::write(docs.join("example.md"), PLANTED_DOCS_FILE).expect("plant the docs file");
+    let config_path = root.path().join("operator.json");
+    std::fs::write(&config_path, DOCS_PATH_CLASS_CONFIG).expect("write the operator config");
+
+    let (daemon, socket_path) = start_daemon(root.path(), "pathclass", Some(&config_path)).await;
+
+    let request = r#"{"method":"scan_file","params":"docs/example.md","id":7}"#;
+    let raw_frames = run_case(&socket_path, &[request.to_string()]).await;
+    assert_eq!(raw_frames.len(), 1, "one response frame: {raw_frames:?}");
+
+    let frame: Value = serde_json::from_str(&raw_frames[0]).expect("frame is JSON");
+    assert_eq!(frame["success"], true, "{frame}");
+    let finding = findings_of(&frame)
+        .into_iter()
+        .find(|finding| finding["pattern"] == "eval-usage")
+        .expect("the documentation file must still report the finding");
+    assert_eq!(finding["severity"], "low", "a classed path reports as low");
+    assert!(
+        has_tag(finding, "docs"),
+        "the class is recorded on the finding: {finding}"
+    );
+    drop(daemon);
+}
+
+/// The `aegis:synthetic` annotation keeps the finding, tags it, and
+/// reports it at low severity — over the wire.
+#[tokio::test]
+async fn a_synthetic_annotation_keeps_its_finding_over_the_wire() {
+    let root = tempfile::tempdir().expect("scan-root tempdir");
+    std::fs::write(root.path().join("app.py"), PLANTED_SYNTHETIC_FILE).expect("plant the file");
+
+    let (daemon, socket_path) = start_daemon(root.path(), "synthetic", None).await;
+
+    let request = r#"{"method":"scan_file","params":"app.py","id":8}"#;
+    let raw_frames = run_case(&socket_path, &[request.to_string()]).await;
+    assert_eq!(raw_frames.len(), 1, "one response frame: {raw_frames:?}");
+
+    let frame: Value = serde_json::from_str(&raw_frames[0]).expect("frame is JSON");
+    assert_eq!(frame["success"], true, "{frame}");
+    let findings = findings_of(&frame);
+    assert!(
+        !findings.is_empty(),
+        "the annotation keeps the finding: {frame}"
+    );
+    let finding = findings
+        .into_iter()
+        .find(|finding| has_tag(finding, "synthetic"))
+        .expect("the finding must carry the synthetic tag");
+    assert_eq!(
+        finding["severity"], "low",
+        "a synthetic value reports as low"
+    );
+    drop(daemon);
+}
+
+/// A secret finding carries its triage verdict over the wire, and the
+/// verdict names the signal it judged without quoting the value it
+/// judged: a report that says the secret contains `changeme` is itself a
+/// disclosure.
+#[tokio::test]
+async fn a_secret_finding_carries_its_triage_verdict_over_the_wire() {
+    let root = tempfile::tempdir().expect("scan-root tempdir");
+    std::fs::write(root.path().join("app.py"), PLANTED_PLACEHOLDER_FILE).expect("plant the file");
+
+    let (daemon, socket_path) = start_daemon(root.path(), "triage", None).await;
+
+    let request = r#"{"method":"scan_file","params":"app.py","id":9}"#;
+    let raw_frames = run_case(&socket_path, &[request.to_string()]).await;
+    assert_eq!(raw_frames.len(), 1, "one response frame: {raw_frames:?}");
+
+    let frame: Value = serde_json::from_str(&raw_frames[0]).expect("frame is JSON");
+    assert_eq!(frame["success"], true, "{frame}");
+    let finding = findings_of(&frame)
+        .into_iter()
+        .find(|finding| finding["pattern"] == "hardcoded-password")
+        .expect("the planted password must be reported");
+    assert_eq!(
+        finding["secret_triage"]["outcome"], "likely_placeholder",
+        "a known placeholder marker is a placeholder verdict: {finding}"
+    );
+    let reasons = finding["secret_triage"]["reasons"]
+        .as_array()
+        .expect("reasons array");
+    assert!(!reasons.is_empty(), "the verdict says why: {finding}");
+    for reason in reasons {
+        let reason = reason.as_str().expect("a reason is a string");
+        assert!(
+            !reason.contains("changeme"),
+            "a reason must not quote the value: {reason}"
+        );
+    }
     drop(daemon);
 }

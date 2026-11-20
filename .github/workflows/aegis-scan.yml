@@ -20,15 +20,6 @@ on:
           - high
           - medium
           - low
-      preset:
-        description: 'Scan preset to use'
-        required: false
-        default: 'pipeline'
-        type: choice
-        options:
-          - production
-          - pipeline
-          - development
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,13 +42,15 @@ jobs:
       security-events: write
     env:
       SCAN_SEVERITY: ${{ inputs.severity || 'high' }}
-      SCAN_PRESET: ${{ inputs.preset || 'pipeline' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Test Aegis report classifier
+        run: python3 scripts/test_classify_aegis_sarif.py
+
       - name: Build Aegis
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           components: rustfmt, clippy
@@ -65,31 +58,40 @@ jobs:
           RUST_BACKTRACE: 1
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis scan
         id: scan
         run: |
+          # Do not let a report from an earlier attempt make this scan look complete.
+          rm -f aegis-results.sarif
           set +e
+          # The category set is fixed on purpose: it is the same set the
+          # repository's self-scan contract names in AGENTS.md, and the
+          # expected result of this scan is documented there. The
+          # `config/profiles/*.json` presets stay available for local runs;
+          # wiring one in here would change what this gate proves without
+          # changing what it reports.
           ./target/release/aegis --format sarif scan . \
             --categories secrets,security-hardening,web-security \
             --severity-threshold "$SCAN_SEVERITY" \
             --output-file aegis-results.sarif
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-results.sarif ]; then
-            status=SAFE
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-results.sarif ]; then
-            status=FINDINGS
-          else
-            status=BLOCKED
-          fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the report.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-results.sarif "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "exit_code=$scan_exit" >> "$GITHUB_OUTPUT"
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis scan status: $status (exit=$scan_exit)"
 
       - name: Upload SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         if: always() && hashFiles('aegis-results.sarif') != ''
         with:
           sarif_file: aegis-results.sarif
@@ -108,7 +110,7 @@ jobs:
 
       - name: Upload Aegis scan artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aegis-scan-results
           path: aegis-results.sarif
@@ -141,12 +143,12 @@ jobs:
           fetch-depth: 0
 
       - name: Build Aegis
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis on changed files
         run: |
@@ -165,8 +167,10 @@ jobs:
                   --categories secrets \
                   --severity-threshold high
                 code=$?
-                # Aegis exits 0 for no findings and 1 for findings. Both are
-                # valid scan results; only execution/reporting errors block CI.
+                # Aegis exits 0 for a clean scan and 1 for findings — both
+                # valid scan results. Exit 3 is fail-closed (incomplete
+                # receipt: an unreadable, size-skipped, or unsupported file
+                # such as a binary); it and any other non-zero block CI.
                 if [ "$code" -gt 1 ]; then overall=1; fi
               fi
             done <<< "$CHANGED_FILES"
@@ -185,16 +189,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build Aegis
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Run Aegis secrets scan
         id: secrets_scan
         run: |
+          rm -f aegis-secrets.sarif
           set +e
           ./target/release/aegis --format sarif scan . \
             --categories secrets \
@@ -202,22 +207,27 @@ jobs:
             --output-file aegis-secrets.sarif
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-secrets.sarif ]; then status=SAFE;
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-secrets.sarif ]; then status=FINDINGS;
-          else status=BLOCKED; fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the report.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-secrets.sarif "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis secrets status: $status (exit=$scan_exit)"
 
       - name: Upload secrets SARIF
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
-        if: always()
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always() && hashFiles('aegis-secrets.sarif') != ''
         with:
           sarif_file: aegis-secrets.sarif
           category: aegis-secrets-detection
 
       - name: Upload secrets scan artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aegis-secrets-scan
           path: aegis-secrets.sarif
@@ -246,16 +256,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build Aegis
-        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
 
       - name: Build binary
-        run: cargo build --release -p aegis-cli
+        run: cargo build --locked --release -p aegis-cli
 
       - name: Scan dependencies
         id: supply_scan
         run: |
+          rm -f aegis-supply-chain.json
           set +e
           # Scan Cargo.toml and Cargo.lock for supply chain risks
           ./target/release/aegis --format json scan . \
@@ -264,15 +275,21 @@ jobs:
             --output-file aegis-supply-chain.json
           scan_exit=$?
           set -e
-          if [ "$scan_exit" -eq 0 ] && [ -s aegis-supply-chain.json ]; then status=SAFE;
-          elif [ "$scan_exit" -eq 1 ] && [ -s aegis-supply-chain.json ]; then status=FINDINGS;
-          else status=BLOCKED; fi
+          # Fail-closed: exit=1 also covers partial scans, so classification
+          # consults the inspection ledger embedded in the JSON report
+          # (stats.inspection_ledger) — same rule as the SARIF shape.
+          status="$(python3 scripts/ci/classify_aegis_sarif.py \
+            aegis-supply-chain.json "$scan_exit")" || status=BLOCKED
+          case "$status" in
+            SAFE|FINDINGS|BLOCKED) ;;
+            *) status=BLOCKED ;;
+          esac
           echo "status=$status" >> "$GITHUB_OUTPUT"
           echo "Aegis supply-chain status: $status (exit=$scan_exit)"
 
       - name: Upload supply chain report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: aegis-supply-chain-report
           path: aegis-supply-chain.json

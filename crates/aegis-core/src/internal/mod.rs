@@ -34,6 +34,7 @@ pub fn normalize_severity(severity: &str) -> String {
 
 /// Check if a string looks like a secret (high entropy)
 #[allow(dead_code)]
+// aegis-allow: internal entropy helper seam kept for the analyzers that consume it | expires=2027-12-31 | approver=maintainers
 pub fn looks_like_secret(content: &str) -> bool {
     let entropy = crate::entropy::shannon_entropy(content);
     entropy > 4.0 && content.len() >= 8

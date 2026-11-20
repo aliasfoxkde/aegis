@@ -7,7 +7,62 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Fixed
+
+- A release is now byte-reproducible regardless of the directory it is
+  built in. The absolute build path was compiled into the binaries - it
+  appears in the panic locations - so two builds of one tag at different
+  paths produced different binaries and different tarball digests even
+  though the code was identical; the `v0.6.5` cross-build measured
+  exactly that, for the workspace path and for the dependency sources
+  under the cargo home alike. `scripts/release/build.sh` now remaps both
+  prefixes out of the compiled paths, so the same tag yields the same
+  bytes wherever it is built.
+
+## [0.6.5] - 2026-11-17
+
 ### Added
+
+- **Path classes.** `--classify-path GLOB=KIND` classifies a path so
+  the findings below it are reported at low severity instead of at the
+  pattern's own severity, and carry the class as a tag. `KIND` is `docs`
+  or `fixture`; the flag repeats for more rules, and a profile file
+  carries the same rules. A rule is validated before use: a glob that
+  does not compile is an error, not a rule that quietly matches
+  nothing. Secret findings keep their severity under a path class — a
+  credential in a documentation file is still a credential — and carry
+  the class as a tag.
+
+- **Inline synthetic annotations.** `aegis:synthetic -- <reason>` on a
+  line, or `aegis:synthetic-file -- <reason>` for a whole file, marks
+  a deliberate example. The finding is kept, tagged `synthetic`, and
+  reported at low severity: visible in the report, no longer competing
+  with real signals.
+
+- **Secret triage.** A finding in the `secrets` category now carries a
+  verdict — `likely_real`, `likely_placeholder`, or `uncertain` — with
+  the confidence behind it and the signals that produced it: published
+  vendor examples, placeholder markers, template shapes, repeated
+  characters, and entropy. The verdict never quotes the value it
+  judged; the reasons name the signal only, because a report that
+  names a fragment of the credential is itself a disclosure. The
+  verdict appears in the human and JSON reports and in the SARIF
+  output. See `docs/guides/TRIAGE.md`.
+
+- A patch-coverage floor now runs on every build. The project-wide floor
+  barely moves when a change adds one uncovered file, so a pull request
+  could add uncovered lines and stay green, and `codecov.yml`'s `patch`
+  target was never evaluated by anything (no `CODECOV_TOKEN`, so every
+  Codecov upload fails and is ignored). `scripts/patch-coverage-floor.py`
+  intersects the lines a diff adds with the hit counts in the same lcov
+  report and fails the Coverage job below the floor, which starts at the
+  90% `codecov.yml` already declares. The diff is taken against the merge
+  base, so a branch that lags its base still measures against the fork.
+  `scripts/check-gate-parity.py` tracks the floor, so it cannot be
+  lowered or removed quietly — and its codecov-target reader, which
+  stopped a scope's body at the next key of any kind and therefore never
+  reached the `target:` line, now reads a scope's body to the next line
+  at the same indentation.
 
 - New `ai-slop` detection category (7 rules) flagging LLM-prose style
   tells in source trees: em dashes and other typographic punctuation
@@ -22,7 +77,119 @@ every release are attached to the matching GitHub release.
   verdicts. A file where several slop rules fire at once is the real
   signal.
 
+- The daemon and the MCP server now take an operator configuration at
+  startup. `AEGIS_DAEMON_CONFIG` and `AEGIS_MCP_CONFIG` name the same JSON
+  profile document the CLI reads with `aegis --config <file>`; the
+  categories, severity threshold, anomaly detectors, and path classes in
+  it are applied before the daemon binds its socket and before the MCP
+  server answers, so a deployment can choose what it scans for without a
+  code change. A configuration that cannot be applied stops the process
+  rather than leaving it serving scans it was not configured for, and an
+  empty variable is refused instead of being read as "no configuration".
+  The configuration stays operator-side: no request over either protocol
+  changes it, because a client that could set the severity threshold or
+  the category list could weaken the scan it was asked for. Applying a
+  configuration also marks the rule set as built, so the first request no
+  longer compiles the whole rule set a second time.
+
+### Changed
+
+- Scan exit status now honors both receipt completeness and the finding
+  policy, decided from the scan's own `ScanReceipt` so the exit can never
+  disagree with the evidence a downstream gate validates. A complete scan
+  exits `0` (clean, informational findings excluded) or `1` (blocking
+  findings) as before; a scan whose receipt does not certify that every
+  required inspection completed — an unreadable required file, a
+  size-limit skip, a binary no analyzer covers, or nothing inspected at
+  all — now exits `3` instead of passing as clean with zero findings.
+  Consumers that branch on non-zero fail closed unchanged; exit `3` makes
+  "findings reported" separable from "the scan could not inspect what it
+  was asked to inspect", and `ScanReceipt::allows_safe()` alone still
+  never means clean. `--staged` scans now record the same style of
+  inspection-ledger evidence as every other mode (the index enumeration
+  as a required analyzed unit, per-blob analyzed/excluded/unsupported
+  units), so a pre-commit receipt proves what the pass inspected and a
+  staged binary blob no longer exits as a clean commit. `docs/guides/CLI.md`
+  and `PLATFORM_INTEGRATION.md` document the new code; the GitHub scan
+  workflows already classified any exit beyond `0`/`1` as `BLOCKED`.
+
 ### Fixed
+
+- A path class never matched anything on Windows. A rule is written with
+  `/`, the separator a configuration file carries on every platform, but
+  the path the scanner matched it against was the one the operating system
+  built, which uses `\` on Windows. Every rule was therefore inert there,
+  and a documentation or fixture path stayed reported as an ordinary
+  finding. The path is now put into `/` before it is matched. A backslash
+  is still a legal character in a file name on Unix, so only the
+  platform's own separator is replaced.
+
+- The daemon and the MCP server each held a configuration they never
+  applied. The categories, severity threshold, anomaly detectors, and path
+  classes it named had no effect on any scan, and no caller could change
+  it: the field was written once at startup and never read again. Both
+  surfaces now publish the configuration in force (`config()`), apply it
+  when the scanner is built, and rebuild the scanner around a new
+  configuration (`set_config()`), so a host process that retunes scanning
+  sees the change in what is reported. A configuration that cannot be
+  applied — an unknown category, a path-class rule whose glob does not
+  compile, a severity threshold no severity name matches, or an unknown
+  anomaly detector — is rejected with the reason, and the configuration
+  already in force keeps serving. Installing a bundle now builds around
+  the configuration in force as well, so the rule set and the
+  configuration cannot disagree. The daemon's `DaemonState::config` field
+  is now private: read the configuration in force with `config()` and
+  change it with `set_config()`, so the field can no longer be written
+  behind the scanner's back.
+- A secret-triage verdict no longer names the placeholder marker it
+  matched. The reason read "contains the placeholder marker `changeme`",
+  so every placeholder finding put a fragment of the matched credential
+  into the report — the disclosure the triage contract exists to
+  prevent. The reason now names the signal only ("contains a known
+  placeholder marker"), and a regression test asserts that no reason
+  names the marker the verdict matched.
+
+- A scanner built from a configuration whose path-class rule names a
+  glob that does not compile is now rejected instead of built. The
+  matcher drops a rule it cannot compile, so the caller went on
+  believing a path class was in force while the rule classified
+  nothing. `Scanner::from_config` now returns
+  `PatternError::InvalidPathClass` naming the offending glob. The
+  command line already rejected such a rule before use.
+
+- The `llm-guardrails` PII-output marker no longer fires on the three
+  letters inside an ordinary identifier. The rule matched a bare token
+  anywhere on a line, so the camel-case rendering of React's `className`
+  attribute was reported as a high-severity PII marker on every JSX
+  element in an application. The marker now requires the token to start
+  at a word boundary (or after an underscore), so the standalone forms
+  (`SSN`, `ssn:`, `ssn_field`, `user_ssn`, `social security number`) and
+  the camel-case field name (`ssnNumber`) still fire while `className`,
+  `classNames`, and `assignment` stay silent.
+
+- Diff scans now attribute findings to the target file's actual line from
+  each unified-diff hunk, reject additions without a trustworthy file/hunk
+  anchor, correctly decode Git C-quoted paths, and apply baselines only
+  after location identities are remapped. Malformed or out-of-range octal
+  path escapes are rejected rather than truncated into a different path.
+
+- CLI scans: a scan that could not inspect every required unit exited 0
+  whenever it reported no findings, so an incomplete scan passed a CI
+  gate as clean. That covers an unreadable file or walk error (counted
+  in `stats.files_failed`) and every required inspection-ledger unit
+  that did not finish as `Analyzed` or `Suppressed` — the same
+  required-unit rule `InspectionLedger::allows_safe` applies. The core can
+  record a tree-sitter parse error as `Failed` when its optional feature is
+  enabled (the default CLI dependency does not enable that feature), a
+  size limit lands as a required `Skipped` unit, and a binary file as a
+  required `Unsupported` unit. These required incomplete inspections now
+  produce `EXIT_INCOMPLETE` (3) from the scan's receipt instead of passing
+  as clean; complete scans with findings remain exit 1, while failures
+  before a receipt is produced still propagate as errors. Optional units
+  and out-of-scope exclusions (`Excluded`, ignore rules) stay non-gating.
+  The scan renders and persists the evidence, including uninspected units
+  in the receipt ledger. Found by the 2026-10-05 audit of
+  `run_scan_and_get_exit_code`.
 
 - Release builds: the tarball mtime pin now reads the tag commit's time
   (`git show -s --format=%ct` on the commit, not the tag — on an
