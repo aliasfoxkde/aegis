@@ -52,6 +52,21 @@ fn every_pattern_regex_compiles() {
 }
 
 #[test]
+fn graphql_batch_limit_does_not_match_find_maxdepth_option() {
+    let pattern = all_patterns()
+        .into_iter()
+        .find(|pattern| pattern.name == "graphql-batch-limit")
+        .expect("graphql-batch-limit is a registered pattern");
+    let regex = Regex::new(&pattern.match_pattern).expect("registered regex compiles");
+
+    assert!(regex.is_match("query depth"));
+    assert!(regex.is_match("maxDepth: 12"));
+    assert!(
+        !regex.is_match("find /opt/firecraft-tar -maxdepth 3 -type f -name firecraft | head -10")
+    );
+}
+
+#[test]
 fn pattern_names_are_unique() {
     let mut seen = HashMap::new();
     let mut dupes = Vec::new();

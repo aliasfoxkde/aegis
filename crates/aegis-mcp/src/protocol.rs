@@ -21,12 +21,99 @@ use crate::AegisRpcImpl;
 use jsonrpc_core::{IoHandler, Params, Result, Value};
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 /// Protocol versions this server can speak, newest last.
 pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 3] = ["2024-11-05", "2025-03-26", "2025-06-18"];
 
 /// The version answered when the client requests nothing we support.
 pub const LATEST_PROTOCOL_VERSION: &str = "2025-06-18";
+
+/// Per-request wall-clock guard, in milliseconds, applied when the client
+/// does not configure one. Chosen below any plausible hang threshold yet
+/// high enough for pathological directory scans; `0` (or a direct
+/// `AEGIS_MCP_TOOL_TIMEOUT_MS=0`) disables the guard.
+pub const DEFAULT_TOOL_TIMEOUT_MS: u64 = 600_000;
+
+/// Environment knob for [`tool_timeout`]; a value of `0` disables the
+/// per-request guard entirely.
+pub const TOOL_TIMEOUT_ENV: &str = "AEGIS_MCP_TOOL_TIMEOUT_MS";
+
+/// Per-request wall-clock guard. Returns `None` when the guard is
+/// disabled via [`TOOL_TIMEOUT_ENV`] = `0`.
+#[must_use]
+pub fn tool_timeout() -> Option<std::time::Duration> {
+    let millis = std::env::var(TOOL_TIMEOUT_ENV)
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .unwrap_or(DEFAULT_TOOL_TIMEOUT_MS);
+    (millis > 0).then(|| std::time::Duration::from_millis(millis))
+}
+
+/// Wake-up handle for one in-flight request. When an MCP client sends
+/// `notifications/cancelled`, the transport wakes the response waiter.
+/// Blocking work already underway may continue until it finishes.
+#[derive(Default)]
+pub struct CancelState {
+    notify: tokio::sync::Notify,
+}
+
+impl CancelState {
+    /// Resolve when the owning client has cancelled the request this
+    /// handle was tracked for.
+    pub async fn cancelled(&self) {
+        self.notify.notified().await;
+    }
+}
+
+/// Registry of in-flight request wake-ups, keyed by the serialized
+/// JSON-RPC request id (`serde_json` text, so `"1"` for `id: 1` and
+/// `"\"1\""` for `id: "1"`, both sides identical).
+pub type CancelRegistry = Arc<Mutex<HashMap<String, Arc<CancelState>>>>;
+
+/// Create an empty cancellation registry for one server session.
+#[must_use]
+pub fn new_cancellation_registry() -> CancelRegistry {
+    Arc::new(Mutex::new(HashMap::new()))
+}
+
+/// Begin tracking a request so a later cancellation notification can
+/// reach it. The returned handle must be polled by the request task via
+/// [`CancelState::cancelled`].
+pub fn track_request(registry: &CancelRegistry, request_id: &Value) -> Arc<CancelState> {
+    let state = Arc::new(CancelState::default());
+    if let Ok(mut entries) = registry.lock() {
+        entries.insert(request_id.to_string(), state.clone());
+    }
+    state
+}
+
+/// Stop tracking a request whose task has ended; later cancellation
+/// notifications for it are then ignored, per the MCP cancellation rules.
+pub fn untrack_request(registry: &CancelRegistry, request_id: &Value) {
+    if let Ok(mut entries) = registry.lock() {
+        entries.remove(&request_id.to_string());
+    }
+}
+
+/// `notifications/cancelled` parameters. The `reason` field is optional
+/// per the spec and unused here beyond the deserializer ignoring it.
+#[derive(Debug, Deserialize)]
+pub struct CancelledParams {
+    #[serde(rename = "requestId")]
+    pub request_id: Value,
+}
+
+/// Wake a tracked request, if it is still in flight; unknown or
+/// already-completed ids are ignored, as the MCP spec directs.
+fn wake_cancelled(registry: &CancelRegistry, request_id: &Value) {
+    if let Ok(entries) = registry.lock() {
+        if let Some(state) = entries.get(&request_id.to_string()) {
+            state.notify.notify_one();
+        }
+    }
+}
 
 /// `initialize` request parameters, parsed liberally: unknown fields are
 /// ignored and missing optional fields fall back to descriptive
@@ -300,7 +387,11 @@ async fn dispatch_tool(rpc: &AegisRpcImpl, name: &str, arguments: Option<Value>)
 ///
 /// The custom method set stays registered separately (legacy surface);
 /// the two share the same [`AegisRpcImpl`], so results never diverge.
-pub fn register(io: &mut IoHandler, rpc: std::sync::Arc<AegisRpcImpl>) {
+///
+/// `registry` is the in-flight cancellation registry the transport
+/// tracks requests with; the `notifications/cancelled` handler wakes
+/// through it.
+pub fn register(io: &mut IoHandler, rpc: Arc<AegisRpcImpl>, registry: CancelRegistry) {
     io.add_method("initialize", |params: Params| {
         Box::pin(async move {
             let params: InitializeParams = parse_params(params)?;
@@ -312,6 +403,18 @@ pub fn register(io: &mut IoHandler, rpc: std::sync::Arc<AegisRpcImpl>) {
     // nothing to answer — jsonrpc-core runs notification handlers to
     // completion synchronously and emits no response frame.
     io.add_notification("notifications/initialized", |_params: Params| {});
+
+    // Cancellation (MCP utilities/cancellation): wake the tracked
+    // request; unknown, malformed, or already-completed cancellations
+    // are silently ignored, and the cancelled request emits no response.
+    // jsonrpc-core runs notification handlers synchronously, which is
+    // exactly right for a wake-up that stores no per-entry state beyond
+    // the notify permit.
+    io.add_notification("notifications/cancelled", move |params: Params| {
+        if let Ok(params) = params.parse::<CancelledParams>() {
+            wake_cancelled(&registry, &params.request_id);
+        }
+    });
 
     io.add_method("tools/list", |_params: Params| {
         Box::pin(async move { Ok(json!({ "tools": tool_definitions() })) })
@@ -330,6 +433,21 @@ pub fn register(io: &mut IoHandler, rpc: std::sync::Arc<AegisRpcImpl>) {
 
     io.add_method("ping", |_params: Params| {
         Box::pin(async move { Ok(json!({})) })
+    });
+
+    io.add_method("prompts/list", |_params: Params| {
+        Box::pin(async move { Ok(json!({ "prompts": [] })) })
+    });
+
+    io.add_method("resources/list", |_params: Params| {
+        Box::pin(async move { Ok(json!({ "resources": [] })) })
+    });
+
+    // Clients may probe resource templates even without a `resources`
+    // capability; an empty list keeps them from misreporting the server
+    // as broken (had they received a bare `-32601`).
+    io.add_method("resources/templates/list", |_params: Params| {
+        Box::pin(async move { Ok(json!({ "resourceTemplates": [] })) })
     });
 }
 
@@ -445,7 +563,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_unknown_tool_is_an_error_message() {
-        let state = std::sync::Arc::new(crate::ServerState::new());
+        let state = Arc::new(crate::ServerState::new());
         let rpc = AegisRpcImpl::new(state);
         let outcome = dispatch_tool(&rpc, "no_such_tool", None).await;
         let message = outcome.expect_err("unknown tool must fail");
@@ -454,7 +572,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_scan_string_rejects_missing_content() {
-        let state = std::sync::Arc::new(crate::ServerState::new());
+        let state = Arc::new(crate::ServerState::new());
         let rpc = AegisRpcImpl::new(state);
         let outcome = dispatch_tool(&rpc, "scan_string", Some(json!({}))).await;
         let message = outcome.expect_err("missing content must fail");
@@ -463,7 +581,7 @@ mod tests {
 
     #[tokio::test]
     async fn dispatch_scan_string_reports_findings() {
-        let state = std::sync::Arc::new(crate::ServerState::new());
+        let state = Arc::new(crate::ServerState::new());
         let rpc = AegisRpcImpl::new(state);
         // Credential-assignment form: the bare token alone does not clear
         // the string-mode entropy/assignment gates (verified e2e).
