@@ -1189,7 +1189,10 @@ mod tests {
 
     #[tokio::test]
     async fn run_request_reports_handler_task_failure() {
-        let work = tokio::spawn(async { panic!("synthetic handler failure") });
+        async fn fail_handler() -> Option<String> {
+            panic!("synthetic handler failure")
+        }
+        let work = tokio::spawn(fail_handler());
         let response = run_request(work, None, Some(json!(11)), None)
             .await
             .expect("a failed request has an error frame");
