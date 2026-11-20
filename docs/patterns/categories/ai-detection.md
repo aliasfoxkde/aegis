@@ -140,7 +140,7 @@ Academic formulaic phrasing in code or docs (informative signal, not proof)
 (?i)\b(?:novel (?:approach|method|framework|solution)|addresses? the (?:challenge|problem) of|in conclusion)\b
 ```
 
-**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -167,7 +167,7 @@ Formulaic AI-preferred verb in a comment (informative signal, not proof)
 (?i)(?://|#|/\*|\*|<!--).*\b(?:leverages?|utilizes?|delves?|showcases?|underscores?)\b.*
 ```
 
-**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -270,7 +270,7 @@ Hedging boilerplate characteristic of AI-written explanations
 (?i)\b(?:please note that|it'?s worth noting that|it is important to note(?: that)?|keep in mind that|kindly (?:note|be advised))\b
 ```
 
-**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 
@@ -297,7 +297,7 @@ Marketing boilerplate vocabulary common in AI-written prose (also common in huma
 (?i)\b(?:seamlessly|state-of-the-art|cutting-edge|game-?changer|blazing(?:ly)? fast|robust solution|comprehensive suite|unlock the (?:full )?potential|elevate your)\b
 ```
 
-**Reference**: <https://www.nature.com/articles/s41598-026-35203-3>
+**Reference**: <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>
 
 **Input that fires** (verified by the liveness test):
 

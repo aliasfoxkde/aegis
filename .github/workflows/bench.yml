@@ -58,8 +58,16 @@ jobs:
             echo "### Benchmark trend vs previous run" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             cargo bench --locked --workspace -- --baseline prev 2>&1 \
-              | tee bench.log \
-              | grep -E "^(\w|time:|change:)" >> "$GITHUB_STEP_SUMMARY" || true
+              | tee bench.log
+            if grep -E "^(\w|time:|change:)" bench.log >> "$GITHUB_STEP_SUMMARY"; then
+              :
+            else
+              grep_status=$?
+              # No matching Criterion lines is fine; grep errors are not.
+              if [[ "$grep_status" -ne 1 ]]; then
+                exit "$grep_status"
+              fi
+            fi
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No stored baseline (first run or cache miss) — seeding." \
