@@ -5,10 +5,11 @@
 handoff task. Written in the isolated NVMe worktree
 `/home/mkinney/worktrees/pa-handoff-aegis-20261011`. No product code, no
 fixtures, no builds, no measurement runs were produced by this document.
-**Base revision:** Aegis `9bf61f3` (= merge of PR #168; `origin/main` is one
-commit ahead at `bebadc7`, PR #172, `crates/aegis-mcp` tests only — no file
-this plan touches). All Aegis citations below were read directly from this
-tree at `9bf61f3`.
+**Base revision:** Aegis `db42bbe852e1f4af0ba865a114f9d4d276830bca` (`origin/main`,
+verified 2026-11-20). Aegis source citations and line numbers in this
+handoff and its fixtures README were rechecked against this revision; the
+measurements and GitHub documentation observations in §9 remain historical
+observations from 2026-10-11 unless explicitly re-run.
 **Status:** Proposal. Nothing here is implemented, measured, or ratified.
 Every threshold/mapping introduced is labeled **PROPOSED** until the
 operator signs off.
@@ -80,18 +81,19 @@ plan's divergence register.
 
 ## 2. Scope selection — why this, why now
 
-### 2.1 Active fronts excluded (worktree/PR overlap check, 2026-10-11)
+### 2.1 Active fronts excluded (worktree/PR overlap check, refreshed 2026-11-20)
 
-Checked before selecting scope: open PRs and their changed files
-(`gh pr diff --name-only`, §9.2), the git worktree list, and
-`agent-locks list` (no active locks).
+Refreshed 2026-11-20 against the current open PR list, changed files, and
+worktree inventory. The rows below capture the remaining relevant fronts;
+the 2026-10-11 inventory commands in §9.2 are historical evidence only.
 
 | Front | PR / worktree | Files touched | Conflict with this plan |
 |---|---|---|---|
-| Scan-status & diff-attribution hardening | PR #169 (draft), worktree `aegis-scan-hardening-mainline-20261011` | `crates/aegis-core/src/scanner.rs`, `crates/aegis-core/src/finding.rs`, `crates/aegis-cli/src/scanner.rs`, `scripts/ci/classify_aegis_sarif.py` (+docs, `.gitforce.yml`) | None on `crates/aegis-cli/src/output.rs`. Its new classifier script reads only `runs[].properties.inspectionLedger` — it does not constrain rule metadata (§9.2). **Caveat:** it edits `crates/aegis-core/src/finding.rs`, which P2 also edits; branch P2 after #169 merges. |
-| Diff header correctness / EOF fail-closed | PRs #170, #171 (drafts) | `crates/aegis-core/src/scanner.rs` + `scanner_behaviors.rs` only | None |
-| MCP sandbox boundary tests | worktree `aegis-parity-corpus-s2-20261011`, branch `codex/aegis-mcp-path-safety-audit-20261011` (head `bee833c`) | `crates/aegis-mcp` tests/docs | None |
-| Dependency bumps | PR #173 | `Cargo.lock` | None |
+| Scan-status & diff-attribution hardening | PR #169 closed unmerged; relevant fail-closed work landed via PR #180 | `crates/aegis-core/src/scanner.rs`, `crates/aegis-core/src/finding.rs`, `crates/aegis-cli/src/scanner.rs`, `scripts/ci/classify_aegis_sarif.py` (+docs, `.gitforce.yml`) | No active overlap on `crates/aegis-cli/src/output.rs`. The current classifier reads `runs[].properties.inspectionLedger`; it does not constrain rule metadata. The former `finding.rs` collision constraint is gone. |
+| Diff header correctness / EOF fail-closed | PRs #170, #171 closed unmerged; follow-up work landed via PR #180 | `crates/aegis-core/src/scanner.rs` + `scanner_behaviors.rs` only | No active overlap |
+| MCP execution/resource bounds | PR #208, draft | MCP transport and tool handlers, tests, docs | No overlap with SARIF emitter or finding metadata |
+| SARIF consumer handoff corrections | PR #174, draft | `docs/handoffs/2026-10-11-sarif-github-consumer-parity.md` and fixture README | This handoff is the PR's intended documentation scope |
+| Dependency/action updates | PR #207 | GitHub Actions dependency files | No source overlap |
 
 No open PR or worktree touches `crates/aegis-cli/src/output.rs`, the
 pattern modules' reference/tags metadata, or SARIF shape. This plan owns
@@ -100,10 +102,9 @@ those files exclusively.
 ### 2.2 Candidates considered and rejected
 
 - **D-01 partial-failure exit semantics (P0 in the parity register):**
-  already owned by the in-flight hardening wave — PR #169 ships the
-  fail-closed ledger classifier (`scripts/ci/classify_aegis_sarif.py`)
-  and its scanner-side predicate work. Starting D-01 here would duplicate
-  active work.
+  already closed out: the fail-closed ledger classifier
+  (`scripts/ci/classify_aegis_sarif.py`) and scanner-side predicate work
+  landed through PR #180. Starting D-01 here would duplicate shipped work.
 - **Gitleaks-style proximity matching** (`docs/ENHANCEMENT_ROADMAP.md`
   item 3, "Low effort 1–2 weeks"): an engine-hot-path change landing in
   `crates/aegis-core/src/scanner.rs` — the single file three open PRs are
@@ -164,20 +165,20 @@ All in `crates/aegis-cli/src/output.rs`:
 
 ### 3.2 Metadata that already exists and can carry the new fields (VERIFIED)
 
-- `Finding` (`crates/aegis-core/src/finding.rs:89-130`, serde
-  `Serialize`/`Deserialize` at **:88**) carries `reference: Option<String>`
-  (**:113**), `remediation` (**:116**), `tags: Vec<String>` (**:119**),
+- `Finding` (`crates/aegis-core/src/finding.rs:90-137`, serde
+  `Serialize`/`Deserialize` at **:91**) carries `reference: Option<String>`
+  (**:116**), `remediation` (**:119**), `tags: Vec<String>` (**:122**),
   `fingerprint` (**:127**), `stable_id` (**:130**). JSON output serializes
-  findings directly (`write_json`, `output.rs:146-164`), so these fields
+  findings directly (`write_json`, `output.rs:164-181`), so these fields
   are already consumer-visible in `--format json`.
 - **`stable_id` is content-free** — `"aegis-" + sha256("pattern|category|
-  file|line|column")` (`finding.rs:152-160`). It is the safe candidate for
+  file|line|column")` (`finding.rs:193-204`). It is the safe candidate for
   an **Aegis supplemental** `partialFingerprints` key — safe because it
   hashes only locator fields, never matched content. It is not a key
   GitHub documents consuming: code scanning "only uses the
   `primaryLocationLineHash`" (§3.4-4). Corrected framing in DEC-5.
 - **`fingerprint` is content-derived** — includes
-  `sha256(matched_content)` (`finding.rs:147-150`). It must **not** be
+  `sha256(matched_content)` (`finding.rs:188-192`). It must **not** be
   exposed in an uploaded artifact: a SHA-256 of a matched secret is an
   offline-confirmation oracle for low-entropy secrets. See §4 DEC-5.
 - `Pattern` (`crates/aegis-patterns/src/lib.rs:37-77`) carries
@@ -267,11 +268,11 @@ P2 should transcribe them as the starting point for score parity
 | ID | Decision | Status |
 |---|---|---|
 | DEC-1 | Severity→`security-severity` score map. **PROPOSED:** critical→`"9.5"`, high→`"8.5"`, medium→`"5.5"`, low→`"2.0"` (mid-band per GitHub's documented bands, §3.4-1); `info` and unknown → property **omitted** (never `"0.0"`, which GitHub reads as "no severity" — acceptable, but omission is honest and shorter). Alternatives: copy Atheon's exact scores from the pin (score parity) — operator picks one; if Atheon's values are transcribed, record them here. | PROPOSED |
-| DEC-2 | Which rules get `security` tag + `security-severity`. **PROPOSED seed:** all categories **except** the non-security quality set `accessibility, code-quality, data-visualization, performance, pwa, web-development, metadata, typescript, frameworks, finance, healthcare`. Operator ratifies the exclusion list at P1 exit; the ratified list becomes a test fixture, not prose. Rationale: Aegis is a security scanner; the burden of proof sits on exclusion, not inclusion. | PROPOSED |
-| DEC-3 | Rules array is findings-derived today (`output.rs:251-264`). Options: (a) keep findings-derived and accept metadata appearing only for rules that fired; (b) switch `driver.rules` to the full enabled registry via the aegis-patterns catalog. **PROPOSED:** (a) for P1 (no dependency on patterns crate in the CLI output path, zero behavior risk), revisit (b) only if P0-2 shows GitHub needs stable rule inventory across runs. | PROPOSED |
+| DEC-2 | Which rules get `security` tag + `security-severity`. **PROPOSED seed:** do not tag categories by default. Start with an explicit, operator-ratified security-category allowlist; pin it as a test fixture before P1. The initial denylist includes `accessibility, ai-detection, ai-safety, ai-slop, code-quality, data-visualization, devops, finance, frameworks, git-hygiene, git-ops, graphql, healthcare, metadata, performance, pwa, shift-left, typescript, web-development`. Review every remaining category individually; an omitted category is not implicitly security. | PROPOSED |
+| DEC-3 | Rules array is findings-derived today (`output.rs:308-321`). Options: (a) keep findings-derived and accept metadata appearing only for rules that fired; (b) switch `driver.rules` to the full enabled registry via the aegis-patterns catalog. **PROPOSED:** (a) for P1 (no dependency on patterns crate in the CLI output path, zero behavior risk), revisit (b) only if P0-2 shows GitHub needs stable rule inventory across runs. | PROPOSED |
 | DEC-4 | Emit `taxonomies[]` for CWE? Emit it as SARIF-2.1.0-correct output + Atheon parity regardless of P0-2 outcome, but the docs and CHANGELOG may claim GitHub display **only** with P0-2 evidence. | PROPOSED |
-| DEC-5 | **No production `partialFingerprints` in this phase.** (a) GitHub documents `primaryLocationLineHash` as the key it uses (§3.4-4); it does not document any custom key as consumed. Aegis does not emit a line hash because it would expose a source-line-derived hash, which may include a detected secret. (b) `{"aegisStableId/v1": <stable_id>}` is SARIF-legal and content-safe (`finding.rs:152-160`), but this handoff does not implement it: there is no demonstrated GitHub benefit. P0-3 may record a narrowly scoped observed result for its synthetic fixture; it cannot establish that GitHub recognizes the custom key or guarantee alert lineage. (c) **Never emit `fingerprint`** — it embeds `sha256(matched_content)` (`finding.rs:147-150`), an offline oracle against low-entropy secrets. | PROPOSED (rule (c) is not negotiable without operator sign-off) |
-| DEC-6 | `severity_to_sarif_level` (`output.rs:317-324`) stays byte-identical. The `level` map plus the ledger is a consumed contract (PR #169's classifier, `PLATFORM_INTEGRATION.md:114`); this plan adds fields, never moves existing ones. | DECIDED |
+| DEC-5 | **No production `partialFingerprints` in this phase.** (a) GitHub documents `primaryLocationLineHash` as the key it uses (§3.4-4); it does not document any custom key as consumed. Aegis does not emit a line hash because it would expose a source-line-derived hash, which may include a detected secret. (b) `{"aegisStableId/v1": <stable_id>}` is SARIF-legal and content-safe (`finding.rs:193-204`), but this handoff does not implement it: there is no demonstrated GitHub benefit. P0-3 may record a narrowly scoped observed result for its synthetic fixture; it cannot establish that GitHub recognizes the custom key or guarantee alert lineage. (c) **Never emit `fingerprint`** — it embeds `sha256(matched_content)` (`finding.rs:188-192`), an offline oracle against low-entropy secrets. | PROPOSED (rule (c) is not negotiable without operator sign-off) |
+| DEC-6 | `severity_to_sarif_level` (`output.rs:375-381`) stays byte-identical. The `level` map plus the ledger is a consumed contract (PR #180's classifier, `PLATFORM_INTEGRATION.md:114`); this plan adds fields, never moves existing ones. | DECIDED |
 
 ---
 
@@ -290,7 +291,7 @@ P3/P4 are small.
 | Field | Content |
 |---|---|
 | Task | (P0-1) In a throwaway GitHub repo, upload minimal SARIF variants through the supported code-scanning action: (i) rule with `security-severity` only; (ii) same + `security` in rule tags. Record the observed severity behavior without generalizing beyond this repository/tool version. (P0-2) Test whether CWE/taxonomy metadata from a third-party SARIF upload is accepted and displayed; record unknown or unavailable UI behavior as unknown. (P0-3) In a disposable repository with a harmless synthetic finding (no secret or sensitive source line), compare repeated uploads across two commits using the `upload-sarif` action and the SARIF API: omit fingerprints, include only the proposed Aegis supplemental key, and include a valid `primaryLocationLineHash` only in the synthetic fixture. Record action/API versions, upload IDs, and whether the same finding remains one alert or duplicates. This is an empirical compatibility probe, not permission to add source-content hashes to production Aegis output. |
-| Owner / model role | infra-operator executes; operator reads results; parity-analyst drafts the sample SARIFs from `output.rs:166-308` shape |
+| Owner / model role | infra-operator executes; operator reads results; parity-analyst drafts the sample SARIFs from `output.rs:184-364` shape |
 | Validation | Reproducible SARIF fixtures and a dated evidence receipt stored under `docs/handoffs/2026-10-11-sarif-contract-p0/` (or a linked evidence repo); record action version, API path, commit, upload ID, and observed result for each run. Do not store source lines containing real secrets. |
 | Acceptance | DEC-1/DEC-2/DEC-4 clauses that were PROPOSED-pending-P0 are flipped to DECIDED only where the evidence answers them. DEC-5 stays no-fingerprint for production in this phase; record the synthetic probe observation without inferring that GitHub recognizes a custom key or guarantees lineage. Resolve or preserve UNKNOWN items §7.2 explicitly. |
 | Risks | Uses a code-scanning enable on a scratch repo — disposable; nothing touches production lanes |
@@ -300,7 +301,7 @@ P3/P4 are small.
 
 | Field | Content |
 |---|---|
-| Task | In `crates/aegis-cli/src/output.rs`: add SARIF rule `properties` (`tags`, `security-severity`) and `helpUri` to `SarifRule` (**:205-209**); forward `Finding.tags`/`Finding.reference` (already serde-visible, `finding.rs:113,119`). Apply DEC-1 scores + DEC-2 category list (the list lives as a const table with a doc comment naming the ratifying decision record). Do not add `partialFingerprints` in this phase: the custom key has no documented GitHub behavior, and the recognized line hash is excluded by the source-content hash rule. Do not touch `severity_to_sarif_level` (DEC-6). |
+| Task | In `crates/aegis-cli/src/output.rs`: add SARIF rule `properties` (`tags`, `security-severity`) and `helpUri` to `SarifRule` (**:223-227**); forward `Finding.tags`/`Finding.reference` (already serde-visible, `finding.rs:116,122`). Apply DEC-1 scores + DEC-2 category list (the list lives as a const table with a doc comment naming the ratifying decision record). Do not add `partialFingerprints` in this phase: the custom key has no documented GitHub behavior, and the recognized line hash is excluded by the source-content hash rule. Do not touch `severity_to_sarif_level` (DEC-6). |
 | Source target | `crates/aegis-cli/src/output.rs` only (plus its tests) |
 | Owner / model role | aegis-maintainer / standard model for the mechanical emission; heavy-reasoning review for the category list and score map |
 | Validation | `cargo test -p aegis-cli --lib output` (extends the four shape-pinning tests, §3.1); `cargo test -p aegis-cli --test cli_integration`; full gates per §6 |
@@ -316,15 +317,15 @@ P3/P4 are small.
 | Source target | `crates/aegis-patterns/src/*.rs`, `crates/aegis-core/src/finding.rs` (+ `crates/aegis-core/src/pattern.rs` for `PatternDefinition`), generated `docs/patterns/` |
 | Owner / model role | parity-analyst drafts the mapping table (heavy-reasoning model for rule→CWE judgment); aegis-maintainer applies + runs the regeneration loop; operator adjudicates disputed rows and signs waivers |
 | Validation | **The full pattern authoring loop is mandatory** (`docs/planning/HANDOFF.md:53-63`): `cargo run -p aegis-patterns --example dump_patterns`, `scripts/generate_examples.py`, `--example generate_docs`, then `cargo test -p aegis-core --test pattern_liveness` and the registry-hygiene docs-freshness test. Plus the corpus lane (`corpus_precision_recall`) per the standing rule that pattern-file edits always run it — even though this change cannot alter matching, the lane is the proof. |
-| Acceptance | (1) Registry hygiene + liveness + corpus gates green. (2) Coverage report committed: N rules in security categories, M with CWE ids, W waived, M+W == N. (3) Equivalence proof (§6) green — zero finding delta. (4) `Finding.cwe_ids` serializes in JSON (additive; consumers that don't know it are unaffected — VERIFIED pattern: `Finding` is plain serde, `finding.rs:88`). |
-| Risks | Branch collision with PR #169 on `crates/aegis-core/src/finding.rs` (§2.1) — sequence P2 to start after #169 merges; if #169 stalls, rebase discipline over its head commit. Wrong-CWE noise (rule mapped to a fashionable-but-wrong CWE) — mitigated by the waiver option and operator adjudication. WASM crate serializes `Finding` too — additive field needs no API change but `crates/aegis-wasm` tests must run. |
+| Acceptance | (1) Registry hygiene + liveness + corpus gates green. (2) Coverage report committed: N rules in security categories, M with CWE ids, W waived, M+W == N. (3) Equivalence proof (§6) green — zero finding delta. (4) `Finding.cwe_ids` serializes in JSON (additive; consumers that don't know it are unaffected — VERIFIED pattern: `Finding` derives serde, `finding.rs:91`). |
+| Risks | `Finding` identity and ledger citations were refreshed against `db42bbe`; recheck them if implementation begins from a later base. Wrong-CWE noise (rule mapped to a fashionable-but-wrong CWE) — mitigated by the waiver option and operator adjudication. WASM crate serializes `Finding` too — additive field needs no API change but `crates/aegis-wasm` tests must run. |
 | Rollback | Test-only + additive metadata; revert the PR. The mapping table should live in one module so retraction is one file. |
 
 ### P3 — CWE into SARIF (+ taxonomy decision)
 
 | Field | Content |
 |---|---|
-| Task | `SarifRule` gains CWE in `properties` (e.g. `properties.cwe` or tags `cwe-532` style — match whatever P0-2 showed GitHub honors; SARIF-standards-correct taxonomies per DEC-4 otherwise). `SarifResult` unchanged beyond P1. Update `PLATFORM_INTEGRATION.md:114` (the documented SARIF contract) and `docs/guides/CICD_INTEGRATION.md:210-218` (the "Upload SARIF to GitHub Security tab" section) to state exactly what is emitted and what GitHub does with it — with the P0 evidence caveat, per DEC-4. CHANGELOG under Unreleased. |
+| Task | `SarifRule` gains CWE in `properties` (e.g. `properties.cwe` or tags `cwe-532` style — match whatever P0-2 showed GitHub honors; SARIF-standards-correct taxonomies per DEC-4 otherwise). `SarifResult` unchanged beyond P1. Update `PLATFORM_INTEGRATION.md:114` (the documented SARIF contract) and `docs/guides/CICD_INTEGRATION.md:279-287` (the `## SARIF Output` upload example) to state exactly what is emitted and what GitHub does with it — with the P0 evidence caveat, per DEC-4. CHANGELOG under Unreleased. |
 | Owner / model role | aegis-maintainer / standard model |
 | Validation | Same test set as P1 + a fixture asserting CWE appears for a mapped rule and is absent for a waived one |
 | Acceptance | Docs and code agree verbatim (the docs-freshness discipline applied to the platform contract); D-11 row in the parity handoff updated to "implemented, evidence: this file" |
@@ -365,7 +366,7 @@ cargo test -p aegis-cli --test cli_integration
 # P2 — pattern metadata
 cargo test -p aegis-patterns --lib
 cargo test -p aegis-core --test pattern_liveness
-cargo test -p aegis-core --test registry_hygiene   # docs-freshness lives here
+cargo test -p aegis-patterns --test registry_hygiene   # docs-freshness lives here
 cargo test -p aegis-core --test corpus_precision_recall   # always run when touching patterns/
 ```
 
@@ -409,7 +410,7 @@ must not touch a regex, the walker, the suppression parser, or the ledger.
    third-party tools (docs qualifier is CodeQL phrasing) — P0-1. The
    plan emits the tag for security categories regardless (cheap,
    honest).
-3. **Current consumer inventory of Aegis SARIF** beyond PR #169's ledger
+3. **Current consumer inventory of Aegis SARIF** beyond PR #180's ledger
    classifier — never audited. P1 is additive-only, so unknown consumers
    are safe by construction; note it in the PR description.
 4. **Atheon's exact security-severity score values** at the pin (the
@@ -431,7 +432,7 @@ must not touch a regex, the walker, the suppression parser, or the ledger.
 | Wrong CWE on hundreds of rules (data-quality debt) | Consumer distrust, rework | Waiver path is first-class; category defaults used sparingly; operator adjudicates; coverage report is a committed artifact, not prose |
 | `security` tag applied to non-security rules | Dishonest filtering in GitHub UI | DEC-2 exclusion list ratified as a test fixture |
 | Content-hash exposure via fingerprints | Secret-confirmation oracle in an uploaded artifact | DEC-5 prohibition; fixture test greps the SARIF for the content-hash shape |
-| Merge collision with PR #169 on `finding.rs` | Rebase churn | P2 sequenced after #169; P1 touches only `output.rs` (verified untouched by all open PRs, §2.1) |
+| `finding.rs` citations drift after source changes | Misleading provenance | Re-verify citations against the implementation base before P2; P1 touches only `output.rs` |
 | Strict downstream SARIF validators reject new members | Consumer breakage | All added members are documented SARIF 2.1.0 / GitHub-supported; schema validation in tests; P0 uploads exercise the real ingestion path |
 | Scope creep into rules-inventory (DEC-3 option b) | Couples CLI output to the patterns crate, grows blast radius | Explicitly deferred; revisit only on P0 evidence |
 | Coverage floor regression from new serialization code | CI red | New branches are tiny; tests pin every emitted field shape |
@@ -446,8 +447,8 @@ must not touch a regex, the walker, the suppression parser, or the ledger.
   does not reduce to a mechanical docs-regeneration miss — halt; metadata
   work must never destabilize the detection gates that the parity and
   qualification work depend on.
-- PR #169 lands changes to SARIF shape (it does not today) — re-baseline
-  §3.1 before P1.
+- A future PR changes SARIF shape or the inspection-ledger contract —
+  re-baseline §3.1 before P1.
 
 ---
 
@@ -455,9 +456,9 @@ must not touch a regex, the walker, the suppression parser, or the ledger.
 
 ### 9.1 Revisions
 
-- Aegis: this worktree at `9bf61f3` (merge of PR #168); `origin/main`
-  fetched 2026-10-11 = `bebadc7` (PR #172, `crates/aegis-mcp` tests only —
-  no file cited here differs).
+- Aegis: source citations re-verified against `origin/main`
+  `db42bbe852e1f4af0ba865a114f9d4d276830bca` on 2026-11-20. Historical
+  P0 measurements remain pinned to their 2026-10-11 inputs.
 - Atheon-Enhanced: cited only via the parity handoff
   `docs/handoffs/2026-10-11-aegis-atheon-parity-and-rollout.md`, pin
   `bc42edf` (§13.1 there).
@@ -500,7 +501,7 @@ list_projects → freshest aegis indexes:
     home-mkinney-worktrees-aegis-scan-hardening-mainline-20261011 (4,771 nodes)
     home-mkinney-worktrees-aegis-parity-corpus-s2-20261011 (4,676 nodes)
 search_graph(query="sarif output severity level") on the scan-hardening index
-    → confirmed write_sarif @ output.rs:166-308, severity_to_sarif_level @ :317-324,
+    → confirmed write_sarif @ output.rs:184-364, severity_to_sarif_level @ :375-381,
       test inventory; cross-checked against this tree (identical lines)
 ```
 

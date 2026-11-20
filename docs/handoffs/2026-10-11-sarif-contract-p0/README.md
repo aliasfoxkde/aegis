@@ -23,17 +23,17 @@ One identity is shared so each variant differs from its sibling in exactly one v
 
 | Field | Value | Shape source |
 |---|---|---|
-| SARIF version | `2.1.0` | `crates/aegis-cli/src/output.rs:289` |
-| driver | `name: "Aegis"`, `version: "0.6.4"` | `output.rs:293-294` (`CARGO_PKG_VERSION`; workspace `Cargo.toml` `[workspace.package]`) |
-| rule `id` | `aegis-8df48180634c583c1bd7d2f67cd63843faba1b90ffe640b16f54c378d3126a55` | emitter sets `rules[].id` to `stable_id` (`output.rs:258-264`) |
+| SARIF version | `2.1.0` | `crates/aegis-cli/src/output.rs:347` |
+| driver | `name: "Aegis"`, `version: "0.6.4"` | `output.rs:351-352` (`CARGO_PKG_VERSION`; workspace `Cargo.toml` `[workspace.package]`) |
+| rule `id` | `aegis-8df48180634c583c1bd7d2f67cd63843faba1b90ffe640b16f54c378d3126a55` | emitter sets `rules[].id` to `stable_id` (`output.rs:315-321`) |
 | rule `name` | `p0_synthetic_finding` | emitter sets `rules[].name` to the pattern name |
-| result `level` | `error` | `severity_to_sarif_level`: high maps to error (`output.rs:317-324`; frozen by DEC-6) |
-| location | `uri: "p0-synthetic-source.txt"`, `startLine: 1`, `startColumn: 1` | `output.rs:274-284` |
-| `inspectionLedger` | one unit, `status: "analyzed"`, `required: true` | serde shape at `crates/aegis-core/src/finding.rs:223,241-261,270-277` |
+| result `level` | `error` | `severity_to_sarif_level`: high maps to error (`output.rs:375-381`; frozen by DEC-6) |
+| location | `uri: "p0-synthetic-source.txt"`, `startLine: 1`, `startColumn: 1` | `output.rs:331-340` |
+| `inspectionLedger` | one unit, `status: "analyzed"`, `required: true` | serde shape at `crates/aegis-core/src/finding.rs:288,315-331,333-342` |
 
-All fixture content is synthetic. The content-derived `fingerprint` field (`finding.rs:123-127,147-150`) and `matched_text` appear nowhere, per DEC-5(c).
+All fixture content is synthetic. The content-derived `fingerprint` field (`finding.rs:130-133,188-192`) and `matched_text` appear nowhere, per DEC-5(c).
 
-**`stable_id` derivation** (formula VERIFIED at `finding.rs:152-159`: `"aegis-" + sha256("pattern|category|file|line|column")`):
+**`stable_id` derivation** (formula VERIFIED at `finding.rs:193-204`: `"aegis-" + sha256("pattern|category|file|line|column")`):
 
 ```bash
 printf '%s' 'p0_synthetic_finding|synthetic|p0-synthetic-source.txt|1|1' | sha256sum
@@ -54,7 +54,7 @@ The hashed line contains no credential material, so hashing it is harmless. Whet
 
 ## 3. Exact variant differences
 
-Base = the current emitter shape (`output.rs:166-308`) plus one finding. Each row is the complete delta from the named base; the files are otherwise byte-identical in structure.
+Base = the current emitter shape (`output.rs:184-364`) plus one finding. Each row is the complete delta from the named base; the files are otherwise byte-identical in structure.
 
 | Variant | Base | Delta |
 |---|---|---|
@@ -147,4 +147,6 @@ No upload was performed. `evidence-receipt-template.md` has one row per planned 
 
 ## 8. Provenance
 
-Shapes transcribed by hand from `crates/aegis-cli/src/output.rs:166-324` and `crates/aegis-core/src/finding.rs:88-159,223,241-277` in this tree (branch `codex/aegis-sarif-p0-fixtures-20261011`). Hash values are reproducible with the commands in section 2. This directory adds no product code, no builds, no scans, no uploads, and no dependency changes.
+The fixture payloads retain the captured Aegis 0.6.4 driver version from 2026-10-11. Source citations below were refreshed against `origin/main` `db42bbe` on 2026-11-20; the historical payload bytes were not regenerated.
+
+Shapes transcribed by hand from `crates/aegis-cli/src/output.rs:184-364` and `crates/aegis-core/src/finding.rs:90-205,288,315-342` in this tree (branch `codex/aegis-sarif-p0-fixtures-20261011`). Hash values are reproducible with the commands in section 2. This directory adds no product code, no builds, no scans, no uploads, and no dependency changes.
