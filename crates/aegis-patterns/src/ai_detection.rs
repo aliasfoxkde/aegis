@@ -7,7 +7,7 @@
 //! Treat findings as triage signals, never verdicts. The lexical markers below
 //! are the same "superficial statistical cues" the literature shows are
 //! brittle: formulaic human writing triggers them, and paraphrasing defeats
-//! them (Zhang & Zhou 2026, <https://www.nature.com/articles/s41598-026-35203-3>,
+//! them (Zhang & Zhou 2026, <https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/>,
 //! measured recall dropping 99.8% → 70.4% under moderate paraphrasing).
 //! Likelihood-based detectors (DetectGPT, Binoculars, Fast-DetectGPT) that
 //! don't share this weakness need token probabilities, which a static
@@ -403,7 +403,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "low".to_string(),
             min_entropy: None,
             description: "Formulaic AI-preferred verb in a comment (informative signal, not proof)".to_string(),
-            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            reference: Some("https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/".to_string()),
             tags: vec!["ai".to_string(), "language".to_string()],
             env_var: false,
             binary: false,
@@ -419,7 +419,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "low".to_string(),
             min_entropy: None,
             description: "Marketing boilerplate vocabulary common in AI-written prose (also common in human marketing copy)".to_string(),
-            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            reference: Some("https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/".to_string()),
             tags: vec!["ai".to_string(), "language".to_string()],
             env_var: false,
             binary: false,
@@ -435,7 +435,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "low".to_string(),
             min_entropy: None,
             description: "Hedging boilerplate characteristic of AI-written explanations".to_string(),
-            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            reference: Some("https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/".to_string()),
             tags: vec!["ai".to_string(), "language".to_string()],
             env_var: false,
             binary: false,
@@ -451,7 +451,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "low".to_string(),
             min_entropy: None,
             description: "Academic formulaic phrasing in code or docs (informative signal, not proof)".to_string(),
-            reference: Some("https://www.nature.com/articles/s41598-026-35203-3".to_string()),
+            reference: Some("https://pmc.ncbi.nlm.nih.gov/articles/PMC12877026/".to_string()),
             tags: vec!["ai".to_string(), "language".to_string()],
             env_var: false,
             binary: false,
