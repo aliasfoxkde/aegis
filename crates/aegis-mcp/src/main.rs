@@ -954,23 +954,21 @@ where
             // Cancellation must remain serviceable when the scan slots are
             // saturated; its handler only wakes a waiter and does no scan.
             None
+        } else if let Ok(permit) = requests.clone().try_acquire_owned() {
+            Some(permit)
+        } else if let Some(id) = request.get("id") {
+            send_frame(
+                &tx,
+                Incoming::Ready(protocol_error_frame(
+                    id,
+                    -32001,
+                    "server is at its concurrent request limit; retry later",
+                )),
+            )
+            .await?;
+            continue;
         } else {
-            if let Ok(permit) = requests.clone().try_acquire_owned() {
-                Some(permit)
-            } else if let Some(id) = request.get("id") {
-                send_frame(
-                    &tx,
-                    Incoming::Ready(protocol_error_frame(
-                        id,
-                        -32001,
-                        "server is at its concurrent request limit; retry later",
-                    )),
-                )
-                .await?;
-                continue;
-            } else {
-                continue;
-            }
+            continue;
         };
 
         // Track cancellation by the serialized id. Notifications carry no
@@ -1190,10 +1188,10 @@ mod tests {
 
     #[tokio::test]
     async fn run_request_reports_handler_task_failure() {
-        async fn fail_handler() -> Option<String> {
+        let work = tokio::spawn(async {
+            tokio::task::yield_now().await;
             panic!("synthetic handler failure")
-        }
-        let work = tokio::spawn(fail_handler());
+        });
         let response = run_request(work, None, Some(json!(11)), None)
             .await
             .expect("a failed request has an error frame");
@@ -1244,8 +1242,8 @@ mod tests {
         let prepared = prepare_bundle(None, &Config::default()).expect("shipped bundle compiles");
         assert!(prepared.pattern_count > 0);
         assert_eq!(prepared.pattern_count, prepared.bundle.len());
-        assert!(!prepared.version.is_empty());
-        assert!(!prepared.checksum.is_empty());
+        assert_ne!(prepared.version, "");
+        assert_ne!(prepared.checksum, "");
     }
 
     #[tokio::test]
