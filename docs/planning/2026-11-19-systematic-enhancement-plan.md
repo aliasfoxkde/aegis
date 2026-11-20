@@ -1,7 +1,7 @@
 # Aegis Systematic Enhancement Audit and Plan
 
 **Prepared:** 2026-11-20  
-**Status:** Refreshed against fetched `origin/main` (`db42bbe`). Phase 0 reconciliation is complete. Audit branch `codex/systematic-audit-20261120` contains the MCP/pattern hardening and handoff; draft PR #208 is open. CI run 44803141453 passed broad build/MSRV, formatting, platform, CodeQL, dependency policy, and link checks, but failed Clippy and patch coverage. Clippy was corrected in `161d55b`; patch coverage remains unresolved at 85.84% against the 90% floor.
+**Status:** Refreshed against fetched `origin/main` (`db42bbe`). Phase 0 reconciliation is complete. Audit branch `codex/systematic-audit-20261120` contains the MCP/pattern hardening and handoff; draft PR #208 is open. CI run 44833384158 passed build/MSRV, formatting, three-OS tests, CodeQL, dependency policy, and the Aegis security scan, but failed Clippy, patch coverage (86.69% against 90%), and one transient Nature link check (503). Clippy was corrected in the working tree; focused coverage tests and a DOI link replacement are in progress.
 
 ## Executive assessment
 
@@ -15,7 +15,7 @@ The initial checkout was `main` at `46cd30a`, 28 commits behind fetched `origin/
 
 - **Implemented:** MCP scan and bundle work now runs on blocking workers; active configuration is retained across bundle updates; request concurrency is capped at 32, the response queue is bounded, overload returns `-32001`, and docs explain that cancellation stops response waiting while already-running blocking work continues under its admission slot. Added a regression for `graphql-batch-limit` matching `find -maxdepth`.
 - **Local validation:** `cargo fmt --all -- --check` and `git diff --check` pass. Direct Cargo testing was blocked by the repository's NAS-build guard. Managed Aegis scan `723cd108-8d4a-404e-b668-4524841e448a` failed before scanning because the selected harness profile requires a missing `.aegis-baseline.json`; this is a harness configuration failure, not a scan result.
-- **PR disposition:** #206 (`parking_lot` 0.13) was closed because it raises MSRV to 1.95, incompatible with the workspace's Rust 1.88 promise. #207's rerun passed all checks; the earlier macOS job was cancelled, not a code failure. #174's five owner-reviewed documentation defects were corrected and pushed as `5a31112`; it remains draft pending CI/review. #208 is the audit draft PR; run 44803141453 passed broad build/platform/security checks but missed Clippy (fixed in `161d55b`) and patch coverage (85.84% vs 90%).
+- **PR disposition:** #206 (`parking_lot` 0.13) was closed because it raises MSRV to 1.95, incompatible with the workspace's Rust 1.88 promise. #207's rerun passed all checks; the earlier macOS job was cancelled, not a code failure. #174's five owner-reviewed documentation defects were corrected and pushed as `5a31112`; it remains draft pending CI/review. #208 remains draft. Its first Ubuntu run exposed an ordering assumption in `full_mcp_client_lifecycle_in_one_session`; the test now correlates responses by ID, and the latest run passed all three OS test jobs. The second run identified a `collapsible_else_if` Clippy finding, fixed in the working tree, patch coverage at 86.69% (new focused unit tests added), and a transient 503 for a valid Nature citation (replaced with the stable DOI URL).
 - **Checkout cleanup:** 136 local branches and 15 worktrees were found. Pruning remote refs removed 13 stale tracking refs; three fully merged unattached local branches were safely deleted. Gone/unmerged refs, historical release refs, and attached worktrees remain preserved pending mapping to PRs and durable work. The pre-reconcile audit backup remains untracked because the original directory is owned by `nobody` and cannot be removed by this account.
 
 ## Scope and limits
@@ -128,7 +128,7 @@ All items are proposed and unassigned. Start dependent implementation only after
 
 ## Recommended order
 
-1. Resolve PR #208's coverage floor without weakening the gate; require the complete CI set to pass before promoting or merging it.
+1. Push the current focused tests/lint/link fixes, then resolve any remaining PR #208 coverage deficit without weakening the gate; require the complete CI set to pass before promoting or merging it.
 2. Re-run managed scanning with a profile that does not require a nonexistent baseline, and save the scan receipt.
 3. Map remaining branches/worktrees to open PRs and durable work before deleting further refs.
 4. Confirm CI/review disposition for corrected draft PR #174; #206 is closed for MSRV incompatibility and #207's rerun is green.

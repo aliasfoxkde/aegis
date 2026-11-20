@@ -463,6 +463,55 @@ fn parse_params<T: serde::de::DeserializeOwned>(params: Params) -> Result<T> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn timeout_environment_uses_default_valid_values_and_disable_switch() {
+        let previous = std::env::var_os(TOOL_TIMEOUT_ENV);
+        std::env::remove_var(TOOL_TIMEOUT_ENV);
+        assert_eq!(
+            tool_timeout(),
+            Some(std::time::Duration::from_millis(DEFAULT_TOOL_TIMEOUT_MS))
+        );
+
+        std::env::set_var(TOOL_TIMEOUT_ENV, "25");
+        assert_eq!(tool_timeout(), Some(std::time::Duration::from_millis(25)));
+        std::env::set_var(TOOL_TIMEOUT_ENV, "0");
+        assert_eq!(tool_timeout(), None);
+        std::env::set_var(TOOL_TIMEOUT_ENV, "not-a-number");
+        assert_eq!(
+            tool_timeout(),
+            Some(std::time::Duration::from_millis(DEFAULT_TOOL_TIMEOUT_MS))
+        );
+
+        if let Some(value) = previous {
+            std::env::set_var(TOOL_TIMEOUT_ENV, value);
+        } else {
+            std::env::remove_var(TOOL_TIMEOUT_ENV);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_notification_wakes_the_tracked_request() {
+        let registry = new_cancellation_registry();
+        let request_id = json!(37);
+        let state = track_request(&registry, &request_id);
+        let rpc = AegisRpcImpl::new(Arc::new(crate::ServerState::new()));
+        let mut io = IoHandler::new();
+        register(&mut io, Arc::new(rpc), registry.clone());
+
+        let response = io
+            .handle_request(
+                r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":37}}"#,
+            )
+            .await;
+        assert!(response.is_none(), "notifications do not receive responses");
+        tokio::time::timeout(std::time::Duration::from_secs(1), state.cancelled())
+            .await
+            .expect("tracked cancellation wakes its waiter");
+
+        untrack_request(&registry, &request_id);
+        wake_cancelled(&registry, &request_id); // An already-finished request is ignored.
+    }
+
     fn params_from(value: Value) -> InitializeParams {
         serde_json::from_value(value).expect("initialize params parse")
     }

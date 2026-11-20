@@ -957,18 +957,18 @@ where
         } else {
             if let Ok(permit) = requests.clone().try_acquire_owned() {
                 Some(permit)
+            } else if let Some(id) = request.get("id") {
+                send_frame(
+                    &tx,
+                    Incoming::Ready(protocol_error_frame(
+                        id,
+                        -32001,
+                        "server is at its concurrent request limit; retry later",
+                    )),
+                )
+                .await?;
+                continue;
             } else {
-                if let Some(id) = request.get("id") {
-                    send_frame(
-                        &tx,
-                        Incoming::Ready(protocol_error_frame(
-                            id,
-                            -32001,
-                            "server is at its concurrent request limit; retry later",
-                        )),
-                    )
-                    .await?;
-                }
                 continue;
             }
         };
@@ -1160,6 +1160,94 @@ mod tests {
         let registry = scanner.registry();
         let patterns = registry.all();
         assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
+    }
+
+    #[tokio::test]
+    async fn run_request_returns_handler_response() {
+        let work = tokio::spawn(async { Some("response".to_string()) });
+        assert_eq!(
+            run_request(work, None, Some(json!(7)), None).await,
+            Some("response".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn run_request_times_out_with_a_correlated_error() {
+        let work = tokio::spawn(std::future::pending::<Option<String>>());
+        let response = run_request(
+            work,
+            None,
+            Some(json!(9)),
+            Some(std::time::Duration::from_millis(1)),
+        )
+        .await
+        .expect("a timed out request has an error frame");
+        let frame: Value = serde_json::from_str(&response).expect("timeout frame is JSON");
+        assert_eq!(frame["id"], 9);
+        assert_eq!(frame["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn run_request_reports_handler_task_failure() {
+        let work = tokio::spawn(async { panic!("synthetic handler failure") });
+        let response = run_request(work, None, Some(json!(11)), None)
+            .await
+            .expect("a failed request has an error frame");
+        let frame: Value = serde_json::from_str(&response).expect("failure frame is JSON");
+        assert_eq!(frame["id"], 11);
+        assert_eq!(frame["error"]["code"], -32603);
+    }
+
+    #[tokio::test]
+    async fn saturated_transport_rejects_requests_with_retryable_error() {
+        let request = br#"{"jsonrpc":"2.0","method":"ping","id":42}"#;
+        let reader = tokio::io::BufReader::new(&request[..]);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        read_frames(
+            reader,
+            Arc::new(IoHandler::new()),
+            protocol::new_cancellation_registry(),
+            None,
+            Arc::new(tokio::sync::Semaphore::new(0)),
+            tx,
+        )
+        .await
+        .expect("overload is a protocol response, not a transport failure");
+        match rx.recv().await.expect("overload response is sent") {
+            Incoming::Ready(frame) => {
+                let value: Value = serde_json::from_str(&frame).expect("response is JSON");
+                assert_eq!(value["id"], 42);
+                assert_eq!(value["error"]["code"], -32001);
+            }
+            Incoming::Task(_) => panic!("overload must be answered before dispatch"),
+        }
+    }
+
+    #[test]
+    fn prepare_bundle_builds_shipped_patterns() {
+        let prepared = prepare_bundle(None, &Config::default()).expect("shipped bundle compiles");
+        assert!(prepared.pattern_count > 0);
+        assert_eq!(prepared.pattern_count, prepared.bundle.len());
+        assert!(!prepared.version.is_empty());
+        assert!(!prepared.checksum.is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_bundle_accepts_a_safe_bundle_path() {
+        let cwd = std::env::current_dir().expect("read cwd");
+        let directory = tempfile::tempdir_in(cwd).expect("create in-sandbox fixture dir");
+        let path = directory.path().join("bundle.json.gz");
+        Bundle::new(Vec::new())
+            .save(&path)
+            .expect("write valid empty bundle");
+
+        let rpc = AegisRpcImpl::new(Arc::new(ServerState::new()));
+        let updated = rpc
+            .update_bundle(Some(path.to_string_lossy().into_owned()), false)
+            .await
+            .expect("safe bundle path loads and installs");
+        assert!(updated.success);
+        assert_eq!(updated.pattern_count, 0);
     }
 
     #[test]
