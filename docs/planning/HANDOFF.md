@@ -12,7 +12,7 @@ crates.io decision are closed out (see Known Issues)
 **Location:** `/nas/Temp/repos/aegis`
 
 > **Current execution authority:** Use `/nas/Temp/repos/Platform-Architecture/docs/planning/HANDOFF_AUDIT_2026-08-13.md` for verified cross-repository findings and `/nas/Temp/repos/Platform-Architecture/docs/planning/CODEX_CLI_EXECUTION_PACKETS_2026-08-13.md` for bounded implementation sessions.
-**Evidence boundary (central audit):** branch `main`, HEAD `086d478c0f89608cf926795910cf5a0881c0852e` (`origin/main`, verified 2026-11-16), 0 dirty status entries.
+**Evidence boundary (source baseline):** branch `origin/main`, HEAD `db42bbe852e1f4af0ba865a114f9d4d276830bca`, 0 dirty status entries at fetch (2026-11-20). Implementation is on `codex/systematic-audit-20261120`.
 **MSRV:** 1.88 (pinned by locked deps `time 0.3.55` / `ignore 0.4.33`; CI and
 the release builder image both use `rust:1.88`)
 

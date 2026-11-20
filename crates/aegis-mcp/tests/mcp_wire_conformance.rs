@@ -2,8 +2,10 @@
 //!
 //! Each case in `fixtures/mcp_wire_conformance.json` is one session:
 //! the exact request lines go to the server's stdin, and every stdout
-//! frame is matched against the fixture's expected subset. This pins the
-//! MCP handshake, discovery, and error semantics against regressions —
+//! frame is matched against the fixture's expected subset, by request
+//! id in any arrival order (the server emits responses in task
+//! completion order, like the reference MCP SDK). This pins the MCP
+//! handshake, discovery, and error semantics against regressions —
 //! the property generic MCP clients depend on.
 
 // Test binary: panicking on failure *is* the assertion mechanism, and the
@@ -71,7 +73,9 @@ struct ExpectedFrame {
 }
 
 /// Assertions against the JSON inside `result.content[0].text` of a
-/// `tools/call` result.
+/// `tools/call` result. `frame` indexes the EXPECTED frame list, and the
+/// target response is located by that frame's request id so arrival
+/// ordering does not matter.
 #[derive(Deserialize)]
 struct ExpectedText {
     frame: usize,
@@ -227,21 +231,41 @@ fn assert_frame(expected: &ExpectedFrame, frame: &Value, case_name: &str, index:
     }
 }
 
-fn assert_text(expected: &ExpectedText, frames: &[Value], case_name: &str) {
-    let frame = &frames[expected.frame];
-    let text = resolve(frame, "result.content.0.text")
+fn assert_text(text: &ExpectedText, case: &ConformanceCase, raw_frames: &[String]) {
+    let expected = case
+        .frames
+        .get(text.frame)
+        .expect("expected frame index referenced by text");
+    let frame = raw_frames
+        .iter()
+        .map(|raw| serde_json::from_str::<Value>(raw).expect("raw frame is JSON"))
+        .find(|frame| frame.get("id") == Some(&expected.id))
+        .unwrap_or_else(|| {
+            panic!(
+                "case {:?}: no frame with id {} for text assertions",
+                case.name, expected.id
+            )
+        });
+    let value = resolve(&frame, "result.content.0.text")
         .and_then(Value::as_str)
-        .unwrap_or_else(|| panic!("case {case_name:?}: result.content.0.text missing: {frame}"));
-    for needle in &expected.must_contain {
+        .unwrap_or_else(|| {
+            panic!(
+                "case {:?}: result.content.0.text missing: {frame}",
+                case.name
+            )
+        });
+    for needle in &text.must_contain {
         assert!(
-            text.contains(needle.as_str()),
-            "case {case_name:?}: text must contain {needle:?}: {text}"
+            value.contains(needle.as_str()),
+            "case {:?}: text must contain {needle:?}: {value}",
+            case.name
         );
     }
-    for needle in &expected.must_not_contain {
+    for needle in &text.must_not_contain {
         assert!(
-            !text.contains(needle.as_str()),
-            "case {case_name:?}: text must not contain {needle:?}: {text}"
+            !value.contains(needle.as_str()),
+            "case {:?}: text must not contain {needle:?}: {value}",
+            case.name
         );
     }
 }
@@ -271,18 +295,38 @@ fn wire_conformance_cases_replay() {
             case.frames.len(),
             frames.len()
         );
-        for (index, expected) in case.frames.iter().enumerate() {
-            assert_frame(expected, &frames[index], &case.name, index);
+        // Frames are matched by request id, in any arrival order: the
+        // server emits responses in task-completion order (the reference
+        // MCP SDK does the same), so a single session with two requests
+        // must not be pinned to submission order.
+        for expected in &case.frames {
+            let index = frames
+                .iter()
+                .position(|frame| frame.get("id") == Some(&expected.id))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "case {:?}: no response frame with id {} among {frames:?}",
+                        case.name, expected.id
+                    )
+                });
+            let frame = frames.remove(index);
+            assert_frame(expected, &frame, &case.name, index);
         }
+        assert!(
+            frames.is_empty(),
+            "case {:?}: unmatched response frames: {frames:?}",
+            case.name
+        );
         if let Some(text) = &case.text {
-            assert_text(text, &frames, &case.name);
+            assert_text(text, case, &raw_frames);
         }
     }
 }
 
 /// The full lifecycle a generic MCP client performs, in one session:
 /// negotiate, signal readiness, discover, then call a tool. The frames
-/// must come back in request order with the request ids.
+/// must come back with the corresponding request ids. Independent requests
+/// may complete in either order, so correlate by id as a client must.
 #[test]
 fn full_mcp_client_lifecycle_in_one_session() {
     let requests = vec![
@@ -297,12 +341,22 @@ fn full_mcp_client_lifecycle_in_one_session() {
         "the notification must produce no frame: {lines:?}"
     );
 
-    let initialize: Value = serde_json::from_str(&lines[0]).expect("initialize frame is JSON");
+    let frames = lines
+        .iter()
+        .map(|line| serde_json::from_str::<Value>(line).expect("response frame is JSON"))
+        .collect::<Vec<_>>();
+    let initialize = frames
+        .iter()
+        .find(|frame| frame.get("id") == Some(&Value::from(1)))
+        .expect("initialize response has id 1");
     assert_eq!(initialize["id"], 1);
     assert_eq!(initialize["result"]["protocolVersion"], "2025-03-26");
     assert_eq!(initialize["result"]["serverInfo"]["name"], "aegis-mcp");
 
-    let tools: Value = serde_json::from_str(&lines[1]).expect("tools/list frame is JSON");
+    let tools = frames
+        .iter()
+        .find(|frame| frame.get("id") == Some(&Value::from(2)))
+        .expect("tools/list response has id 2");
     assert_eq!(tools["id"], 2);
     let tool_list = tools["result"]["tools"]
         .as_array()

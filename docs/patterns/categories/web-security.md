@@ -346,7 +346,7 @@ GraphQL depth limiting detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)query\s*depth|maxDepth|batch.*limit
+(?i)query\s*depth|maxDepth\s*[:=]|batch.*limit
 ```
 
 **Input that fires** (verified by the liveness test):

@@ -396,7 +396,7 @@ fn send_mcp_request_with_stderr_capture(request: &str) -> (String, String) {
 #[test]
 fn test_tracing_stays_off_stdout_json_rpc_clean() {
     // A request that produces at least one finding triggers internal span/logging.
-    let request = r#"{"jsonrpc":"2.0","method":"scan_string","params":["AWS_SECRET_KEY=abcdefghijk","test.rs"],"id":99}"#;
+    let request = r#"{"jsonrpc":"2.0","method":"scan_string","params":["AWS_SECRET_KEY=abcdefghijk","test.rs"],"id":99}"#; // aegis:ignore:aws-secret-key,env-credential-assignment -- synthetic fixtures
 
     let (stdout, _stderr) = send_mcp_request_with_stderr_capture(request);
 
