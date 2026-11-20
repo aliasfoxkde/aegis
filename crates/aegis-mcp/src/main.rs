@@ -368,14 +368,14 @@ impl AegisRpcImpl {
         let state = self.state.clone();
         Box::pin(async move {
             state.ensure_patterns_loaded().await?;
-            let scanner = Arc::clone(&state.scanner.read().await);
+            let scanner = Arc::clone(&*state.scanner.read().await);
             let bytes = content.len();
             let spawned = tokio::task::spawn_blocking(move || {
                 let findings = scanner.scan_string(&content, &source);
                 ScanResponse::for_string(findings, &source, bytes)
             })
             .await;
-            spawn_blocking_result(spawned, "string scan failed")
+            spawn_blocking_join(spawned, "string scan failed")
         })
     }
 
@@ -437,13 +437,13 @@ impl AegisRpcImpl {
         let state = self.state.clone();
         Box::pin(async move {
             state.ensure_patterns_loaded().await?;
-            let scanner = Arc::clone(&state.scanner.read().await);
+            let scanner = Arc::clone(&*state.scanner.read().await);
             let spawned = tokio::task::spawn_blocking(move || {
                 let findings = scanner.scan_env();
                 ScanResponse::for_environment(findings)
             })
             .await;
-            spawn_blocking_result(spawned, "environment scan failed")
+            spawn_blocking_join(spawned, "environment scan failed")
         })
     }
 
@@ -647,6 +647,15 @@ fn spawn_blocking_result<T, E: std::fmt::Display>(
         Ok(value) => value.map_err(|error| internal_error(format!("{context}: {error}"))),
         Err(join) => Err(internal_error(format!("{context}: task failed: {join}"))),
     }
+}
+
+/// Resolve a blocking task that returns a value directly, mapping a task
+/// panic into a JSON-RPC `InternalError`.
+fn spawn_blocking_join<T>(
+    spawned: std::result::Result<T, tokio::task::JoinError>,
+    context: &str,
+) -> Result<T> {
+    spawned.map_err(|join| internal_error(format!("{context}: task failed: {join}")))
 }
 
 fn serialize_result<T: Serialize>(value: T) -> Result<Value> {
