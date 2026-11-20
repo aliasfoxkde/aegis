@@ -1,7 +1,7 @@
 # Aegis Systematic Enhancement Audit and Plan
 
 **Prepared:** 2026-11-20  
-**Status:** Refreshed against fetched `origin/main` (`db42bbe`). Phase 0 reconciliation is complete. The first MCP/pattern hardening slice is committed on `codex/systematic-audit-20261120` as `42d679d`; focused validation is pending managed host capacity.
+**Status:** Refreshed against fetched `origin/main` (`db42bbe`). Phase 0 reconciliation is complete. Audit branch `codex/systematic-audit-20261120` contains the MCP/pattern hardening and handoff; draft PR #208 is open. CI run 44803141453 passed broad build/MSRV, formatting, platform, CodeQL, dependency policy, and link checks, but failed Clippy and patch coverage. Clippy was corrected in `161d55b`; patch coverage remains unresolved at 85.84% against the 90% floor.
 
 ## Executive assessment
 
@@ -14,13 +14,13 @@ The initial checkout was `main` at `46cd30a`, 28 commits behind fetched `origin/
 ### Execution update — 2026-11-20
 
 - **Implemented:** MCP scan and bundle work now runs on blocking workers; active configuration is retained across bundle updates; request concurrency is capped at 32, the response queue is bounded, overload returns `-32001`, and docs explain that cancellation stops response waiting while already-running blocking work continues under its admission slot. Added a regression for `graphql-batch-limit` matching `find -maxdepth`.
-- **Local validation:** `cargo fmt --all -- --check` and `git diff --check` pass. Direct Cargo testing was blocked by the repository's NAS-build guard; the host lease also rejected a local build because `/var/tmp` was 95% full and another full CI job held the storage lease. Managed Aegis scan `723cd108-8d4a-404e-b668-4524841e448a` was submitted and remained queued at the last check.
-- **Open PRs:** #206 (`parking_lot` 0.13) fails the Rust 1.88 MSRV gate; its upstream release notes raise MSRV to 1.95, incompatible with `Cargo.toml`. #207's checks pass except macOS tests; its failure log was not available through `gh run view --log-failed`. #174 remains a stale draft with five owner-reviewed document corrections and should be repaired or closed after the MCP slice is validated.
-- **Checkout cleanup:** 136 local branches and 15 worktrees were found. Only branches fully contained in `origin/main` and not attached to a worktree are eligible for automatic deletion; the large set of gone/unmerged refs and attached worktrees remains preserved pending mapping to open PRs and durable work.
+- **Local validation:** `cargo fmt --all -- --check` and `git diff --check` pass. Direct Cargo testing was blocked by the repository's NAS-build guard. Managed Aegis scan `723cd108-8d4a-404e-b668-4524841e448a` failed before scanning because the selected harness profile requires a missing `.aegis-baseline.json`; this is a harness configuration failure, not a scan result.
+- **PR disposition:** #206 (`parking_lot` 0.13) was closed because it raises MSRV to 1.95, incompatible with the workspace's Rust 1.88 promise. #207's rerun passed all checks; the earlier macOS job was cancelled, not a code failure. #174's five owner-reviewed documentation defects were corrected and pushed as `5a31112`; it remains draft pending CI/review. #208 is the audit draft PR; run 44803141453 passed broad build/platform/security checks but missed Clippy (fixed in `161d55b`) and patch coverage (85.84% vs 90%).
+- **Checkout cleanup:** 136 local branches and 15 worktrees were found. Pruning remote refs removed 13 stale tracking refs; three fully merged unattached local branches were safely deleted. Gone/unmerged refs, historical release refs, and attached worktrees remain preserved pending mapping to PRs and durable work. The pre-reconcile audit backup remains untracked because the original directory is owned by `nobody` and cannot be removed by this account.
 
 ## Scope and limits
 
-Inspected manifests, source modules, tests/corpora, CI and release workflows, current plans/audits, and GitHub PR/check state. Three read-only reviews covered core/patterns, CI/release, and interfaces. The graph MCP route was unavailable in this terminal, so source relationships were inspected with direct reads and repository search. Formatting and diff checks ran; tests/builds did not run because of host storage admission. The managed scan is queued. Resource and race risks still need focused verification.
+Inspected manifests, source modules, tests/corpora, CI and release workflows, current plans/audits, and GitHub PR/check state. Three read-only reviews covered core/patterns, CI/release, and interfaces. The graph MCP route was unavailable in this terminal, so source relationships were inspected with direct reads and repository search. Formatting and diff checks ran. CI provided compiled/test validation; its first run exposed Clippy and coverage failures. The local scan profile did not run the scanner because its baseline input was absent. Resource and path-race risks still need focused verification.
 
 ## Strengths to preserve
 
@@ -128,10 +128,10 @@ All items are proposed and unassigned. Start dependent implementation only after
 
 ## Recommended order
 
-1. Finish managed scan and focused tests for commit `42d679d`; repair any regressions before publishing the branch.
-2. Carry over the local handoff provenance commit, clean only fully merged unattached refs, and map remaining branches/worktrees to open PRs before any further deletion.
-3. Repair the five owner-reviewed defects in draft PR #174 or close it with a durable disposition.
-4. Close or replace PR #206 because `parking_lot` 0.13 is incompatible with MSRV 1.88; diagnose PR #207's macOS test failure.
+1. Resolve PR #208's coverage floor without weakening the gate; require the complete CI set to pass before promoting or merging it.
+2. Re-run managed scanning with a profile that does not require a nonexistent baseline, and save the scan receipt.
+3. Map remaining branches/worktrees to open PRs and durable work before deleting further refs.
+4. Confirm CI/review disposition for corrected draft PR #174; #206 is closed for MSRV incompatibility and #207's rerun is green.
 5. Revalidate the 2026-11-16 gap analysis against refreshed main and close only remaining verified issues.
 6. Establish per-rule evidence metrics and grow the realistic corpus before adding large rule batches.
 7. Publish honest language coverage, then pilot parser-backed rules.

@@ -325,7 +325,8 @@ fn wire_conformance_cases_replay() {
 
 /// The full lifecycle a generic MCP client performs, in one session:
 /// negotiate, signal readiness, discover, then call a tool. The frames
-/// must come back in request order with the request ids.
+/// must come back with the corresponding request ids. Independent requests
+/// may complete in either order, so correlate by id as a client must.
 #[test]
 fn full_mcp_client_lifecycle_in_one_session() {
     let requests = vec![
@@ -340,12 +341,22 @@ fn full_mcp_client_lifecycle_in_one_session() {
         "the notification must produce no frame: {lines:?}"
     );
 
-    let initialize: Value = serde_json::from_str(&lines[0]).expect("initialize frame is JSON");
+    let frames = lines
+        .iter()
+        .map(|line| serde_json::from_str::<Value>(line).expect("response frame is JSON"))
+        .collect::<Vec<_>>();
+    let initialize = frames
+        .iter()
+        .find(|frame| frame.get("id") == Some(&Value::from(1)))
+        .expect("initialize response has id 1");
     assert_eq!(initialize["id"], 1);
     assert_eq!(initialize["result"]["protocolVersion"], "2025-03-26");
     assert_eq!(initialize["result"]["serverInfo"]["name"], "aegis-mcp");
 
-    let tools: Value = serde_json::from_str(&lines[1]).expect("tools/list frame is JSON");
+    let tools = frames
+        .iter()
+        .find(|frame| frame.get("id") == Some(&Value::from(2)))
+        .expect("tools/list response has id 2");
     assert_eq!(tools["id"], 2);
     let tool_list = tools["result"]["tools"]
         .as_array()
