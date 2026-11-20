@@ -513,7 +513,7 @@ impl AegisRpcImpl {
             let _guard = state.apply_lock.lock().await;
             let config = state.config.read().await.clone();
             let prepared =
-                tokio::task::spawn_blocking(move || prepare_bundle(validated, config)).await;
+                tokio::task::spawn_blocking(move || prepare_bundle(validated, &config)).await;
             let bundle = spawn_blocking_result(prepared, "bundle update failed")?;
 
             // Update state. The swap flag makes later `ensure_patterns_loaded`
@@ -583,7 +583,7 @@ struct PreparedBundle {
 /// bundle. All resource-heavy steps stay on the caller's blocking task.
 fn prepare_bundle(
     path: Option<PathBuf>,
-    config: Config,
+    config: &Config,
 ) -> std::result::Result<PreparedBundle, String> {
     let bundle = if let Some(path) = path {
         Bundle::load(&path).map_err(|e| format!("Failed to load bundle: {e}"))?
@@ -598,16 +598,16 @@ fn prepare_bundle(
     bundle
         .validate()
         .map_err(|e| format!("Invalid bundle: {e}"))?;
-    let scanner = scanner_for(&bundle, &config)?;
+    let scanner = scanner_for(&bundle, config)?;
     let pattern_count = bundle.len();
     let version = bundle.metadata().version.to_string();
     let checksum = bundle.metadata().checksum;
     Ok(PreparedBundle {
         bundle,
-        pattern_count,
+        scanner,
         version,
         checksum,
-        scanner,
+        pattern_count,
     })
 }
 
@@ -955,22 +955,21 @@ where
             // saturated; its handler only wakes a waiter and does no scan.
             None
         } else {
-            match requests.clone().try_acquire_owned() {
-                Ok(permit) => Some(permit),
-                Err(_) => {
-                    if let Some(id) = request.get("id") {
-                        send_frame(
-                            &tx,
-                            Incoming::Ready(protocol_error_frame(
-                                id,
-                                -32001,
-                                "server is at its concurrent request limit; retry later",
-                            )),
-                        )
-                        .await?;
-                    }
-                    continue;
+            if let Ok(permit) = requests.clone().try_acquire_owned() {
+                Some(permit)
+            } else {
+                if let Some(id) = request.get("id") {
+                    send_frame(
+                        &tx,
+                        Incoming::Ready(protocol_error_frame(
+                            id,
+                            -32001,
+                            "server is at its concurrent request limit; retry later",
+                        )),
+                    )
+                    .await?;
                 }
+                continue;
             }
         };
 
