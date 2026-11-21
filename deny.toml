@@ -5,13 +5,7 @@
 [advisories]
 version = 2
 yanked = "deny"
-ignore = [
-    # Transitive via jsonrpc (unmaintained upstream). Kept in lockstep with
-    # the cargo-audit ignores in .github/workflows/ci.yml — remove from both
-    # or neither.
-    "RUSTSEC-2024-0421", # idna < 1.0.0
-    "RUSTSEC-2026-0097", # rand < 0.8.6
-]
+ignore = []
 
 [licenses]
 version = 2
