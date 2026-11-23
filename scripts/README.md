@@ -11,7 +11,7 @@ standalone; release scripts are driven by `.gitforce.yml`.
 | `check-advisory-parity.sh` | Fail unless `cargo-audit` and `cargo-deny` waive the same advisories. |
 | `check-allow-expiry.sh` | Fail when a lint suppression has no dated, owned decision, or its expiry has passed or is near. |
 | `check-fuzz-lock.sh` | Fail unless `fuzz/Cargo.lock` pins the same `aegis-core` version as the workspace. |
-| `check-gate-parity.py` | Fail when a change weakens a configured quality gate — a lint relaxed, a waiver added, a coverage floor dropped. Stdlib only. Tested by `scripts/test_check_gate_parity.py`. |
+| `check-gate-parity.py` | Fail when a change weakens a configured quality gate — a lint relaxed, a waiver added, a coverage floor dropped, or a gate that stopped running (a CI step, a workflow file, `deny.toml`, or `codecov.yml` removed). Stdlib only. Tested by `scripts/test_check_gate_parity.py`. |
 | `check-license-parity.sh` | Fail unless `deny.toml` and `about.toml` carry identical license allow lists. |
 | `coverage-floor.sh` | Enforce the workspace line-coverage floor from an lcov report (Codecov cannot, for lack of a token). |
 | `generate_examples.py` | Regenerate `crates/aegis-patterns/src/examples.rs` from a `dump_patterns` output. |

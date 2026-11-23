@@ -8,10 +8,12 @@ nobody notices, because the check that would have failed is the one that was
 turned off.
 
 This script compares the gate configuration against the merge base with the
-target branch and fails when the change moves a floor down. It only knows
-about floors that are expressed as configuration; a gate that is *deleted*
-(a removed CI job) is caught by the branch-protection required checks, not
-here.
+target branch and fails when the change moves a floor down. It also fails
+when a gate is *removed*: a CI step that ran at the base and does not run
+at the head, a workflow file that no longer exists, or a gate
+configuration file that was deleted outright. A removed CI *job* is caught
+by the branch-protection required checks, which name jobs; the steps
+inside a job are named by nothing else, so they are caught here.
 
 Usage: scripts/check-gate-parity.py [base-ref]
     base-ref defaults to origin/main, and the merge base with HEAD is used.
@@ -137,6 +139,90 @@ def patch_floor_is_wired(text: str) -> bool:
     return "patch-coverage-floor.py" in text
 
 
+# A gate step is identified by the scripts it runs. A step that runs no
+# script is still a gate - `git diff --exit-code THIRD-PARTY-NOTICES.md`
+# is one - so the step's name is the fallback identity.
+SCRIPT_RE = re.compile(r"scripts/[A-Za-z0-9_./-]+")
+STEP_NAME_RE = re.compile(r"^\s*-\s+name:\s*(.+?)\s*$")
+RUN_RE = re.compile(r"^(\s*)run:\s*(.*)$")
+
+
+def parse_steps(text: str) -> list[tuple[str, str]]:
+    """Return the (name, run body) of every step in a workflow file.
+
+    The workflow files are YAML and the repository's rule is that the
+    gate scripts are stdlib only, so this parses the two shapes the
+    workflows actually use rather than pulling in a YAML library: a step
+    is a `- name:` line followed by a `run:` line, and a `run:` block
+    scalar runs until a line at the `run:` line's own indentation.
+    """
+    steps: list[tuple[str, str]] = []
+    lines = text.splitlines()
+    name = ""
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        name_match = STEP_NAME_RE.match(line)
+        if name_match:
+            name = name_match.group(1).strip().strip("'\"")
+        run_match = RUN_RE.match(line)
+        if run_match:
+            indent, first = run_match.group(1), run_match.group(2)
+            block = [first]
+            index += 1
+            while index < len(lines):
+                following = lines[index]
+                if following.strip():
+                    depth = len(following) - len(following.lstrip())
+                    if depth <= len(indent):
+                        break
+                block.append(following)
+                index += 1
+            steps.append((name, "\n".join(block)))
+            continue
+        index += 1
+    return steps
+
+
+def scripts_in(body: str) -> set[str]:
+    """Return the repository scripts a run body invokes."""
+    found: set[str] = set()
+    for line in body.splitlines():
+        if line.strip().startswith("#"):
+            continue
+        for match in SCRIPT_RE.finditer(line):
+            found.add(match.group(0).rstrip(".,;:"))
+    return found
+
+
+def removed_steps(base_text: str, head_text: str) -> list[str]:
+    """Return the base steps that the head no longer runs.
+
+    A step counts as removed when nothing in the head invokes the scripts
+    it invoked *and* no head step carries its name. Renaming a step while
+    it keeps running its script is not a removal; deleting the step, or
+    repointing it at a different script, is.
+    """
+    head_scripts: set[str] = set()
+    head_names: set[str] = set()
+    for name, body in parse_steps(head_text):
+        head_names.add(name)
+        head_scripts |= scripts_in(body)
+
+    removed: list[str] = []
+    for name, body in parse_steps(base_text):
+        base_scripts = scripts_in(body)
+        if base_scripts & head_scripts:
+            continue
+        if name and name in head_names:
+            continue
+        label = name or body.strip().splitlines()[0]
+        if base_scripts:
+            label = f"{label} ({', '.join(sorted(base_scripts))})"
+        removed.append(label)
+    return removed
+
+
 def report(problems: list[str]) -> int:
     if not problems:
         print("gate-parity: no gate was weakened")
@@ -152,6 +238,192 @@ def report(problems: list[str]) -> int:
     return 1
 
 
+GATE_FILES = ("Cargo.toml", "deny.toml", "codecov.yml")
+WORKFLOW_DIR = ".github/workflows"
+CI_WORKFLOW = ".github/workflows/ci.yml"
+
+
+def workflow_paths(ref: str | None) -> list[str]:
+    """The workflow files at a ref; None reads the working tree."""
+    if ref is None:
+        root = REPO / WORKFLOW_DIR
+        if not root.is_dir():
+            return []
+        return sorted(
+            str(path.relative_to(REPO))
+            for path in root.iterdir()
+            if path.suffix in (".yml", ".yaml")
+        )
+    listing = git("ls-tree", "--name-only", ref, WORKFLOW_DIR)
+    return sorted(
+        line for line in listing.splitlines() if line.endswith((".yml", ".yaml"))
+    )
+
+
+def collect_files(ref: str | None) -> dict[str, bytes | None]:
+    """Every file the gate comparison reads, at one ref."""
+    files: dict[str, bytes | None] = {}
+    for path in GATE_FILES:
+        files[path] = current(path) if ref is None else read_at(ref, path)
+    for path in workflow_paths(ref):
+        files[path] = current(path) if ref is None else read_at(ref, path)
+    return files
+
+
+def lint_problems(
+    base_manifest: bytes | None, head_manifest: bytes | None
+) -> list[str]:
+    """Lints that were relaxed or removed."""
+    if not base_manifest or not head_manifest:
+        return []
+    problems: list[str] = []
+    base_levels = lint_levels(base_manifest)
+    head_levels = lint_levels(head_manifest)
+    for name, level in sorted(base_levels.items()):
+        if name not in head_levels:
+            problems.append(f"lint {name} was removed (was {level_name(level)})")
+        elif head_levels[name] < level:
+            problems.append(
+                f"lint {name} was relaxed from {level_name(level)} to "
+                f"{level_name(head_levels[name])}"
+            )
+    return problems
+
+
+def deny_problems(base_deny: bytes | None, head_deny: bytes | None) -> list[str]:
+    """Waivers that were added, or the whole file that carried them."""
+    if not base_deny:
+        return []
+    if not head_deny:
+        return [
+            "deny.toml was removed; the advisory waivers and the license "
+            "allow-list went with it"
+        ]
+    problems: list[str] = []
+    for section, key in (("advisories", "ignore"), ("licenses", "allow")):
+        base_list = string_list(base_deny.decode(), section, key)
+        head_list = string_list(head_deny.decode(), section, key)
+        for added in sorted(head_list - base_list):
+            problems.append(f"deny.toml [{section}] {key} gained {added}")
+    return problems
+
+
+def coverage_problems(base_ci: bytes | None, head_ci: bytes | None) -> list[str]:
+    """Coverage floors that were dropped or removed."""
+    if not base_ci or not head_ci:
+        return []
+    problems: list[str] = []
+    base_text = base_ci.decode()
+    head_text = head_ci.decode()
+
+    base_floor = coverage_floor(base_text)
+    head_floor = coverage_floor(head_text)
+    if base_floor is not None:
+        if head_floor is None:
+            problems.append("the coverage floor step was removed from ci.yml")
+        elif head_floor < base_floor:
+            problems.append(
+                f"the coverage floor dropped from {base_floor}% to {head_floor}%"
+            )
+
+    base_patch = patch_coverage_floor(base_text)
+    head_patch = patch_coverage_floor(head_text)
+    if base_patch is not None:
+        if head_patch is None:
+            problems.append("the patch coverage floor was removed from ci.yml")
+        elif head_patch < base_patch:
+            problems.append(
+                f"the patch coverage floor dropped from {base_patch}% to "
+                f"{head_patch}%"
+            )
+    if patch_floor_is_wired(base_text) and not patch_floor_is_wired(head_text):
+        problems.append("the patch coverage floor step was removed from ci.yml")
+    return problems
+
+
+def codecov_problems(
+    base_codecov: bytes | None,
+    head_codecov: bytes | None,
+    head_ci: bytes | None,
+) -> list[str]:
+    """Codecov targets that were dropped, and the file itself."""
+    if not base_codecov:
+        return []
+    if not head_codecov:
+        return [
+            "codecov.yml was removed; the coverage targets it declared went "
+            "with it"
+        ]
+    problems: list[str] = []
+    base_targets = codecov_targets(base_codecov.decode())
+    head_targets = codecov_targets(head_codecov.decode())
+    for scope, value in sorted(base_targets.items()):
+        if scope not in head_targets:
+            problems.append(f"codecov {scope} target was removed (was {value}%)")
+        elif head_targets[scope] < value:
+            problems.append(
+                f"codecov {scope} target dropped from {value}% to "
+                f"{head_targets[scope]}%"
+            )
+    # codecov.yml states the target; the CI floor is the one that
+    # actually fails a build. The enforced floor may not be the weaker
+    # of the two.
+    head_text = head_ci.decode() if head_ci else ""
+    head_floor = coverage_floor(head_text)
+    head_patch = patch_coverage_floor(head_text)
+    for scope, enforced in (("project", head_floor), ("patch", head_patch)):
+        declared = head_targets.get(scope)
+        if declared is not None and enforced is not None and enforced < declared:
+            problems.append(
+                f"the enforced {scope} coverage floor ({enforced}%) is below "
+                f"the codecov {scope} target ({declared}%)"
+            )
+    return problems
+
+
+def workflow_problems(
+    base: dict[str, bytes | None], head: dict[str, bytes | None]
+) -> list[str]:
+    """Gates that stopped running because a step or a workflow went away.
+
+    The required status checks name jobs, so a job that disappears is
+    caught by the ruleset. A step inside a job that still exists is named
+    by nothing, so it is caught here.
+    """
+    problems: list[str] = []
+    paths = sorted(
+        path
+        for path in set(base) | set(head)
+        if path.startswith(WORKFLOW_DIR)
+    )
+    for path in paths:
+        base_bytes = base.get(path)
+        head_bytes = head.get(path)
+        if not base_bytes:
+            continue
+        if not head_bytes:
+            problems.append(f"the workflow {path} was removed")
+            continue
+        for name in removed_steps(base_bytes.decode(), head_bytes.decode()):
+            problems.append(f"the CI step {name!r} was removed from {path}")
+    return problems
+
+
+def gate_problems(
+    base: dict[str, bytes | None], head: dict[str, bytes | None]
+) -> list[str]:
+    """Everything this change would weaken, as a list of sentences."""
+    problems: list[str] = []
+    problems += lint_problems(base.get("Cargo.toml"), head.get("Cargo.toml"))
+    problems += deny_problems(base.get("deny.toml"), head.get("deny.toml"))
+    problems += coverage_problems(base.get(CI_WORKFLOW), head.get(CI_WORKFLOW))
+    problems += codecov_problems(
+        base.get("codecov.yml"), head.get("codecov.yml"), head.get(CI_WORKFLOW)
+    )
+    problems += workflow_problems(base, head)
+    return problems
+
+
 def main() -> int:
     ref = base_ref()
     try:
@@ -163,84 +435,7 @@ def main() -> int:
         print(f"gate-parity: cannot resolve the merge base of {ref}", file=sys.stderr)
         return 2
 
-    problems: list[str] = []
-
-    base_manifest = read_at(base, "Cargo.toml")
-    head_manifest = current("Cargo.toml")
-    if base_manifest and head_manifest:
-        base_levels = lint_levels(base_manifest)
-        head_levels = lint_levels(head_manifest)
-        for name, level in sorted(base_levels.items()):
-            if name not in head_levels:
-                problems.append(f"lint {name} was removed (was {level_name(level)})")
-            elif head_levels[name] < level:
-                problems.append(
-                    f"lint {name} was relaxed from {level_name(level)} to "
-                    f"{level_name(head_levels[name])}"
-                )
-
-    base_deny = read_at(base, "deny.toml")
-    head_deny = current("deny.toml")
-    if base_deny and head_deny:
-        for section, key in (("advisories", "ignore"), ("licenses", "allow")):
-            base_list = string_list(base_deny.decode(), section, key)
-            head_list = string_list(head_deny.decode(), section, key)
-            for added in sorted(head_list - base_list):
-                problems.append(f"deny.toml [{section}] {key} gained {added}")
-
-    base_ci = read_at(base, ".github/workflows/ci.yml")
-    head_ci = current(".github/workflows/ci.yml")
-    head_floor = head_patch = None
-    if base_ci and head_ci:
-        base_floor = coverage_floor(base_ci.decode())
-        head_floor = coverage_floor(head_ci.decode())
-        if base_floor is not None:
-            if head_floor is None:
-                problems.append("the coverage floor step was removed from ci.yml")
-            elif head_floor < base_floor:
-                problems.append(
-                    f"the coverage floor dropped from {base_floor}% to {head_floor}%"
-                )
-
-        base_patch = patch_coverage_floor(base_ci.decode())
-        head_patch = patch_coverage_floor(head_ci.decode())
-        if base_patch is not None:
-            if head_patch is None:
-                problems.append(
-                    "the patch coverage floor was removed from ci.yml"
-                )
-            elif head_patch < base_patch:
-                problems.append(
-                    f"the patch coverage floor dropped from {base_patch}% to "
-                    f"{head_patch}%"
-                )
-        if patch_floor_is_wired(base_ci.decode()) and not patch_floor_is_wired(
-            head_ci.decode()
-        ):
-            problems.append("the patch coverage floor step was removed from ci.yml")
-
-    base_codecov = read_at(base, "codecov.yml")
-    head_codecov = current("codecov.yml")
-    if base_codecov and head_codecov:
-        base_targets = codecov_targets(base_codecov.decode())
-        head_targets = codecov_targets(head_codecov.decode())
-        for scope, value in sorted(base_targets.items()):
-            if scope not in head_targets:
-                problems.append(f"codecov {scope} target was removed (was {value}%)")
-            elif head_targets[scope] < value:
-                problems.append(
-                    f"codecov {scope} target dropped from {value}% to {head_targets[scope]}%"
-                )
-        # codecov.yml states the target; the CI floor is the one that
-        # actually fails a build. The enforced floor may not be the
-        # weaker of the two.
-        for scope, enforced in (("project", head_floor), ("patch", head_patch)):
-            declared = head_targets.get(scope)
-            if declared is not None and enforced is not None and enforced < declared:
-                problems.append(
-                    f"the enforced {scope} coverage floor ({enforced}%) is below "
-                    f"the codecov {scope} target ({declared}%)"
-                )
+    problems = gate_problems(collect_files(base), collect_files(None))
 
     print(f"gate-parity: compared HEAD against {ref} ({base[:12]})")
     return report(problems)
