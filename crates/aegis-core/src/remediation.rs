@@ -267,7 +267,8 @@ impl RemediationAdvisor {
                 ],
                 effort_reducer: None,
                 reference_urls: vec![
-                    "https://wstg.owasp.org/latest/12-Error_Handling/01-Improper_Error_Handling/".to_string(),
+                    "https://wstg.owasp.org/latest/12-Error_Handling/01-Improper_Error_Handling/"
+                        .to_string(),
                 ],
             },
         );
