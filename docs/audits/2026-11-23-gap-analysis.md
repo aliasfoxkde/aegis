@@ -207,7 +207,7 @@ Measured at the merge of #214, on the three CI lanes, from the job logs
 directly: Linux 954 tests across 31 test binaries, macOS 954 across 31,
 Windows 925 across 31.
 
-### 3.2 The enhancement roadmap is a 2026-09-07 snapshot that contradicts the tree — OPEN (P2)
+### 3.2 The enhancement roadmap is a 2026-09-07 snapshot that contradicts the tree — CLOSED by #221
 
 `docs/ENHANCEMENT_ROADMAP.md` still says, among other things:
 
@@ -227,6 +227,15 @@ Windows 925 across 31.
   banner, so it is marked, but the count is still wrong.
 - Footer — "Last Updated: 2026-09-07".
 
+What landed: the roadmap keeps its archived banner and its research, and
+the claims that contradicted the tree now match it — the real coverage
+thresholds (97% project, 90% patch, with the same floors enforced in
+CI), crates.io publishing recorded as closed without publishing after
+Phase 13 of `docs/PLAN.md`, the current ten-asset release set stated
+next to the historical nine, and the footer dated.
+
+### 3.3 The documentation index links a third of the documentation — CLOSED by #221
+
 ### 3.3 The documentation index links a third of the documentation — OPEN (P3)
 
 `docs/README.md` links 12 documents. The repository has 64 markdown files
@@ -243,6 +252,11 @@ under `docs/`. Nothing links:
 The `Links` CI job checks that the links which exist resolve. It cannot
 check for the links that do not exist, so an index that has quietly stopped
 pointing at half the tree passes the gate that appears to cover it.
+
+What landed: `docs/README.md` now carries an entry for every document
+under `docs/` — the guides, the architecture overview, the module map, the
+coding standards, the pattern documentation, the planning notes, the
+audits, the progress receipts, and the handoff.
 
 ---
 
@@ -441,8 +455,9 @@ next one verifiable.
    (§4.6): move it into the finding pipeline rather than the file scanner,
    so `--env`, `--diff`, `--stdin`, `--staged`, and the anomaly pass are
    classified too.
-6. **Refresh the stale documentation** (§3.2, §3.3): the roadmap snapshot
-   and the `docs/README.md` index.
+6. ~~**Refresh the stale documentation** (§3.2, §3.3)~~ — **DONE, #221**:
+   the roadmap snapshot's numbers match the tree and the `docs/README.md`
+   index has an entry for every document under `docs/`.
 7. **Record the `code_coverage` ruleset rule as unevaluated** (§5), so the
    ruleset is not read as enforcing a 70% floor that nothing reports.
 8. **Retire the flags that can never fire** (§4.3, §4.7): make `--file`
