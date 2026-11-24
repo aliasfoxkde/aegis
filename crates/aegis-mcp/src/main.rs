@@ -300,25 +300,6 @@ fn shipped_bundle() -> Bundle {
     )
 }
 
-/// Build a scanner over a rule set with a configuration in force.
-///
-/// The configuration names the categories to scan, the severity threshold,
-/// the anomaly detectors, and the path classes; the bundle stays the rule
-/// set, because a configuration says what to look for, not which rules to
-/// ship.
-///
-/// # Errors
-///
-/// Returns a message naming the reason the configuration was rejected —
-/// an unknown category, a path-class rule whose glob does not compile, a
-/// severity threshold no severity name matches, or an unknown anomaly
-/// detector. The scanner is not built, so a rejected configuration leaves
-/// the server serving the configuration it already had.
-fn scanner_for(bundle: &Bundle, config: &Config) -> std::result::Result<Scanner, String> {
-    let state = load_pattern_state(None)?;
-    scanner_for_with_state(bundle, config, &state)
-}
-
 /// Build a scanner over a rule set with a configuration in force and a
 /// persisted pattern state applied.
 ///
@@ -771,11 +752,15 @@ fn pattern_state_path() -> Option<PathBuf> {
 
 /// Initialize scanner with patterns from aegis-patterns
 ///
-/// The server builds its scanner through [`scanner_for`], so this shortcut
-/// exists for the tests that need a scanner without a configuration.
+/// The server builds its scanner through [`scanner_for_with_state`], so this
+/// shortcut exists for the tests that need a scanner without a
+/// configuration. It applies an empty pattern state: a test must not depend
+/// on the pattern state file the operator's own `aegis disable` writes.
 #[cfg(test)]
 fn init_scanner() -> anyhow::Result<Scanner> {
-    scanner_for(&shipped_bundle(), &Config::default()).map_err(anyhow::Error::msg)
+    let state = aegis_core::pattern_state::PatternState::empty();
+    scanner_for_with_state(&shipped_bundle(), &Config::default(), &state)
+        .map_err(anyhow::Error::msg)
 }
 
 fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {
