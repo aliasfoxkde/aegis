@@ -101,7 +101,7 @@ pub fn enable_pattern(path: &Path, name: &str) -> anyhow::Result<String> {
 mod tests {
     use super::*;
 
-    fn temp_state_file(tag: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    fn temp_state_file(tag: &str) -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::Builder::new()
             .prefix(&format!("aegis_state_{tag}_{}_", std::process::id()))
             .tempdir()
