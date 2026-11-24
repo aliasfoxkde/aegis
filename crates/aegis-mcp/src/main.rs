@@ -1572,4 +1572,71 @@ mod tests {
             "the rejection names the threshold: {error}"
         );
     }
+
+    #[tokio::test]
+    async fn a_disabled_pattern_stops_firing_on_the_next_tool_call() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file.clone()));
+        let rpc = AegisRpcImpl::new(state.clone());
+        let content = mixed_category_fixture();
+
+        let before = rpc
+            .scan_string(content.clone(), "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            before
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the fixture must trip the gitlab rule: {:?}",
+            before
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let mut document = aegis_core::pattern_state::PatternState::empty();
+        document
+            .disabled_patterns
+            .insert("gitlab-token".to_string());
+        aegis_core::pattern_state::save(&state_file, &document).expect("the state is written");
+
+        let after = rpc
+            .scan_string(content, "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            !after
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the disabled rule must not fire: {:?}",
+            after
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_rather_than_ignored() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+        let rpc = AegisRpcImpl::new(state.clone());
+
+        let error = rpc
+            .scan_string(mixed_category_fixture(), "test.txt".to_string())
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
+        );
+    }
 }

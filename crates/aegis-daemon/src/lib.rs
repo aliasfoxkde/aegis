@@ -1416,4 +1416,78 @@ mod tests {
             "the rejection names the threshold: {error}"
         );
     }
+
+    #[tokio::test]
+    async fn a_disabled_pattern_stops_firing_on_the_next_request() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        let state = Arc::new(
+            DaemonState::new(PathBuf::from("/tmp/test.sock"))
+                .with_pattern_state(state_file.clone()),
+        );
+        let request = serde_json::json!({
+            "method": "scan_string",
+            "params": [mixed_category_fixture(), "test.txt"],
+            "id": 40
+        });
+
+        let before = handle_request(&request, &state).await;
+        assert!(before.success, "scan_string: {:?}", before.error);
+        assert!(
+            before
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the fixture must trip the gitlab rule: {:?}",
+            before
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let mut document = PatternState::empty();
+        document
+            .disabled_patterns
+            .insert("gitlab-token".to_string());
+        aegis_core::pattern_state::save(&state_file, &document).expect("the state is written");
+
+        let after = handle_request(&request, &state).await;
+        assert!(after.success, "scan_string: {:?}", after.error);
+        assert!(
+            !after
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the disabled rule must not fire: {:?}",
+            after
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_rather_than_ignored() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(
+            DaemonState::new(PathBuf::from("/tmp/test.sock")).with_pattern_state(state_file),
+        );
+        let request = serde_json::json!({
+            "method": "scan_string",
+            "params": [mixed_category_fixture(), "test.txt"],
+            "id": 41
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(!response.success, "a malformed state must not be ignored");
+        assert!(
+            response.error.contains("pattern-state.json"),
+            "the refusal names the file: {:?}",
+            response.error
+        );
+    }
 }
