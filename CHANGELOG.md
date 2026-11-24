@@ -7,6 +7,8 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-11-24
+
 ### Fixed
 
 - A release is now byte-reproducible regardless of the directory it is
