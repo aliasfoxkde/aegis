@@ -99,6 +99,21 @@ jobs:
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - name: Run tests
         run: cargo test --locked --workspace
+      # The suite's size is stated in prose in more than one document, and
+      # that prose drifted once already. Each lane measures its own
+      # platform's count and checks it against the recorded table, so a
+      # test that was added, removed, or skipped without updating the
+      # table fails here. The Windows lane runs fewer tests (some are
+      # Unix-only), which is why the table has a row per platform.
+      - name: Check the recorded test counts
+        shell: bash
+        run: |
+          if command -v python3 > /dev/null 2>&1; then
+            python=python3
+          else
+            python=python
+          fi
+          "$python" scripts/check-test-count.py
 
   build:
     name: Build
@@ -237,6 +252,8 @@ jobs:
         run: python3 scripts/test_check_gate_parity.py
       - name: Test the release path remap
         run: python3 scripts/test_release_remap.py
+      - name: Test the test-count gate
+        run: python3 scripts/test_test_count.py
 
   links:
     name: Links
