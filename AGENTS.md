@@ -14,7 +14,7 @@ All of these were verified to pass from the repository root on the current worki
 # Build
 cargo build --workspace --release
 
-# Test (949 tests across 30 test binaries on Linux and macOS; 920 on Windows — measured 2026-11-17)
+# Test (954 tests across 31 test binaries on Linux and macOS; 925 on Windows — measured 2026-11-24)
 cargo test --workspace
 
 # Lint (enforced: clean, zero warnings)
