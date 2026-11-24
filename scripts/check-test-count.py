@@ -24,6 +24,12 @@ including the ones marked `#[ignore]`, so the number does not move when
 a test is skipped rather than removed. A run's own output is read the
 same way, so the gate can be pointed at a CI log as well as at cargo.
 
+Cargo splits that output across two streams: the per-suite counts go to
+stdout, and the headers that announce each suite ("Running unittests
+src/lib.rs", "Doc-tests aegis_core") go to stderr. Both are read, or
+the doctest suites are counted as test binaries and the gate fails on a
+suite that never drifted.
+
 Usage: scripts/check-test-count.py [listing]
     listing defaults to running `cargo test --locked --workspace --
     --list` and reading its output; a path names a file holding that
@@ -67,6 +73,10 @@ RESULT_RE = re.compile(
 # every line with a timestamp, so this is searched for anywhere in the
 # line rather than matched at its start.
 DOCTEST_RE = re.compile(r"\bDoc-tests\s+\S")
+# The header cargo prints before it runs a test binary:
+# "     Running unittests src/lib.rs (target/debug/deps/aegis_core-1)".
+# One header per test binary, which is what the recorded column counts.
+RUNNING_RE = re.compile(r"\bRunning\s+(?:unittests|tests|examples|benches)\b")
 # Cargo colours its output when `CARGO_TERM_COLOR` is set, which CI
 # does. The colour codes sit between the words of a header, so they
 # have to go before the lines are read.
@@ -85,7 +95,12 @@ def current_platform() -> str | None:
 
 
 def listing() -> str:
-    """The suite's listing, from cargo."""
+    """The suite's listing, from cargo.
+
+    Both streams are read: the counts come from stdout and the suite
+    headers from stderr. Keeping the stderr would otherwise count every
+    doctest suite as a test binary.
+    """
     result = subprocess.run(
         ["cargo", "test", "--locked", "--workspace", "--", "--list"],
         cwd=REPO,
@@ -98,15 +113,16 @@ def listing() -> str:
         detail = result.stderr.strip().splitlines()
         tail = detail[-1] if detail else "no output"
         raise RuntimeError(f"cargo test --list failed: {tail}")
-    return result.stdout
+    return result.stdout + result.stderr
 
 
 def measure(text: str) -> tuple[int, int]:
     """Return the (tests, test binaries) the listing reports.
 
-    A doctest suite is listed like any other test target, so the suite
-    count is the number of suites and the binary count is that minus
-    the doctest suites.
+    A test binary is one cargo announces with a "Running" header, so
+    that is what is counted. A doctest suite is announced with a
+    "Doc-tests" header instead, and is a suite rather than a test
+    binary.
 
     A run's ignored tests are counted, because a listing counts them
     too: the number must not move when a test is skipped rather than
@@ -115,9 +131,12 @@ def measure(text: str) -> tuple[int, int]:
     tests = 0
     suites = 0
     doctests = 0
+    binaries = 0
     for line in ANSI_RE.sub("", text).replace("\r", "\n").splitlines():
         if DOCTEST_RE.search(line):
             doctests += 1
+        if RUNNING_RE.search(line):
+            binaries += 1
         match = COUNT_RE.search(line)
         if match:
             suites += 1
@@ -127,7 +146,25 @@ def measure(text: str) -> tuple[int, int]:
         if match:
             suites += 1
             tests += int(match.group(1)) + int(match.group(3))
-    return tests, suites - doctests
+    if binaries == 0:
+        # An input that holds no suite headers - a capture of stdout
+        # alone - is measured from the suite counts instead, so the gate
+        # still measures something rather than nothing.
+        binaries = suites - doctests
+    return tests, binaries
+
+
+def suite_headers(text: str) -> bool:
+    """Whether the text announces any suite at all.
+
+    Cargo announces each suite on stderr. An input without a single
+    header is a capture of stdout alone, which cannot say how many of
+    its suites are doctest suites.
+    """
+    for line in ANSI_RE.sub("", text).replace("\r", "\n").splitlines():
+        if RUNNING_RE.search(line) or DOCTEST_RE.search(line):
+            return True
+    return False
 
 
 def recorded_table(plan_text: str) -> dict[str, tuple[int, int]]:
@@ -169,6 +206,12 @@ def check(
             "the listing holds no test counts; the lane did not produce them"
         )
         return problems
+
+    if not suite_headers(list_text):
+        problems.append(
+            "the listing holds no suite headers; cargo prints them on stderr, "
+            "so a capture has to keep stderr with stdout"
+        )
 
     table = recorded_table(plan_text)
     for key, label in PLATFORMS.items():

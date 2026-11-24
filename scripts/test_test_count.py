@@ -46,6 +46,27 @@ PLAN = """
 
 AGENTS = "# Test (15 tests across 2 test binaries on Linux and macOS)\n"
 
+# Cargo splits its output: the per-suite counts go to stdout, the
+# headers that announce each suite go to stderr. The gate read stdout
+# alone, so every doctest suite counted as a test binary and the lane
+# failed on a suite that never drifted.
+LISTING_STDOUT = """
+foo: test
+bar: test
+
+12 tests, 0 benchmarks
+baz: test
+
+3 tests, 0 benchmarks
+0 tests, 0 benchmarks
+"""
+
+LISTING_STDERR = """
+     Running unittests src/lib.rs (target/debug/deps/aegis_core-1)
+     Running tests/one.rs (target/debug/deps/one-2)
+   Doc-tests aegis_core
+"""
+
 
 class MeasureTest(unittest.TestCase):
     def test_the_tests_and_the_binaries_are_counted(self) -> None:
@@ -90,6 +111,17 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
         )
         listing = f"{coloured}\n0 tests, 0 benchmarks\n\n12 tests, 0 benchmarks\n"
         self.assertEqual(helper.measure(listing), (12, 1))
+
+    def test_a_doctest_suite_is_not_a_test_binary(self) -> None:
+        """Cargo's headers and its counts arrive on different streams."""
+        both = LISTING_STDOUT + LISTING_STDERR
+        self.assertEqual(helper.measure(both), (15, 2))
+
+    def test_a_capture_of_stdout_alone_has_no_suite_headers(self) -> None:
+        """Stdout holds the counts; the headers are on stderr."""
+        self.assertFalse(helper.suite_headers(LISTING_STDOUT))
+        self.assertTrue(helper.suite_headers(LISTING_STDERR))
+        self.assertTrue(helper.suite_headers(LISTING_STDOUT + LISTING_STDERR))
 
 
 class TableTest(unittest.TestCase):
@@ -153,6 +185,18 @@ class CheckTest(unittest.TestCase):
         problems = helper.check(LISTING, plan, AGENTS, platform="windows")
         self.assertTrue(
             any("Windows" in problem for problem in problems), problems
+        )
+
+    def test_the_two_streams_agree_with_the_table(self) -> None:
+        """The shape cargo actually produces passes the gate."""
+        both = LISTING_STDOUT + LISTING_STDERR
+        self.assertEqual(helper.check(both, PLAN, AGENTS, platform="linux"), [])
+
+    def test_a_capture_without_the_headers_is_reported(self) -> None:
+        """A stdout-only capture cannot say how many suites are doctests."""
+        problems = helper.check(LISTING_STDOUT, PLAN, AGENTS, platform="linux")
+        self.assertTrue(
+            any("suite headers" in problem for problem in problems), problems
         )
 
 
