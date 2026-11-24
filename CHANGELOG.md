@@ -19,6 +19,18 @@ every release are attached to the matching GitHub release.
   prefixes out of the compiled paths, so the same tag yields the same
   bytes wherever it is built.
 
+- The two XXE rules (`xml-external-entity` and
+  `security-hardening-xml-external-entity`) no longer read prose as an
+  entity declaration. They matched `SYSTEM\s+"` and `PUBLIC\s+"`, and
+  `\s` matches a newline, so a line that ended in the word "system"
+  followed by a quoted string on the next line was reported as an
+  external-entity payload - the matched content was the text
+  `system\n    "`. The whitespace between the keyword and the quoted
+  identifier is horizontal and on the same line in a real declaration,
+  so the rules now accept only `[ \t]+`. A real
+  `<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>` is
+  still reported critical by both rules.
+
 ## [0.6.5] - 2026-11-17
 
 ### Added
