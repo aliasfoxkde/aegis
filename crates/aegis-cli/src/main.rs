@@ -160,8 +160,12 @@ enum Commands {
         warmup: usize,
 
         /// Number of benchmark runs to average
-        #[arg(long, default_value = "3")]
-        runs: usize,
+        ///
+        /// At least one run: there is nothing to average over zero runs, and
+        /// the average would divide by zero. The count is parsed as `u64`
+        /// because only the ranged parsers expose a lower bound.
+        #[arg(long, default_value = "3", value_parser = clap::value_parser!(u64).range(1..))]
+        runs: u64,
 
         /// Compare with Atheon-Enhanced if available
         #[arg(long)]
@@ -310,6 +314,7 @@ async fn main() -> Result<()> {
             runs,
             compare,
         } => {
+            let runs = usize::try_from(runs).unwrap_or(usize::MAX);
             benchmark::run_benchmark(&benchmark::BenchmarkOptions {
                 path,
                 warmup,
