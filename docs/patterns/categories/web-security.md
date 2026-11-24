@@ -1020,7 +1020,7 @@ XML External Entity (XXE) detected
 **Match pattern** (Rust `regex` syntax):
 
 ```regex
-(?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\"
+(?i)<!ENTITY|SYSTEM[ \t]+\"|PUBLIC[ \t]+\"
 ```
 
 **Reference**: <https://owasp.org/www-community/vulnerabilities/XML_External_Entity_%28XXE%29_Processing>
