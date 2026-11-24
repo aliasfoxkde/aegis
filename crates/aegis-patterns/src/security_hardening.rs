@@ -381,7 +381,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "security-hardening-xml-external-entity".to_string(),
             category: "security-hardening".to_string(),
-            match_pattern: r#"(?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\""#.to_string(),
+            match_pattern: r#"(?i)<!ENTITY|SYSTEM[ \t]+\"|PUBLIC[ \t]+\""#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
