@@ -140,7 +140,8 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     // Persisted `aegis disable` choices narrow the registry before any
     // scan. A state file that exists but cannot be parsed fails the scan:
     // an ignored preference would silently change results.
-    let state = crate::pattern_state::load(&crate::pattern_state::state_dir()?)?;
+    let state_path = crate::pattern_state::state_file()?;
+    let state = crate::pattern_state::load(&state_path)?;
     crate::pattern_state::apply_to_registry(&state, scanner.registry());
 
     // Fail loudly on unknown --categories values; a typo would otherwise
