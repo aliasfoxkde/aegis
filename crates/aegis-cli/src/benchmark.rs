@@ -85,15 +85,17 @@ pub fn run_aegis_benchmark(
         total_findings += findings.len();
     }
 
-    let avg_duration = total_duration / u32::try_from(runs).unwrap_or(u32::MAX);
     // Integer averages: these counters are non-negative, so integer division
     // reproduces the previous truncating float division without narrowing.
-    // A `runs` of zero has nothing to average, so the counters stay at zero.
-    let (avg_files, avg_bytes, avg_findings) = if runs == 0 {
-        (0, 0, 0)
+    // A `runs` of zero has nothing to average, so every average stays at
+    // zero. The guard is before the division: dividing by a zero run count
+    // panics, and a panic is not an average.
+    let (avg_duration, avg_files, avg_bytes, avg_findings) = if runs == 0 {
+        (Duration::ZERO, 0, 0, 0)
     } else {
         let runs_u64 = u64::try_from(runs).unwrap_or(u64::MAX);
         (
+            total_duration / u32::try_from(runs).unwrap_or(u32::MAX),
             total_files / runs,
             total_bytes / runs_u64,
             total_findings / runs,
@@ -159,6 +161,23 @@ pub fn run_external_benchmark(bin_path: &str, path: &PathBuf) -> anyhow::Result<
 /// Returns an error when the Aegis benchmark run fails; a failing external
 /// comparison is reported on stdout instead of failing the run.
 pub fn run_benchmark(opts: &BenchmarkOptions) -> anyhow::Result<()> {
+    // Only consult the environment when the comparison is actually enabled,
+    // preserving the prior behavior of leaving it unread otherwise.
+    let atheon_path = if opts.compare {
+        std::env::var("AEGIS_ATHEON_PATH").ok()
+    } else {
+        None
+    };
+    run_benchmark_with_comparator(opts, atheon_path.as_deref())
+}
+
+/// Core of [`run_benchmark`] with the comparator path injected instead of
+/// read from the process environment, so tests can exercise every branch
+/// without mutating the process-global `AEGIS_ATHEON_PATH`.
+fn run_benchmark_with_comparator(
+    opts: &BenchmarkOptions,
+    atheon_path: Option<&str>,
+) -> anyhow::Result<()> {
     println!("==============================================");
     println!("Aegis Benchmark");
     println!("==============================================");
@@ -194,13 +213,13 @@ pub fn run_benchmark(opts: &BenchmarkOptions) -> anyhow::Result<()> {
         println!();
         println!("Running Atheon-Enhanced comparison...");
 
-        let atheon_path = std::env::var("AEGIS_ATHEON_PATH").unwrap_or_else(|_| {
+        if atheon_path.is_none() {
             println!("AEGIS_ATHEON_PATH is not set; skipping the external comparison.");
-            String::new()
-        });
+        }
+        let atheon_path = atheon_path.unwrap_or("");
 
-        if !atheon_path.is_empty() && Path::new(&atheon_path).exists() {
-            match run_external_benchmark(&atheon_path, &opts.path) {
+        if !atheon_path.is_empty() && Path::new(atheon_path).exists() {
+            match run_external_benchmark(atheon_path, &opts.path) {
                 Ok(atheon_result) => {
                     println!();
                     println!(">>> ATHEON-ENHANCED RESULTS <<<");
@@ -277,6 +296,22 @@ mod tests {
     }
 
     #[test]
+    fn aegis_benchmark_with_zero_runs_yields_zeroed_averages() -> anyhow::Result<()> {
+        // The guard lives before the division: a zero run count used to
+        // panic with "attempt to divide by zero".
+        let dir = sample_target()?;
+        let result = run_aegis_benchmark(dir.path(), 0, 0)?;
+
+        assert_eq!(result.files_scanned, 0);
+        assert_eq!(result.bytes_scanned, 0);
+        assert_eq!(result.findings_count, 0);
+        assert_eq!(result.duration, Duration::ZERO);
+        assert_eq!(result.files_per_second, 0.0);
+        assert_eq!(result.mb_per_second, 0.0);
+        Ok(())
+    }
+
+    #[test]
     fn external_benchmark_surfaces_missing_binaries() {
         let error = run_external_benchmark("/nonexistent/aegis-tool", &PathBuf::from("."))
             .expect_err("missing binary must error");
@@ -296,8 +331,8 @@ mod tests {
     }
 
     /// Exercise every branch of the opt-in external comparison in one test:
-    /// the env var is process-global, so parallel tests could race each
-    /// other's `set_var`/`remove_var`.
+    /// the comparator path is injected directly, so no `set_var`/`remove_var`
+    /// ever touches the process-global environment.
     #[test]
     fn external_comparison_branches_all_complete() -> anyhow::Result<()> {
         let dir = sample_target()?;
@@ -308,15 +343,13 @@ mod tests {
             compare,
         };
 
-        // Unset: the comparison reports it is skipped.
-        std::env::remove_var("AEGIS_ATHEON_PATH");
-        run_benchmark(&opts(true))?;
+        // None: the comparison reports it is skipped.
+        run_benchmark_with_comparator(&opts(true), None)?;
 
-        // Set but absent on disk: reported as not found.
-        std::env::set_var("AEGIS_ATHEON_PATH", "/nonexistent/aegis-comparator");
-        run_benchmark(&opts(true))?;
+        // Some but absent on disk: reported as not found.
+        run_benchmark_with_comparator(&opts(true), Some("/nonexistent/aegis-comparator"))?;
 
-        // Set and present: the external tool actually runs and the ratio
+        // Some and present: the external tool actually runs and the ratio
         // math executes. The stub only has to spawn successfully; `echo`
         // does that on Unix and `hostname` (always present, tolerant of
         // extra arguments) covers Windows.
@@ -324,10 +357,8 @@ mod tests {
         let stub = "/bin/echo";
         #[cfg(windows)]
         let stub = "hostname";
-        std::env::set_var("AEGIS_ATHEON_PATH", stub);
-        run_benchmark(&opts(true))?;
+        run_benchmark_with_comparator(&opts(true), Some(stub))?;
 
-        std::env::remove_var("AEGIS_ATHEON_PATH");
         Ok(())
     }
 }

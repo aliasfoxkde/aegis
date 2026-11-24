@@ -1608,7 +1608,25 @@ impl Scanner {
     }
 
     /// Scan environment variables
+    ///
+    /// The category allow-list, the severity threshold, and the baseline
+    /// apply here exactly as they do to the file pipeline: the flags are
+    /// documented as filters over reported findings, and an environment
+    /// finding that ignores them is a finding the operator asked to filter
+    /// out.
     pub fn scan_env(&self) -> Vec<Finding> {
+        self.scan_env_vars(std::env::vars())
+    }
+
+    /// Scan the given environment variables.
+    ///
+    /// The environment is taken as data rather than read from the process,
+    /// so the filters above can be tested without mutating the environment
+    /// of a test binary that other tests share.
+    pub fn scan_env_vars<I>(&self, vars: I) -> Vec<Finding>
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
         let patterns = if self.options.include_disabled {
             self.registry.all()
         } else {
@@ -1616,7 +1634,7 @@ impl Scanner {
         };
         let mut findings = Vec::new();
 
-        for (key, value) in std::env::vars() {
+        for (key, value) in vars {
             for pattern in &patterns {
                 if !pattern.is_env_var_only() && pattern.category() != "secrets" {
                     continue;
@@ -1635,12 +1653,14 @@ impl Scanner {
                     )
                     .with_kind(FindingKind::Entropy);
 
-                    findings.push(finding);
+                    if self.passes_post_filters(&finding) {
+                        findings.push(finding);
+                    }
                 }
             }
         }
 
-        findings
+        self.filter_baseline(findings)
     }
 }
 
@@ -1888,6 +1908,103 @@ mod tests {
         let (findings, stats) = scanner.scan_file(&temp_file).unwrap();
         assert!(findings.is_empty());
         assert_eq!(stats.files_skipped, 1);
+    }
+
+    /// An environment-only rule that fires on the value used by the
+    /// environment tests below.
+    fn env_definition() -> PatternDefinition {
+        PatternDefinition {
+            name: "aegis-env-token".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "AEGIS-ENV-TOKEN-[A-Z0-9]+".to_string(),
+            severity: Severity::Medium,
+            confidence: crate::pattern::Confidence::High,
+            description: "A token in an environment variable".to_string(),
+            env_var: true,
+            ..PatternDefinition::default()
+        }
+    }
+
+    /// The environment the environment tests scan: one value the rule
+    /// matches, one it does not.
+    fn env_vars() -> Vec<(String, String)> {
+        vec![
+            (
+                "AEGIS_TEST_TOKEN".to_string(),
+                "AEGIS-ENV-TOKEN-ABC123".to_string(),
+            ),
+            ("AEGIS_TEST_OTHER".to_string(), "nothing to see".to_string()),
+        ]
+    }
+
+    #[test]
+    fn an_environment_finding_honours_the_severity_threshold() {
+        let scanner = Scanner::from_definitions(vec![env_definition()]).unwrap();
+        assert_eq!(
+            scanner.scan_env_vars(env_vars()).len(),
+            1,
+            "the rule fires on the matching value"
+        );
+
+        let filtered = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                severity_threshold: Some("critical".to_string()),
+                ..Default::default()
+            });
+        assert!(
+            filtered.scan_env_vars(env_vars()).is_empty(),
+            "a medium finding must not survive a critical threshold"
+        );
+    }
+
+    #[test]
+    fn an_environment_finding_honours_the_category_list() {
+        let filtered = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                categories: vec!["pii".to_string()],
+                ..Default::default()
+            });
+        assert!(
+            filtered.scan_env_vars(env_vars()).is_empty(),
+            "a secrets finding must not survive a pii-only allow-list"
+        );
+
+        let allowed = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                categories: vec!["secrets".to_string()],
+                ..Default::default()
+            });
+        assert_eq!(allowed.scan_env_vars(env_vars()).len(), 1);
+    }
+
+    #[test]
+    fn an_environment_finding_in_the_baseline_is_suppressed() {
+        let scanner = Scanner::from_definitions(vec![env_definition()]).unwrap();
+        let findings = scanner.scan_env_vars(env_vars());
+        assert_eq!(findings.len(), 1);
+        let fingerprint = findings[0].fingerprint.clone();
+
+        let temp_dir = TempDir::new().unwrap();
+        let baseline = temp_dir.path().join("baseline.json");
+        std::fs::write(
+            &baseline,
+            format!("{{\"findings\": [{{\"fingerprint\": \"{fingerprint}\"}}]}}"),
+        )
+        .unwrap();
+
+        let with_baseline = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                baseline: Some(baseline),
+                ..Default::default()
+            });
+        assert!(
+            with_baseline.scan_env_vars(env_vars()).is_empty(),
+            "a finding recorded in the baseline must not be reported again"
+        );
     }
 
     #[test]
