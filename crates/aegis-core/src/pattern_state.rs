@@ -317,12 +317,21 @@ mod tests {
 
     #[test]
     fn apply_to_registry_disables_only_the_listed_pattern() {
-        let registry = PatternRegistry::from_definitions(
-            aegis_patterns::all_patterns()
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        )
+        // The definitions are built here rather than taken from the shipped
+        // rule set: `aegis-core` does not depend on `aegis-patterns` outside
+        // its tests, and the conversion between the two lives in the crate
+        // that depends on this one.
+        let definition = |name: &str| crate::pattern::PatternDefinition {
+            name: name.to_string(),
+            category: "secrets".to_string(),
+            match_pattern: format!("{name}-value"),
+            description: format!("the {name} rule"),
+            ..crate::pattern::PatternDefinition::default()
+        };
+        let registry = PatternRegistry::from_definitions(vec![
+            definition("hardcoded-password"),
+            definition("jwt-token"),
+        ])
         .expect("registry builds");
 
         let mut state = PatternState::empty();

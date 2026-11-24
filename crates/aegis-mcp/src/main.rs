@@ -185,14 +185,8 @@ impl ServerState {
                 let _guard = self.apply_lock.lock().await;
                 let bundle = self.current_bundle().await;
                 let config = self.config.read().await.clone();
-                let state =
-                    load_pattern_state(self.pattern_state_path.as_deref()).map_err(|message| {
-                        jsonrpc_core::Error {
-                            code: jsonrpc_core::ErrorCode::InternalError,
-                            message: format!("pattern state is unavailable: {message}"),
-                            data: None,
-                        }
-                    })?;
+                let state = load_pattern_state(self.pattern_state_path.as_deref())
+                    .map_err(|message| format!("pattern state is unavailable: {message}"))?;
                 let disabled = state.disabled_patterns.clone();
                 let compiled: std::result::Result<Scanner, String> =
                     match tokio::task::spawn_blocking(move || {
