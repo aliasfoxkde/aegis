@@ -1485,7 +1485,10 @@ mod tests {
         let response = handle_request(&request, &state).await;
         assert!(!response.success, "a malformed state must not be ignored");
         assert!(
-            response.error.contains("pattern-state.json"),
+            response
+                .error
+                .as_deref()
+                .is_some_and(|message| message.contains("pattern-state.json")),
             "the refusal names the file: {:?}",
             response.error
         );
