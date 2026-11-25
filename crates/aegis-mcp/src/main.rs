@@ -1618,4 +1618,39 @@ mod tests {
             "the refusal names the file: {error}"
         );
     }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_when_the_state_is_refreshed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+
+        let error = state
+            .refresh_pattern_state()
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_when_the_bundle_is_replaced() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+        let rpc = AegisRpcImpl::new(state);
+
+        let error = rpc
+            .update_bundle(None, false)
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
+        );
+    }
 }

@@ -309,6 +309,78 @@ mod tests {
     }
 
     #[test]
+    fn a_document_without_a_version_is_read_as_the_current_schema() {
+        let (_dir, path) = temp_state_file("noversion");
+        std::fs::write(&path, r#"{ "disabled_patterns": ["jwt-token"] }"#)
+            .expect("write a document without a version");
+
+        let state = load(&path).expect("a document without a version must load");
+        assert_eq!(state.version, STATE_VERSION);
+        assert!(state.is_disabled("jwt-token"));
+    }
+
+    #[test]
+    fn a_state_path_that_cannot_be_read_is_an_error() {
+        let dir = tempfile::Builder::new()
+            .prefix(&format!("aegis_state_unreadable_{}_", std::process::id()))
+            .tempdir()
+            .expect("tempdir");
+        // A directory is not a file: reading it fails with something other
+        // than "not found", which is the branch a permission error and a
+        // truncated state take.
+        let error = load(dir.path()).expect_err("a directory is not a state file");
+        assert!(error
+            .to_string()
+            .contains(&dir.path().display().to_string()));
+    }
+
+    #[test]
+    fn a_state_file_that_cannot_be_written_is_an_error() {
+        let dir = tempfile::Builder::new()
+            .prefix(&format!("aegis_state_unwritable_{}_", std::process::id()))
+            .tempdir()
+            .expect("tempdir");
+        // The parent is a file, so the directory the state file needs cannot
+        // be created.
+        let blocker = dir.path().join("blocker");
+        std::fs::write(&blocker, "not a directory").expect("write the blocker");
+        let path = blocker.join(STATE_FILE_NAME);
+
+        let error = save(&path, &PatternState::empty()).expect_err("the save must fail");
+        assert!(error.to_string().contains(&blocker.display().to_string()));
+    }
+
+    #[test]
+    fn a_state_file_whose_temporary_name_is_taken_is_an_error() {
+        let (dir, path) = temp_state_file("tmpname");
+        // The write goes to a sibling temporary file; when that name is
+        // already a directory the write cannot succeed.
+        let temporary = path.with_extension(format!("json.tmp-{}", std::process::id()));
+        std::fs::create_dir(&temporary).expect("create the temporary path");
+
+        let error = save(&path, &PatternState::empty()).expect_err("the save must fail");
+        assert!(error.to_string().contains(&temporary.display().to_string()));
+    }
+
+    #[test]
+    fn a_state_file_that_cannot_be_replaced_is_an_error() {
+        let dir = tempfile::Builder::new()
+            .prefix(&format!(
+                "aegis_state_unreplaceable_{}_",
+                std::process::id()
+            ))
+            .tempdir()
+            .expect("tempdir");
+        // The target is a directory, so the temporary file cannot be renamed
+        // over it.
+        let target = dir.path().join(STATE_FILE_NAME);
+        std::fs::create_dir(&target).expect("create the target");
+
+        let error = save(&target, &PatternState::empty()).expect_err("the save must fail");
+        assert!(error.to_string().contains(&target.display().to_string()));
+    }
+
+    #[test]
     fn an_explicitly_named_file_wins_over_the_default_one() {
         let explicit = Path::new("/tmp/aegis-state.json");
         let resolved = resolve_state_file(Some(explicit)).expect("resolve");
