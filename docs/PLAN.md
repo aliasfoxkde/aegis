@@ -698,7 +698,13 @@ shortlist rather than a fresh audit.
   at 97.0% lines against the CI-generated report (measured 97.61% over
   the counted set on 2026-09-24), with `codecov.yml` synced; only the
   CI report is authoritative, since locally generated reports map the
-  same executed code to different line counts. See Phase 17C.
+  same executed code to different line counts. See Phase 17C. The
+  GitHub `Safeguards` ruleset's `code_coverage` rule (minimum 70,
+  max drop 10) is **unevaluated**: no integration reports coverage to
+  GitHub while the `CODECOV_TOKEN` is unset, so the rule enforces
+  nothing — including `max_coverage_drop`, the one protection the CI
+  floors do not carry. Do not read the ruleset as a 70% floor until
+  coverage data reaches GitHub.
 - **MCP/daemon protocol conformance tests** — *delivered 2026-09-23*
   (#131); see Phase 15.
 - **Benchmark trend tracking** — *delivered 2026-09-23, deliberately
