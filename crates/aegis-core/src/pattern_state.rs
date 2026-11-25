@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn a_state_file_whose_temporary_name_is_taken_is_an_error() {
-        let (dir, path) = temp_state_file("tmpname");
+        let (_dir, path) = temp_state_file("tmpname");
         // The write goes to a sibling temporary file; when that name is
         // already a directory the write cannot succeed.
         let temporary = path.with_extension(format!("json.tmp-{}", std::process::id()));
