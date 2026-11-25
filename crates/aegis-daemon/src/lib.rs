@@ -374,7 +374,10 @@ pub fn init_scanner() -> anyhow::Result<Scanner> {
 /// The rule set shipped with the binary.
 ///
 /// A configuration says what to look for, not which rules to ship, so the
-/// shipped corpus is the rule set unless a bundle is installed on top.
+/// shipped corpus is the rule set the daemon serves. The daemon has no
+/// install path: `Config::bundle` is skipped on deserialization, so a
+/// client can never name a rule set, and the daemon never replaces the
+/// one it was built with.
 fn shipped_bundle() -> Bundle {
     Bundle::new(
         aegis_patterns::all_patterns()
@@ -441,7 +444,8 @@ pub struct DaemonResponse {
     /// before they reach the socket; empty on failure.
     pub findings: Vec<Finding>,
     /// How many findings came back, reused by `list_patterns` to report the
-    /// number of rules in the registry.
+    /// number of rules in the registry and by `list_categories` to report the
+    /// number of categories.
     pub finding_count: usize,
     /// Aggregated severity label computed over the findings, `"unknown"` when
     /// the request failed and `"none"` when nothing was inspected.
@@ -452,8 +456,13 @@ pub struct DaemonResponse {
     /// or content were actually read.
     pub stats: ScanStats,
     /// Signed-ish audit record tying the answer to a source, profile digest,
-    /// and optional source revision; absent for errors and `list_patterns`.
+    /// and optional source revision; absent for errors and the two listing
+    /// methods.
     pub receipt: Option<ScanReceipt>,
+    /// The categories the registry holds, returned by `list_categories` and
+    /// empty for every other method.
+    #[serde(default)]
+    pub categories: Vec<String>,
     /// Human-readable reason the request was refused or failed, `None` on
     /// success.
     pub error: Option<String>,
@@ -494,6 +503,7 @@ impl DaemonResponse {
             risk_score: risk.score,
             stats,
             receipt: Some(receipt),
+            categories: vec![],
             error: None,
         }
     }
@@ -511,6 +521,7 @@ impl DaemonResponse {
             risk_score: 0,
             stats: ScanStats::default(),
             receipt: None,
+            categories: vec![],
             error: Some(msg),
         }
     }
@@ -618,6 +629,29 @@ pub async fn handle_request(
                 risk_score: 0,
                 stats: ScanStats::default(),
                 receipt: None,
+                categories: vec![],
+                error: None,
+            }
+        }
+        "list_categories" => {
+            if let Err(error) = state.ensure_patterns_loaded().await {
+                return DaemonResponse::error(format!("scanner unavailable: {error}"));
+            }
+            let scanner = state.scanner.read().await;
+            let categories = scanner.registry().categories();
+            // Count-only by contract, like `list_patterns`: the categories
+            // themselves travel in the `categories` field, and the count
+            // rides in `finding_count` so a client can size the list
+            // without reading it.
+            DaemonResponse {
+                success: true,
+                findings: vec![],
+                finding_count: categories.len(),
+                risk_level: "none".to_string(),
+                risk_score: 0,
+                stats: ScanStats::default(),
+                receipt: None,
+                categories,
                 error: None,
             }
         }
@@ -816,6 +850,31 @@ mod tests {
         let response = handle_request(&request, &state).await;
         assert!(response.success);
         assert!(response.finding_count > 0, "Should have patterns");
+    }
+
+    #[tokio::test]
+    async fn test_list_categories() {
+        let state = Arc::new(DaemonState::new(PathBuf::from("/tmp/aegis-test-cat.sock")));
+        {
+            let mut scanner = state.scanner.write().await;
+            *scanner = init_scanner().expect("bundled patterns compile");
+        }
+
+        let request = serde_json::json!({
+            "method": "list_categories",
+            "params": null,
+            "id": 7
+        });
+
+        let response = handle_request(&request, &state).await;
+        assert!(response.success);
+        assert!(
+            !response.categories.is_empty(),
+            "the registry holds categories: {:?}",
+            response.categories
+        );
+        assert_eq!(response.finding_count, response.categories.len());
+        assert!(response.categories.contains(&"secrets".to_string()));
     }
 
     #[test]
