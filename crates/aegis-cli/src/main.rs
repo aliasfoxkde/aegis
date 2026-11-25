@@ -291,19 +291,19 @@ async fn main() -> Result<()> {
             disabled,
             category,
         } => {
-            let state = pattern_state::load(&pattern_state::state_dir()?)?;
+            let state = pattern_state::load(&pattern_state::state_file()?)?;
             println!(
                 "{}",
                 output::list_patterns(enabled, disabled, category.as_deref(), &state)?
             );
         }
         Commands::Enable { pattern } => {
-            let dir = pattern_state::state_dir()?;
-            println!("{}", pattern_state::enable_pattern(&dir, &pattern)?);
+            let path = pattern_state::state_file()?;
+            println!("{}", pattern_state::enable_pattern(&path, &pattern)?);
         }
         Commands::Disable { pattern } => {
-            let dir = pattern_state::state_dir()?;
-            println!("{}", pattern_state::disable_pattern(&dir, &pattern)?);
+            let path = pattern_state::state_file()?;
+            println!("{}", pattern_state::disable_pattern(&path, &pattern)?);
         }
         Commands::Update { force } => {
             scanner::update_bundle(force).await?;

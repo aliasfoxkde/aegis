@@ -9,7 +9,7 @@ use aegis_core::transport::{read_bounded_line, FrameRead, MAX_FRAME_BYTES};
 use aegis_core::{Bundle, Config, ScanOptions, ScanReceipt, ScanStats, Scanner};
 use jsonrpc_core::{BoxFuture, IoHandler, Result, Value};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -56,6 +56,13 @@ pub struct ServerState {
     /// afterwards, silently undoing the change. It is always the outermost
     /// lock, so the paths cannot deadlock.
     apply_lock: tokio::sync::Mutex<()>,
+    /// The persisted pattern state this server honors, when it was pointed
+    /// at a file. The file is re-read for every tool call, so a pattern the
+    /// operator disabled after startup stops firing without a restart.
+    pattern_state_path: Option<PathBuf>,
+    /// The pattern disablements the scanner in force was built with, so a
+    /// state file that did not change does not rebuild the rule set.
+    applied_pattern_state: RwLock<BTreeSet<String>>,
 }
 
 impl ServerState {
@@ -74,7 +81,21 @@ impl ServerState {
             patterns_init: tokio::sync::OnceCell::const_new(),
             bundle_swapped: AtomicBool::new(false),
             apply_lock: tokio::sync::Mutex::const_new(()),
+            pattern_state_path: None,
+            applied_pattern_state: RwLock::new(BTreeSet::new()),
         }
+    }
+
+    /// Point the server at a persisted pattern state file.
+    ///
+    /// The server reads the file for every tool call, so a pattern the
+    /// operator disabled after startup stops firing without a restart. A
+    /// server that is not pointed at a file honors no persisted state: the
+    /// rule set in force is what it scans with.
+    #[must_use]
+    pub fn with_pattern_state(mut self, path: PathBuf) -> Self {
+        self.pattern_state_path = Some(path);
+        self
     }
 
     /// The configuration in force.
@@ -112,12 +133,16 @@ impl ServerState {
         // CPU-bound; `spawn_blocking` keeps it off the reactor so other
         // tool calls keep being served while the configuration changes.
         let applied = config.clone();
-        let rebuilt = tokio::task::spawn_blocking(move || scanner_for(&bundle, &applied))
-            .await
-            .map_err(|error| format!("scanner rebuild task failed: {error}"))?;
+        let state = load_pattern_state(self.pattern_state_path.as_deref())?;
+        let disabled = state.disabled_patterns.clone();
+        let rebuilt =
+            tokio::task::spawn_blocking(move || scanner_for_with_state(&bundle, &applied, &state))
+                .await
+                .map_err(|error| format!("scanner rebuild task failed: {error}"))?;
         let scanner = rebuilt?;
         *self.scanner.write().await = scanner;
         *self.config.write().await = config;
+        *self.applied_pattern_state.write().await = disabled;
         // The scanner in force is already built from this configuration, so
         // the lazy compilation is marked as done. Without this the first
         // request would compile the whole rule set a second time.
@@ -160,14 +185,22 @@ impl ServerState {
                 let _guard = self.apply_lock.lock().await;
                 let bundle = self.current_bundle().await;
                 let config = self.config.read().await.clone();
+                let state = load_pattern_state(self.pattern_state_path.as_deref())
+                    .map_err(|message| format!("pattern state is unavailable: {message}"))?;
+                let disabled = state.disabled_patterns.clone();
                 let compiled: std::result::Result<Scanner, String> =
-                    match tokio::task::spawn_blocking(move || scanner_for(&bundle, &config)).await {
+                    match tokio::task::spawn_blocking(move || {
+                        scanner_for_with_state(&bundle, &config, &state)
+                    })
+                    .await
+                    {
                         Ok(result) => result,
                         Err(error) => Err(format!("pattern compilation task failed: {error}")),
                     };
                 match compiled {
                     Ok(scanner) => {
                         *self.scanner.write().await = scanner;
+                        *self.applied_pattern_state.write().await = disabled;
                         Ok(())
                     }
                     Err(message) => Err(message),
@@ -180,6 +213,77 @@ impl ServerState {
                 message: format!("scanner patterns are unavailable: {message}"),
                 data: None,
             })
+    }
+
+    /// Make the scanner in force match the persisted pattern state.
+    ///
+    /// The state file is read for every tool call, so a pattern the
+    /// operator disabled after the server started stops firing without a
+    /// restart. A state file that did not change does not rebuild the rule
+    /// set.
+    ///
+    /// # Errors
+    /// Returns `InternalError` when the state cannot be read or parsed, and
+    /// when the rule set cannot be rebuilt around it.
+    pub async fn refresh_pattern_state(&self) -> Result<()> {
+        let state = load_pattern_state(self.pattern_state_path.as_deref()).map_err(|message| {
+            jsonrpc_core::Error {
+                code: jsonrpc_core::ErrorCode::InternalError,
+                message: format!("pattern state is unavailable: {message}"),
+                data: None,
+            }
+        })?;
+        if *self.applied_pattern_state.read().await == state.disabled_patterns {
+            return Ok(());
+        }
+        // The lock keeps a configuration applied while this rebuild runs
+        // from being overwritten by it.
+        let _guard = self.apply_lock.lock().await;
+        if *self.applied_pattern_state.read().await == state.disabled_patterns {
+            return Ok(());
+        }
+        let bundle = self.current_bundle().await;
+        let config = self.config.read().await.clone();
+        let disabled = state.disabled_patterns.clone();
+        let rebuilt = match tokio::task::spawn_blocking(move || {
+            scanner_for_with_state(&bundle, &config, &state)
+        })
+        .await
+        {
+            Ok(Ok(scanner)) => scanner,
+            Ok(Err(message)) => {
+                return Err(jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: format!("scanner rebuild failed: {message}"),
+                    data: None,
+                });
+            }
+            Err(error) => {
+                return Err(jsonrpc_core::Error {
+                    code: jsonrpc_core::ErrorCode::InternalError,
+                    message: format!("scanner rebuild task failed: {error}"),
+                    data: None,
+                });
+            }
+        };
+        *self.scanner.write().await = rebuilt;
+        *self.applied_pattern_state.write().await = disabled;
+        Ok(())
+    }
+
+    /// The scanner every tool call scans with.
+    ///
+    /// The rule set is compiled on first use, and the persisted pattern
+    /// state is applied before the first scan and refreshed afterwards, so
+    /// the rule set in force is the one the operator configured.
+    ///
+    /// # Errors
+    /// Returns `InternalError` when the rule set cannot be compiled, when
+    /// the persisted pattern state cannot be read, or when the rule set
+    /// cannot be rebuilt around it.
+    pub async fn prepare_scanner(&self) -> Result<()> {
+        self.ensure_patterns_loaded().await?;
+        self.refresh_pattern_state().await
     }
 }
 
@@ -196,12 +300,12 @@ fn shipped_bundle() -> Bundle {
     )
 }
 
-/// Build a scanner over a rule set with a configuration in force.
+/// Build a scanner over a rule set with a configuration in force and a
+/// persisted pattern state applied.
 ///
-/// The configuration names the categories to scan, the severity threshold,
-/// the anomaly detectors, and the path classes; the bundle stays the rule
-/// set, because a configuration says what to look for, not which rules to
-/// ship.
+/// The state narrows the registry before any scan, the same way it does on
+/// the command line, so a pattern the operator disabled does not fire here
+/// either.
 ///
 /// # Errors
 ///
@@ -210,7 +314,11 @@ fn shipped_bundle() -> Bundle {
 /// severity threshold no severity name matches, or an unknown anomaly
 /// detector. The scanner is not built, so a rejected configuration leaves
 /// the server serving the configuration it already had.
-fn scanner_for(bundle: &Bundle, config: &Config) -> std::result::Result<Scanner, String> {
+fn scanner_for_with_state(
+    bundle: &Bundle,
+    config: &Config,
+    state: &aegis_core::pattern_state::PatternState,
+) -> std::result::Result<Scanner, String> {
     // A rule whose glob does not compile classifies nothing, so the
     // configuration is rejected here instead of being applied as a silent
     // no-op: the caller learns that its path class never fired.
@@ -240,7 +348,30 @@ fn scanner_for(bundle: &Bundle, config: &Config) -> std::result::Result<Scanner,
         aegis_core::anomalies::validate_detector_names(detectors)?;
     }
 
-    Ok(scanner.with_options(options))
+    let scanner = scanner.with_options(options);
+    // The state is applied before the first scan, so the extension scanners
+    // the scanner caches are built from the narrowed registry.
+    aegis_core::pattern_state::apply_to_registry(state, scanner.registry());
+    Ok(scanner)
+}
+
+/// Read the persisted pattern state a server honors.
+///
+/// `path` is the file the server was pointed at; without one the server
+/// honors no persisted state and scans with the rule set in force.
+///
+/// # Errors
+///
+/// Returns a message naming the file when the state cannot be read or
+/// parsed. A malformed state file is an error, never a silent fallback: an
+/// ignored preference silently changes scan results.
+fn load_pattern_state(
+    path: Option<&std::path::Path>,
+) -> std::result::Result<aegis_core::pattern_state::PatternState, String> {
+    let Some(path) = path else {
+        return Ok(aegis_core::pattern_state::PatternState::empty());
+    };
+    aegis_core::pattern_state::load(path).map_err(|error| error.to_string())
 }
 
 impl Default for ServerState {
@@ -360,7 +491,7 @@ impl AegisRpcImpl {
     fn scan_string(&self, content: String, source: String) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_string(&content, &source);
 
@@ -382,7 +513,7 @@ impl AegisRpcImpl {
                 });
             }
 
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let (findings, scan_stats) =
                 scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
@@ -413,7 +544,7 @@ impl AegisRpcImpl {
                 });
             }
 
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let (findings, scan_stats) =
                 scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
@@ -433,7 +564,7 @@ impl AegisRpcImpl {
     fn scan_env(&self) -> BoxFuture<Result<ScanResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let findings = scanner.scan_env();
 
@@ -444,7 +575,7 @@ impl AegisRpcImpl {
     fn list_patterns(&self, category: Option<String>) -> BoxFuture<Result<ListPatternsResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
 
@@ -475,7 +606,7 @@ impl AegisRpcImpl {
     fn list_categories(&self) -> BoxFuture<Result<Vec<String>>> {
         let state = self.state.clone();
         Box::pin(async move {
-            state.ensure_patterns_loaded().await?;
+            state.prepare_scanner().await?;
             let scanner = state.scanner.read().await;
             let registry = scanner.registry();
             Ok(registry.categories())
@@ -528,11 +659,23 @@ impl AegisRpcImpl {
             // from installing its scanner after this one.
             let _guard = state.apply_lock.lock().await;
             let config = state.config.read().await.clone();
-            let new_scanner = scanner_for(&bundle, &config).map_err(|e| jsonrpc_core::Error {
-                code: jsonrpc_core::ErrorCode::InternalError,
-                message: format!("Failed to create scanner: {e}"),
-                data: None,
-            })?;
+            let pattern_state =
+                load_pattern_state(state.pattern_state_path.as_deref()).map_err(|e| {
+                    jsonrpc_core::Error {
+                        code: jsonrpc_core::ErrorCode::InternalError,
+                        message: format!("Failed to read the pattern state: {e}"),
+                        data: None,
+                    }
+                })?;
+            let disabled = pattern_state.disabled_patterns.clone();
+            let new_scanner =
+                scanner_for_with_state(&bundle, &config, &pattern_state).map_err(|e| {
+                    jsonrpc_core::Error {
+                        code: jsonrpc_core::ErrorCode::InternalError,
+                        message: format!("Failed to create scanner: {e}"),
+                        data: None,
+                    }
+                })?;
 
             // Update state. The swap flag makes later `ensure_patterns_loaded`
             // calls no-ops so they cannot overwrite this bundle, and it also
@@ -540,6 +683,12 @@ impl AegisRpcImpl {
             {
                 let mut scanner = state.scanner.write().await;
                 *scanner = new_scanner;
+            }
+            // The scanner in force was built around this state, so a later
+            // refresh does not rebuild the rule set for nothing.
+            {
+                let mut applied = state.applied_pattern_state.write().await;
+                *applied = disabled;
             }
             // Keep the installed bundle, so a configuration applied later
             // is built around the same rules instead of silently falling
@@ -589,13 +738,29 @@ fn operator_config_path() -> anyhow::Result<Option<PathBuf>> {
     }
 }
 
+/// The persisted pattern state the server honors.
+///
+/// The environment is read here, at the edge: `AEGIS_PATTERN_STATE` names
+/// the file, and the default is this account's own configuration
+/// directory. A server running under a service account therefore needs the
+/// environment variable to honor the file the operator's `aegis disable`
+/// writes.
+fn pattern_state_path() -> Option<PathBuf> {
+    let explicit = std::env::var_os(aegis_core::pattern_state::STATE_PATH_ENV).map(PathBuf::from);
+    aegis_core::pattern_state::resolve_state_file(explicit.as_deref()).ok()
+}
+
 /// Initialize scanner with patterns from aegis-patterns
 ///
-/// The server builds its scanner through [`scanner_for`], so this shortcut
-/// exists for the tests that need a scanner without a configuration.
+/// The server builds its scanner through [`scanner_for_with_state`], so this
+/// shortcut exists for the tests that need a scanner without a
+/// configuration. It applies an empty pattern state: a test must not depend
+/// on the pattern state file the operator's own `aegis disable` writes.
 #[cfg(test)]
 fn init_scanner() -> anyhow::Result<Scanner> {
-    scanner_for(&shipped_bundle(), &Config::default()).map_err(anyhow::Error::msg)
+    let state = aegis_core::pattern_state::PatternState::empty();
+    scanner_for_with_state(&shipped_bundle(), &Config::default(), &state)
+        .map_err(anyhow::Error::msg)
 }
 
 fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {
@@ -660,7 +825,12 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .try_init();
 
-    let state = Arc::new(ServerState::new());
+    let server_state = ServerState::new();
+    let server_state = match pattern_state_path() {
+        Some(path) => server_state.with_pattern_state(path),
+        None => server_state,
+    };
+    let state = Arc::new(server_state);
 
     // An operator configuration is applied before the server answers, so a
     // configuration that cannot be applied stops the server instead of
@@ -1379,6 +1549,108 @@ mod tests {
         assert!(
             error.contains("severe"),
             "the rejection names the threshold: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_disabled_pattern_stops_firing_on_the_next_tool_call() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file.clone()));
+        let rpc = AegisRpcImpl::new(state.clone());
+        let content = mixed_category_fixture();
+
+        let before = rpc
+            .scan_string(content.clone(), "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            before
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the fixture must trip the gitlab rule: {:?}",
+            before
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let mut document = aegis_core::pattern_state::PatternState::empty();
+        document
+            .disabled_patterns
+            .insert("gitlab-token".to_string());
+        aegis_core::pattern_state::save(&state_file, &document).expect("the state is written");
+
+        let after = rpc
+            .scan_string(content, "test.txt".to_string())
+            .await
+            .expect("scan_string must succeed");
+        assert!(
+            !after
+                .findings
+                .iter()
+                .any(|finding| finding.pattern == "gitlab-token"),
+            "the disabled rule must not fire: {:?}",
+            after
+                .findings
+                .iter()
+                .map(|finding| finding.pattern.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_rather_than_ignored() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+        let rpc = AegisRpcImpl::new(state.clone());
+
+        let error = rpc
+            .scan_string(mixed_category_fixture(), "test.txt".to_string())
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_when_the_state_is_refreshed() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+
+        let error = state
+            .refresh_pattern_state()
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_malformed_state_file_is_refused_when_the_bundle_is_replaced() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state_file = dir.path().join("pattern-state.json");
+        std::fs::write(&state_file, "{not json").expect("write a malformed state");
+        let state = Arc::new(ServerState::new().with_pattern_state(state_file));
+        let rpc = AegisRpcImpl::new(state);
+
+        let error = rpc
+            .update_bundle(None, false)
+            .await
+            .expect_err("a malformed state must not be ignored");
+        assert!(
+            error.to_string().contains("pattern-state.json"),
+            "the refusal names the file: {error}"
         );
     }
 }
