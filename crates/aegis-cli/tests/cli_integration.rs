@@ -717,3 +717,70 @@ fn test_scan_rejects_a_malformed_classify_path() {
         "the failure must name the expected form: {stderr}"
     );
 }
+
+#[test]
+fn test_scan_refuses_two_modes_at_once() {
+    // The modes are exclusive: combining them used to pick one silently,
+    // so the user got a scan they did not ask for and no notice.
+    let cfg = isolated_config();
+    let output = cfg
+        .command()
+        .args(["scan", "--env", "--stdin"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with"),
+        "the usage error must name the conflict, got: {stderr}"
+    );
+}
+
+#[test]
+fn test_scan_file_on_a_directory_is_refused() {
+    let cfg = isolated_config();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("main.rs"), "fn main() {}\n").unwrap();
+
+    let output = cfg
+        .command()
+        .args(["scan", "--file"])
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "a directory under --file must not be scanned as a tree"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("is a directory"),
+        "the error must say what is wrong, got: {stderr}"
+    );
+}
+
+#[test]
+fn test_scan_of_an_empty_directory_exits_0() {
+    // Nothing to inspect is a completed inspection. The run used to exit 3
+    // ("not proven inspected"), which failed pipelines that scan an empty
+    // build directory.
+    let cfg = isolated_config();
+    let dir = tempfile::tempdir().unwrap();
+    let empty = dir.path().join("empty");
+    std::fs::create_dir(&empty).unwrap();
+
+    let output = cfg.command().args(["scan"]).arg(&empty).output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

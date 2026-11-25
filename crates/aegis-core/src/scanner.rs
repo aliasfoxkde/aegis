@@ -145,8 +145,6 @@ pub struct ScanOptions {
     pub baseline: Option<PathBuf>,
     /// Include disabled patterns in scan
     pub include_disabled: bool,
-    /// Diff file to scan (only changed lines)
-    pub diff_file: Option<PathBuf>,
     /// Statistical anomaly detectors to run after a directory scan; `None`
     /// runs every detector, an empty list disables the layer entirely, and a
     /// non-empty list runs exactly the named detectors (see
@@ -178,7 +176,6 @@ impl Default for ScanOptions {
             workers: num_cpus(),
             baseline: None,
             include_disabled: false,
-            diff_file: None,
             anomaly_detectors: None,
             detect_clones: false,
             path_classes: Vec::new(),
@@ -842,13 +839,21 @@ impl Scanner {
             }
         }
 
+        // A diff names the files it touches, so its findings are classified
+        // against the paths the diff carries.
+        self.apply_path_classes(&mut all_findings, None);
         all_findings
     }
 
     /// Scan a string
     /// Scan in-memory content and return findings from all enabled analyzers.
     pub fn scan_string(&self, content: &str, source: &str) -> Vec<Finding> {
-        self.scan_string_with_inspection(content, source).0
+        let mut findings = self.scan_string_with_inspection(content, source).0;
+        // Content that arrives as a string — from stdin, from a staged
+        // blob — carries a path too, so it is classified like any other
+        // finding.
+        self.apply_path_classes(&mut findings, None);
+        findings
     }
 
     /// Lowercased file extension of a source path, if any
@@ -1192,6 +1197,38 @@ impl Scanner {
     /// thread.
     pub fn scan_file(&self, path: &Path) -> Result<(Vec<Finding>, ScanStats), ScanError> {
         self.scan_file_with_root(path, None)
+    }
+
+    /// Apply the configured path classes to a set of findings.
+    ///
+    /// This is the classification step of the finding pipeline. Every
+    /// finding that reaches a report passes through it, whatever route it
+    /// took: a file walk, a directory walk, the statistical anomaly pass,
+    /// an environment scan, a diff, or content read from stdin. A class is
+    /// a property of where a finding came from, so it belongs to the
+    /// pipeline rather than to one entry point.
+    ///
+    /// `root` is the scan root, for the routes that have one. A rule is
+    /// then matched against the path relative to that root, so `docs/**`
+    /// means the docs directory of this repository rather than any
+    /// directory named `docs` on the machine. Routes without a root match
+    /// against the path as written.
+    pub fn apply_path_classes(&self, findings: &mut Vec<Finding>, root: Option<&Path>) {
+        if self.path_classes.is_empty() {
+            return;
+        }
+        for finding in findings.iter_mut() {
+            let file = finding.location.file.clone();
+            let relative = root
+                .and_then(|root| Path::new(&file).strip_prefix(root).ok())
+                .map(|relative| relative.to_string_lossy().into_owned());
+            if let Some(class) = self.path_classes.class_of(&file, relative.as_deref()) {
+                apply_path_class(finding, class);
+            }
+        }
+        // A finding the classification lowered below the operator's
+        // threshold must not survive the report.
+        findings.retain(|finding| self.passes_severity_threshold(finding));
     }
 
     /// Scan a single file, classifying its path relative to `root`.
@@ -1558,6 +1595,21 @@ impl Scanner {
             }
         }
 
+        // A tree with no files in it has nothing to inspect, and "nothing
+        // to inspect" is a completed inspection rather than an unproven
+        // one. The root is recorded as an analyzed unit so the receipt can
+        // certify that the walk happened: an empty ledger is not evidence
+        // of anything, and a clean scan of an empty build directory must
+        // not be reported as an incomplete inspection.
+        if merged_stats.inspection_ledger.units.is_empty() {
+            merged_stats.inspection_ledger.record(
+                root.to_string_lossy().into_owned(),
+                InspectionStatus::Analyzed,
+                true,
+                Some("empty_tree: nothing to inspect".to_string()),
+            );
+        }
+
         // Statistical anomaly post-pass: the parallel phase filled the
         // metrics sink; analyze it against the repository's own baseline and
         // append the observations. They pass through the same category,
@@ -1566,7 +1618,11 @@ impl Scanner {
         let mut anomaly_findings =
             Self::anomaly_findings(&metrics, self.options.anomaly_detectors.as_deref());
         anomaly_findings.retain(|finding| self.passes_post_filters(finding));
-        let anomaly_findings = self.filter_baseline(anomaly_findings);
+        let mut anomaly_findings = self.filter_baseline(anomaly_findings);
+        // The anomaly pass runs after the per-file walk, so its findings
+        // never carried the file walk's classification. They are classified
+        // here instead, against the same root.
+        self.apply_path_classes(&mut anomaly_findings, Some(root));
         for finding in &anomaly_findings {
             merged_stats.add_finding(finding);
         }
@@ -1660,7 +1716,11 @@ impl Scanner {
             }
         }
 
-        self.filter_baseline(findings)
+        let mut findings = self.filter_baseline(findings);
+        // An environment finding is classified like any other finding: the
+        // class is recorded as a tag, so a report says where it came from.
+        self.apply_path_classes(&mut findings, None);
+        findings
     }
 }
 
@@ -2387,7 +2447,6 @@ mod tests {
             workers: 8,
             baseline: Some(PathBuf::from("/baseline.json")),
             include_disabled: true,
-            diff_file: Some(PathBuf::from("/diff.txt")),
             anomaly_detectors: Some(vec!["file-size-outlier".to_string()]),
             detect_clones: true,
             path_classes: Vec::new(),
@@ -3244,5 +3303,105 @@ patterns:
             err.to_string().contains("failed to read"),
             "read failures must be reported, got: {err}"
         );
+    }
+
+    /// A scanner whose only rule classifies every path as documentation.
+    fn classifying_scanner(glob: &str) -> Scanner {
+        Scanner::from_definitions(vec![PatternDefinition {
+            name: "test-secret".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "secret".to_string(),
+            exclude_pattern: None,
+            file_extensions: Vec::new(),
+            severity: Severity::High,
+            confidence: crate::pattern::Confidence::High,
+            description: "Test pattern".to_string(),
+            enabled: true,
+            min_entropy: None,
+            reference: None,
+            tags: vec![],
+            env_var: false,
+            binary: false,
+            remediation: None,
+        }])
+        .unwrap()
+        .with_options(ScanOptions {
+            path_classes: vec![PathClassRule {
+                glob: glob.to_string(),
+                class: crate::config::PathClass::Docs,
+            }],
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn an_empty_directory_is_a_completed_inspection() {
+        let temp_dir = TempDir::new().unwrap();
+        let scanner = Scanner::new();
+
+        let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
+
+        assert!(
+            stats.inspection_ledger.allows_safe(),
+            "nothing to inspect is a completed inspection, not an unproven one"
+        );
+        assert!(
+            !stats.inspection_ledger.units.is_empty(),
+            "the receipt must certify that the walk happened"
+        );
+    }
+
+    #[test]
+    fn a_string_scanned_outside_a_file_is_classified() {
+        let scanner = classifying_scanner("*");
+
+        let findings = scanner.scan_string("let secret = 'abc';", "docs/intro.md");
+
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0].tags.contains(&"docs".to_string()),
+            "a finding that did not come from a file is classified too: {:?}",
+            findings[0].tags
+        );
+    }
+
+    #[test]
+    fn an_environment_finding_is_classified() {
+        let scanner = classifying_scanner("*");
+
+        let findings =
+            scanner.scan_env_vars([("AEGIS_TEST".to_string(), "let secret = 'abc';".to_string())]);
+
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0].tags.contains(&"docs".to_string()),
+            "an environment finding is classified too: {:?}",
+            findings[0].tags
+        );
+    }
+
+    #[test]
+    fn a_diff_finding_is_classified() {
+        let scanner = classifying_scanner("docs/**");
+        let diff = "diff --git a/docs/intro.md b/docs/intro.md\n--- a/docs/intro.md\n+++ b/docs/intro.md\n@@ -1,1 +1,2 @@\n context\n+let secret = 'abc';\n";
+
+        let findings = scanner.scan_diff(diff, "diff");
+
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0].tags.contains(&"docs".to_string()),
+            "a diff finding is classified too: {:?}",
+            findings[0].tags
+        );
+    }
+
+    #[test]
+    fn a_secret_finding_keeps_its_severity_under_a_classified_path() {
+        let scanner = classifying_scanner("*");
+
+        let findings = scanner.scan_string("let secret = 'abc';", "docs/intro.md");
+
+        assert_eq!(findings[0].severity, "high");
+        assert!(findings[0].tags.contains(&"docs".to_string()));
     }
 }
