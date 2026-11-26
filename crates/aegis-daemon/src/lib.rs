@@ -1245,7 +1245,7 @@ mod tests {
         let outside = tempfile::tempdir().expect("outside tempdir");
         fs::write(
             outside.path().join("outside.js"),
-            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis-allow: synthetic fixture
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis-allow: synthetic fixture, not a real credential | expires=2027-12-31 | approver=maintainers
         )
         .expect("write outside file");
         fs::write(root.path().join("inside.txt"), "safe content").expect("write inside file");
@@ -1293,7 +1293,7 @@ mod tests {
         let file = dir.path().join("leak.txt");
         fs::write(
             &file,
-            "AKIAIOSFODNN7EXAMPLE\nAKIAIOSFODNN7OTHERKEY\n", // aegis-allow: synthetic fixture
+            "AKIAIOSFODNN7EXAMPLE\nAKIAIOSFODNN7OTHERKEY\n", // aegis-allow: synthetic fixture, not a real credential | expires=2027-12-31 | approver=maintainers
         )
         .expect("write fixture");
 
