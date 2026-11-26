@@ -326,6 +326,20 @@ fn scanner_for_with_state(
         rule.validate()?;
     }
 
+    // A baseline must name an existing, readable file, and it must sit
+    // inside the sandbox: a baseline is content the scan reads, so an
+    // operator profile cannot smuggle reads outside the allowed directory.
+    if let Some(baseline) = &config.baseline {
+        if !sandbox::is_path_safe(baseline) {
+            return Err(format!(
+                "baseline path {} is outside the allowed directory",
+                baseline.display()
+            ));
+        }
+        aegis_core::scanner::load_baseline_fingerprints(baseline)
+            .map_err(|error| error.to_string())?;
+    }
+
     let mut configured = config.clone();
     configured.bundle = bundle.clone();
 
@@ -334,11 +348,15 @@ fn scanner_for_with_state(
     // `from_config` applies the categories and the path classes; the
     // threshold and the detector selection are scan options, so they are
     // applied here — with the path classes carried over, because the
-    // options replace the ones the scanner was built with.
+    // options replace the ones the scanner was built with. The baseline
+    // and the walk options come from the configuration the same way.
     let options = ScanOptions {
         path_classes: configured.path_classes.clone(),
         severity_threshold: configured.severity_threshold.clone(),
         anomaly_detectors: configured.anomaly_detectors.clone(),
+        baseline: configured.baseline.clone(),
+        follow_symlinks: configured.follow_symlinks,
+        detect_clones: configured.detect_clones,
         ..ScanOptions::default()
     };
     // A threshold or a detector name that cannot be honoured would quiet
@@ -1006,6 +1024,68 @@ async fn write_response<W: tokio::io::AsyncWrite + Unpin>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_config_with_a_baseline_inside_the_sandbox_carries_it_into_the_options() {
+        // The server can offer the "what is new since last time" mode: the
+        // profile's baseline reaches the scan options and the scanner is
+        // built with it.
+        // The sandbox admits only paths inside the working directory, so
+        // the fixture lives under the process cwd, spelled absolutely so
+        // the test does not depend on how the runner resolves relatives.
+        let dir = std::env::current_dir()
+            .expect("test cwd")
+            .join(format!("target/aegis-mcp-baseline-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        let baseline = dir.join("baseline.json");
+        std::fs::write(&baseline, r#"[{"fingerprint":"fp-1"}]"#).expect("write baseline");
+
+        let config = Config {
+            baseline: Some(baseline.clone()),
+            ..Config::default()
+        };
+        let state = aegis_core::pattern_state::PatternState::default();
+
+        let scanner =
+            scanner_for_with_state(&shipped_bundle(), &config, &state).expect("scanner builds");
+        assert_eq!(scanner.scan_options().baseline.as_ref(), Some(&baseline));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_config_with_a_baseline_outside_the_sandbox_is_refused() {
+        // A baseline is content the scan reads, so an operator profile
+        // cannot point it outside the allowed directory.
+        let config = Config {
+            baseline: Some(PathBuf::from("/etc/aegis-never-here-baseline.json")),
+            ..Config::default()
+        };
+        let state = aegis_core::pattern_state::PatternState::default();
+
+        let Err(error) = scanner_for_with_state(&shipped_bundle(), &config, &state) else {
+            panic!("a baseline outside the sandbox must be refused");
+        };
+        assert!(
+            error.contains("outside the allowed directory"),
+            "got: {error}"
+        );
+    }
+
+    #[test]
+    fn a_config_with_walk_options_carries_them_into_the_options() {
+        let config = Config {
+            follow_symlinks: true,
+            detect_clones: true,
+            ..Config::default()
+        };
+        let state = aegis_core::pattern_state::PatternState::default();
+
+        let scanner =
+            scanner_for_with_state(&shipped_bundle(), &config, &state).expect("scanner builds");
+        let options = scanner.scan_options();
+        assert!(options.follow_symlinks);
+        assert!(options.detect_clones);
+    }
 
     #[test]
     fn test_init_scanner_has_patterns() {
