@@ -120,7 +120,9 @@ aegis list --disabled
 
 Enable or disable a pattern by id. The choice persists to
 `<config dir>/aegis/pattern-state.json` and is honored by every later
-scan and by `aegis list`.
+scan and by `aegis list`. The daemon and the MCP server read the same
+file when they are pointed at it with `AEGIS_PATTERN_STATE`; see
+[Persisted Pattern State](CONFIGURATION.md#persisted-pattern-state).
 
 ```bash
 aegis enable <pattern-id>
@@ -262,7 +264,8 @@ automatically — a run's settings come from CLI flags, plus optional JSON
 profile documents selected with the top-level `-c/--config` flag. The
 one auto-read state file is `<config dir>/aegis/pattern-state.json`,
 written by `aegis enable`/`aegis disable` and applied to every scan and
-`aegis list`. The config directory follows the XDG convention: it is
-`$XDG_CONFIG_HOME` when set, otherwise `~/.config`. See
+`aegis list`. The daemon and the MCP server read the same file when
+`AEGIS_PATTERN_STATE` names it. The config directory follows the XDG
+convention: it is `$XDG_CONFIG_HOME` when set, otherwise `~/.config`. See
 [Configuration](CONFIGURATION.md) for the profile schema and the
 presets shipped in `config/profiles/`.

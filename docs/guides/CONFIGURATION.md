@@ -164,6 +164,7 @@ Aegis reads only these variables; there is no general `AEGIS_CONFIG` or
 | `AEGIS_DAEMON_ALLOWED_GIDS` | Comma-separated GIDs permitted to talk to the daemon |
 | `AEGIS_DAEMON_CONFIG` | Profile file the daemon applies at startup; see [Operator Configuration](#operator-configuration-for-the-daemon-and-the-mcp-server) |
 | `AEGIS_MCP_CONFIG` | Profile file the MCP server applies at startup; see [Operator Configuration](#operator-configuration-for-the-daemon-and-the-mcp-server) |
+| `AEGIS_PATTERN_STATE` | Persisted pattern state file the process reads; without it each process reads `<config dir>/aegis/pattern-state.json` of its own account; see [Persisted Pattern State](#persisted-pattern-state) |
 | `AEGIS_SOURCE_REVISION` | Source revision stamped into scan receipts (informational only) |
 | `AEGIS_ATHEON_PATH` | Path to an Atheon binary that `aegis benchmark --compare` runs against; when unset, the external comparison is skipped |
 
@@ -208,6 +209,40 @@ protocol**. Neither server accepts a request that changes it, because a
 client that could set the severity threshold or the category list could
 weaken the scan it was asked for. Change the profile file and restart the
 service.
+
+### Persisted Pattern State
+
+`aegis enable` and `aegis disable` record the choice in a JSON state file
+and every surface that scans honors it:
+
+```json
+{ "version": 1, "disabled_patterns": ["hardcoded-password"] }
+```
+
+The file is `<config dir>/aegis/pattern-state.json` — the XDG
+configuration directory of the account that runs the process, so
+`$XDG_CONFIG_HOME/aegis/pattern-state.json` when that is set and
+`~/.config/aegis/pattern-state.json` otherwise.
+
+| Surface | When the file is read | What happens when it changed |
+|---------|-----------------------|------------------------------|
+| `aegis scan`, `aegis list` | Before every scan and listing | The next scan honors it; there is nothing to rebuild |
+| `aegis-daemon` | Before every request | The scanner is rebuilt around the new state, so the next request honors it without a restart |
+| `aegis-mcp` | Before every tool call | The scanner is rebuilt around the new state, so the next tool call honors it without a restart |
+
+A daemon or an MCP server usually runs under a service account whose
+configuration directory is not the operator's, so the two do not share a
+file by default. Point the service at the operator's file with
+`AEGIS_PATTERN_STATE`:
+
+```bash
+AEGIS_PATTERN_STATE=/home/operator/.config/aegis/pattern-state.json aegis-daemon
+```
+
+A file that cannot be parsed is an error on every surface, never a silent
+fallback: an ignored preference silently changes scan results. A file that
+does not exist is an empty state, which is what "nothing is disabled"
+means.
 
 ## Risk Scoring
 

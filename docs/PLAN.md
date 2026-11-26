@@ -14,7 +14,7 @@ and quality phases. Status is updated as phases land.
 | Patterns | 677 across 35 categories, per-extension dispatch, entropy + exclude gates; five false-positive-prone rules regex-corrected in the Phase 11 audit, each pinned by a negative-corpus regression fixture (Phase 12) |
 | Engine | Suppression directives (line/range/file/reason), baseline filtering (baseline artifact excluded from rescans), `.aegisignore`, custom user patterns (`.aegis.yml`), `--staged` pre-commit mode, persisted pattern state (`enable`/`disable` → `pattern-state.json`), `ScanOptions::workers` sizes the actual scan pool; path classes (`--classify-path`), inline `aegis:synthetic` annotations, and secret-triage verdicts (all three shipped in #185) |
 | Rule liveness | Every shipped rule has a provably firing example; `crates/aegis-core/tests/pattern_liveness.rs` runs in CI |
-| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, 949 tests passing in the CI test lane (2026-11-16, `f90171f`), `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines and a 90% patch floor enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
+| Quality gates | `[workspace.lints]` (pedantic + `missing_docs`, unwrap/expect/panic denied, `-D warnings`), rustdoc link lints + Rustdoc CI job, fmt, the per-platform test counts gated by `scripts/check-test-count.py` (988 on Linux and macOS, 957 on Windows — measured 2026-11-26), `--locked` everywhere, multi-OS test matrix, native coverage floor 97.0% lines and a 90% patch floor enforced in CI from the CI-generated lcov report (Codecov uploads currently fail for lack of a token — see Phase 17C), weekly cargo-fuzz (4 targets), criterion bench, corpus harness (aggregate 0.95/0.95, per-rule precision floor, demote-only confidence calibration, negative-corpus silence pins) |
 | Surfaces | CLI (human/json/sarif; `-c/--config` presets and profile files), MCP server (full MCP lifecycle discovery plus the custom JSON-RPC method set), Unix-socket daemon, wasm build, 5-platform release tarballs, verified container image, k8s scan CronJob; both wire surfaces pinned by conformance fixture suites (Phase 15) with 10 MiB frame caps |
 | Release | v0.6.5 published 2026-11-17; **GitForge-first** — the `.gitforce.yml` pipeline builds all assets in the builder image, `scripts/release/publish.sh` mirrors to GitHub; attestation carries the lockfile SHA-256. v0.6.2 was the first release whose assets were actually built by the GitForge pipeline end-to-end (7-step run green, 10 artifacts, checksums verified at publish), and v0.6.5 repeated that end-to-end path (receipt: [progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md](progress/AEGIS_V0_6_5_RELEASE_RECEIPT_2026-11-17.md)). The platform tarballs were byte-reproducible only for the same build directory — the build path was compiled into the binaries — which `scripts/release/build.sh` now remaps away (workspace and cargo home alike), so a release is reproducible wherever it is built |
 | Known defects | The [2026-11-16 gap analysis](audits/2026-11-16-gap-analysis.md) list is worked through: the daemon's and the MCP server's inert `config` field is fixed (#199) and both surfaces now take an operator profile file, a path-class rule that cannot compile is rejected instead of skipped (#197), the triage reason no longer quotes the matched value (#195), patch coverage is enforced in CI (#200), the triage ergonomics are pinned over both wires (#202), and the changelog and branch-sync documentation are written (#193, #196, #201). What remains is operator-side: a `CODECOV_TOKEN` for the Codecov half of the coverage gate, the CodeRabbit OSS auto-review restriction, and GitForge required checks (a product gap in GitForge itself). Self-scan clean (0 findings at `--severity-threshold high`, 2026-09-22); stats agree with findings on every scan path; exit codes verified e2e per mode |
@@ -755,8 +755,21 @@ is a straight weighted sum (`aegis-core::risk`).
   CI-generated report counts: locally generated reports map identical
   executed code to different instrumented-line counts; see Phase 17C
   for the Codecov upload state)
-- 818 tests across 25 test binaries: unit tests per crate; integration
-  tests per surface; property
+- The suite is platform-dependent — some tests are Unix-only — so the
+  counts are recorded per platform. Measured on CI at `5b1741e` on
+  2026-11-24:
+
+  | Platform | Tests | Test binaries |
+  | --- | --- | --- |
+  | Linux | 988 | 31 |
+  | macOS | 988 | 31 |
+  | Windows | 957 | 31 |
+
+  `scripts/check-test-count.py` re-measures the count from each lane's
+  own test log and fails when this table no longer matches, so the
+  numbers cannot drift the way the prose did before the table existed.
+- The suite is unit tests per crate; integration tests per surface;
+  property
   tests and fuzzing for parsers (4 cargo-fuzz targets); criterion
   benchmarks; labelled corpus with aggregate + per-rule precision gates,
   confidence calibration, and negative-corpus silence pins; wire
