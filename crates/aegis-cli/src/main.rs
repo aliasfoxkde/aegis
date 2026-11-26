@@ -265,6 +265,11 @@ async fn main() -> Result<()> {
                 }
                 path_classes.extend(profile.path_classes.iter().cloned());
             }
+            // The profile supplies defaults for the walk options and the
+            // baseline, the same way it does for the categories and the
+            // threshold: an explicit flag always wins.
+            let (follow_symlinks, detect_clones, baseline) =
+                merge_wire_options(follow_symlinks, detect_clones, baseline, profile.as_ref());
             scanner::run_scan(scanner::ScanOptions {
                 path,
                 scan_file: file,
@@ -325,4 +330,71 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Merge the walk options and the baseline: the command line wins, the
+/// profile supplies defaults.
+///
+/// The flags are opt-in, so a profile can only turn an option on that the
+/// operator did not set; the baseline falls back to the profile's when the
+/// flag is absent.
+type WireOptions = (bool, bool, Option<PathBuf>);
+
+fn merge_wire_options(
+    follow_symlinks: bool,
+    detect_clones: bool,
+    baseline: Option<PathBuf>,
+    profile: Option<&aegis_core::Config>,
+) -> WireOptions {
+    (
+        follow_symlinks || profile.is_some_and(|p| p.follow_symlinks),
+        detect_clones || profile.is_some_and(|p| p.detect_clones),
+        baseline.or_else(|| profile.and_then(|p| p.baseline.clone())),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_command_line_wins_over_the_profile() {
+        let profile = aegis_core::Config {
+            follow_symlinks: true,
+            detect_clones: true,
+            baseline: Some(PathBuf::from("profile-baseline.json")),
+            ..aegis_core::Config::default()
+        };
+        let (follow, clones, baseline) = merge_wire_options(
+            false,
+            false,
+            Some(PathBuf::from("cli-baseline.json")),
+            Some(&profile),
+        );
+        assert!(follow);
+        assert!(clones);
+        assert_eq!(baseline, Some(PathBuf::from("cli-baseline.json")));
+    }
+
+    #[test]
+    fn the_profile_supplies_unset_defaults() {
+        let profile = aegis_core::Config {
+            follow_symlinks: true,
+            detect_clones: false,
+            baseline: Some(PathBuf::from("profile-baseline.json")),
+            ..aegis_core::Config::default()
+        };
+        let (follow, clones, baseline) = merge_wire_options(false, false, None, Some(&profile));
+        assert!(follow);
+        assert!(!clones);
+        assert_eq!(baseline, Some(PathBuf::from("profile-baseline.json")));
+    }
+
+    #[test]
+    fn with_no_profile_the_flags_stand_alone() {
+        let (follow, clones, baseline) = merge_wire_options(true, false, None, None);
+        assert!(follow);
+        assert!(!clones);
+        assert_eq!(baseline, None);
+    }
 }

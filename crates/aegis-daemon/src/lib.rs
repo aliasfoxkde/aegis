@@ -508,6 +508,13 @@ fn scanner_for_with_state(config: &Config, state: &PatternState) -> Result<Scann
         rule.validate()?;
     }
 
+    // A baseline that exists but cannot be used must fail here, before any
+    // scan runs: an ignored baseline silently changes what a scan reports.
+    if let Some(baseline) = &config.baseline {
+        aegis_core::scanner::load_baseline_fingerprints(baseline)
+            .map_err(|error| error.to_string())?;
+    }
+
     let mut configured = config.clone();
     configured.bundle = shipped_bundle();
 
@@ -516,11 +523,15 @@ fn scanner_for_with_state(config: &Config, state: &PatternState) -> Result<Scann
     // `from_config` applies the categories and the path classes; the
     // threshold and the detector selection are scan options, so they are
     // applied here — with the path classes carried over, because the
-    // options replace the ones the scanner was built with.
+    // options replace the ones the scanner was built with. The baseline
+    // and the walk options come from the configuration the same way.
     let options = ScanOptions {
         path_classes: configured.path_classes.clone(),
         severity_threshold: configured.severity_threshold.clone(),
         anomaly_detectors: configured.anomaly_detectors.clone(),
+        baseline: configured.baseline.clone(),
+        follow_symlinks: configured.follow_symlinks,
+        detect_clones: configured.detect_clones,
         ..ScanOptions::default()
     };
     // A threshold or a detector name that cannot be honoured would quiet
@@ -668,8 +679,10 @@ pub async fn handle_request(
             };
 
             let scanner = state.scanner.read().await;
-            let findings = scanner.scan_string(content, source);
-            let scan_stats = ScanStats::for_content(format!("string:{source}"), content.len());
+            // The stats-returning path also runs clone detection when the
+            // configuration enables it, so scan_string reports the same
+            // channels scan_file does.
+            let (findings, scan_stats) = scanner.scan_string_with_stats(content, source);
             DaemonResponse::from_findings_with_source(
                 findings,
                 scan_stats,
@@ -754,6 +767,68 @@ mod tests {
     use super::*;
     use std::fs;
     use std::sync::Arc;
+
+    #[test]
+    fn a_config_with_a_baseline_carries_it_into_the_scan_options() {
+        // The wire surface can offer the "what is new since last time"
+        // mode: the profile's baseline reaches the scan options and the
+        // scanner is built with it.
+        let dir = env::temp_dir().join(format!("aegis-daemon-baseline-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create fixture dir");
+        let baseline = dir.join("baseline.json");
+        fs::write(&baseline, r#"[{"fingerprint":"fp-1"}]"#).expect("write baseline");
+
+        let config = Config {
+            baseline: Some(baseline.clone()),
+            ..Config::default()
+        };
+        let state = PatternState::default();
+
+        let scanner = scanner_for_with_state(&config, &state).expect("scanner builds");
+        assert_eq!(scanner.scan_options().baseline.as_ref(), Some(&baseline));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_config_whose_baseline_cannot_be_loaded_is_refused() {
+        // An ignored baseline silently changes what a scan reports, so a
+        // baseline that exists but cannot be used fails the build rather
+        // than the scan.
+        let dir = env::temp_dir().join(format!("aegis-daemon-baseline-bad-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create fixture dir");
+        let baseline = dir.join("baseline.json");
+        fs::write(&baseline, "not json").expect("write malformed baseline");
+
+        let config = Config {
+            baseline: Some(baseline),
+            ..Config::default()
+        };
+        let state = PatternState::default();
+
+        let Err(error) = scanner_for_with_state(&config, &state) else {
+            panic!("a baseline that cannot be loaded must be refused");
+        };
+        assert!(
+            error.contains("baseline"),
+            "the error names the baseline problem, got: {error}"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_config_with_walk_options_carries_them_into_the_scan_options() {
+        let config = Config {
+            follow_symlinks: true,
+            detect_clones: true,
+            ..Config::default()
+        };
+        let state = PatternState::default();
+
+        let scanner = scanner_for_with_state(&config, &state).expect("scanner builds");
+        let options = scanner.scan_options();
+        assert!(options.follow_symlinks);
+        assert!(options.detect_clones);
+    }
 
     #[test]
     fn test_peer_policy_matches_owner_uid_and_explicit_lists() {
@@ -1154,6 +1229,115 @@ mod tests {
         assert!(
             response.finding_count > 0,
             "finding in nested fixture must be reported"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_follow_symlinks_config_keeps_scan_dir_inside_the_approved_root() {
+        // The configuration can turn link-following on, but the daemon's
+        // contract is "only inside the approved root": a link inside the
+        // root pointing outside is skipped, and the file it targets is
+        // never scanned.
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().expect("root tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        fs::write(
+            outside.path().join("outside.js"),
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI\n", // aegis-allow: synthetic fixture
+        )
+        .expect("write outside file");
+        fs::write(root.path().join("inside.txt"), "safe content").expect("write inside file");
+        symlink(
+            outside.path().join("outside.js"),
+            root.path().join("escape.js"),
+        )
+        .expect("create escaping symlink");
+
+        let state = Arc::new(DaemonState::with_scan_root(
+            PathBuf::from("/tmp/test.sock"),
+            root.path(),
+        ));
+        state
+            .set_config(Config {
+                follow_symlinks: true,
+                ..Config::default()
+            })
+            .await
+            .expect("config applies");
+
+        let request = serde_json::json!({ "method": "scan_dir", "params": ".", "id": 31 });
+        let response = handle_request(&request, &state).await;
+        assert!(response.success, "scan_dir: {:?}", response.error);
+
+        // The outside file holds the same credential shape the other
+        // fixtures use; if the walk had escaped the root it would fire and
+        // this assertion would fail.
+        assert_eq!(
+            response.finding_count, 0,
+            "nothing outside the approved root may be scanned"
+        );
+
+        let config = state.config().await;
+        assert!(config.follow_symlinks, "the flag was in force for the scan");
+    }
+
+    #[tokio::test]
+    async fn a_configured_baseline_filters_known_findings_from_scan_dir() {
+        // The "what is new since last time" mode end to end: a baseline
+        // carried in the configuration removes the finding it records from
+        // a daemon scan_dir response, while a finding the baseline does not
+        // know about still fires.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file = dir.path().join("leak.txt");
+        fs::write(
+            &file,
+            "AKIAIOSFODNN7EXAMPLE\nAKIAIOSFODNN7OTHERKEY\n", // aegis-allow: synthetic fixture
+        )
+        .expect("write fixture");
+
+        // A first scan, unfiltered, records both findings.
+        let state = Arc::new(DaemonState::with_scan_root(
+            PathBuf::from("/tmp/test.sock"),
+            dir.path(),
+        ));
+        let request = serde_json::json!({ "method": "scan_dir", "params": ".", "id": 41 });
+        let first = handle_request(&request, &state).await;
+        assert!(first.success, "first scan: {:?}", first.error);
+        assert_eq!(
+            first.finding_count, 2,
+            "both synthetic keys fire before a baseline exists"
+        );
+
+        // The fingerprints come from the findings the response carries.
+        let known = first.findings[0].fingerprint.clone();
+        let baseline_path = dir.path().join("baseline.json");
+        fs::write(
+            &baseline_path,
+            serde_json::to_string(&[serde_json::json!({"fingerprint": known})]).unwrap(),
+        )
+        .expect("write baseline");
+
+        // Apply the configuration that carries the baseline; the scanner
+        // is rebuilt around it.
+        state
+            .set_config(Config {
+                baseline: Some(baseline_path.clone()),
+                ..Config::default()
+            })
+            .await
+            .expect("config applies");
+
+        let second = handle_request(&request, &state).await;
+        assert!(second.success, "second scan: {:?}", second.error);
+        assert_eq!(
+            second.finding_count, 1,
+            "only the finding the baseline does not record survives"
+        );
+        assert_ne!(
+            second.findings[0].fingerprint, known,
+            "the surviving finding is the new one"
         );
     }
 
