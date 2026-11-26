@@ -34,6 +34,7 @@ pub mod finding;
 pub mod ignore;
 pub mod path_class;
 pub mod pattern;
+pub mod pattern_state;
 pub mod receipt;
 pub mod remediation;
 pub mod risk;
@@ -66,6 +67,7 @@ pub use finding::{
 };
 pub use path_class::{apply_path_class, PathClassMatcher};
 pub use pattern::{Category, Confidence, Pattern, PatternDefinition, PatternRegistry, Severity};
+pub use pattern_state::{PatternState, PatternStateError};
 pub use receipt::{ReceiptFinding, ReceiptLocation, ScanReceipt, SCAN_RECEIPT_SCHEMA_VERSION};
 pub use remediation::{
     FixDifficulty, FixPattern, FixType, Remediation, RemediationAdvisor, RemediationReport,

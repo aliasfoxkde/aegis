@@ -37,6 +37,21 @@ pub struct Config {
     /// rather than shipped code.
     #[serde(default)]
     pub path_classes: Vec<PathClassRule>,
+    /// Baseline file whose findings are treated as pre-existing and
+    /// filtered out — JSON output from a previous scan. A profile or a
+    /// wire surface can carry one so a scan through the daemon or the
+    /// MCP server reports only what is new, the same way `--baseline`
+    /// does on the command line.
+    #[serde(default)]
+    pub baseline: Option<std::path::PathBuf>,
+    /// Descend into symbolic links while walking the scan root. Off by
+    /// default: a symlink can leave the tree the operator meant to scan.
+    #[serde(default)]
+    pub follow_symlinks: bool,
+    /// Detect copy-paste code clones while scanning. Pairs land in the
+    /// scan statistics; they never affect findings or the exit code.
+    #[serde(default)]
+    pub detect_clones: bool,
     /// Bundle path
     #[serde(skip)]
     pub bundle: Bundle,
@@ -196,6 +211,12 @@ impl Config {
                 severity_threshold: None,
                 anomaly_detectors: None,
                 path_classes: Vec::new(),
+                baseline: None,
+
+                follow_symlinks: false,
+
+                detect_clones: false,
+
                 bundle: Bundle::new(vec![]),
             }),
             "pipeline" => Some(Self {
@@ -215,6 +236,12 @@ impl Config {
                 severity_threshold: None,
                 anomaly_detectors: None,
                 path_classes: Vec::new(),
+                baseline: None,
+
+                follow_symlinks: false,
+
+                detect_clones: false,
+
                 bundle: Bundle::new(vec![]),
             }),
             "development" => Some(Self {
@@ -224,6 +251,12 @@ impl Config {
                 severity_threshold: None,
                 anomaly_detectors: None,
                 path_classes: Vec::new(),
+                baseline: None,
+
+                follow_symlinks: false,
+
+                detect_clones: false,
+
                 bundle: Bundle::new(vec![]),
             }),
             "mcp-integration" => Some(Self {
@@ -233,6 +266,12 @@ impl Config {
                 severity_threshold: None,
                 anomaly_detectors: None,
                 path_classes: Vec::new(),
+                baseline: None,
+
+                follow_symlinks: false,
+
+                detect_clones: false,
+
                 bundle: Bundle::new(vec![]),
             }),
             _ => None,
@@ -255,6 +294,9 @@ impl Config {
             severity_threshold: None,
             anomaly_detectors: None,
             path_classes: Vec::new(),
+            baseline: None,
+            follow_symlinks: false,
+            detect_clones: false,
             bundle: Bundle::new(vec![]),
         }
     }
@@ -388,6 +430,34 @@ mod tests {
         let config: Config = serde_json::from_str("{}").expect("sparse config");
         assert_eq!(config.output_format, OutputFormat::Human);
         assert_eq!(config.severity_threshold, None);
+    }
+
+    #[test]
+    fn scan_wire_options_deserialize_and_round_trip() {
+        // The walk options and the baseline ride the configuration file,
+        // so a sparse document must still default them, and an explicit
+        // document must carry them through a save/load round trip.
+        let sparse: Config = serde_json::from_str("{}").expect("sparse config");
+        assert_eq!(sparse.baseline, None);
+        assert!(!sparse.follow_symlinks);
+        assert!(!sparse.detect_clones);
+
+        let baseline = std::path::PathBuf::from("baseline.json");
+        let explicit = Config {
+            baseline: Some(baseline.clone()),
+            follow_symlinks: true,
+            detect_clones: true,
+            ..Config::default()
+        };
+        let dir = std::env::temp_dir().join(format!("aegis-config-wire-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create fixture dir");
+        let path = dir.join("config.json");
+        explicit.save(&path).expect("serialize");
+        let parsed = Config::load(&path).expect("deserialize");
+        assert_eq!(parsed.baseline.as_ref(), Some(&baseline));
+        assert!(parsed.follow_symlinks);
+        assert!(parsed.detect_clones);
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]
