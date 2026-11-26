@@ -38,7 +38,7 @@ walkdir = "2.5"
 # Time
 
 # Directories
-dirs = "7.0"
+dirs = { workspace = true }
 
 # Preset configuration
 serde_yaml = "0.9"

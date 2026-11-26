@@ -140,7 +140,8 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
     // Persisted `aegis disable` choices narrow the registry before any
     // scan. A state file that exists but cannot be parsed fails the scan:
     // an ignored preference would silently change results.
-    let state = crate::pattern_state::load(&crate::pattern_state::state_dir()?)?;
+    let state_path = crate::pattern_state::state_file()?;
+    let state = crate::pattern_state::load(&state_path)?;
     crate::pattern_state::apply_to_registry(&state, scanner.registry());
 
     // Fail loudly on unknown --categories values; a typo would otherwise
@@ -425,12 +426,14 @@ fn build_receipt(opts: &ScanOptions, findings: &[Finding], stats: ScanStats) -> 
     .with_source_revision(std::env::var("AEGIS_SOURCE_REVISION").ok())
 }
 
-fn persist_receipt_if_configured(receipt: &ScanReceipt) -> Result<()> {
-    if let Ok(path) = std::env::var("AEGIS_RECEIPT_FILE") {
+/// Persist the scan receipt to the configured receipt path, if one is set.
+/// An explicitly empty path is a configuration error, not "unset".
+fn persist_receipt(receipt_path: Option<&str>, receipt: &ScanReceipt) -> Result<()> {
+    if let Some(path) = receipt_path {
         if path.trim().is_empty() {
             return Err(anyhow::anyhow!("AEGIS_RECEIPT_FILE must not be empty"));
         }
-        receipt.write_atomic(Path::new(&path))?;
+        receipt.write_atomic(Path::new(path))?;
     }
     Ok(())
 }
@@ -502,8 +505,8 @@ pub async fn run_scan(opts: ScanOptions) -> Result<()> {
 
 /// Retire the configured receipt path, if one is set.
 /// Called before scan so a failed scan leaves no stale receipt.
-fn retire_receipt_if_configured() {
-    if let Ok(path) = std::env::var("AEGIS_RECEIPT_FILE") {
+fn retire_receipt(receipt_path: Option<&str>) {
+    if let Some(path) = receipt_path {
         if !path.trim().is_empty() {
             // Best effort: an absent or unreadable receipt has nothing to retire.
             let _retired = std::fs::remove_file(path);
@@ -598,9 +601,35 @@ fn retire_output_file(path: Option<&Path>) -> Result<()> {
 /// Returns an error when the scan fails, when the configured receipt file
 /// cannot be persisted, or when `output_file` cannot be written.
 pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
+    // Read the receipt target once, up front, so retire and persist cannot
+    // disagree about what was configured mid-scan.
+    let receipt_path = std::env::var("AEGIS_RECEIPT_FILE").ok();
+    run_scan_and_get_exit_code_with_receipt(opts, receipt_path.as_deref()).await
+}
+
+/// Receipt-target-injected core of [`run_scan_and_get_exit_code`], so tests
+/// can exercise the fail-closed receipt contract against explicit paths
+/// without mutating the process-global environment.
+///
+/// # Errors
+///
+/// Same contract as [`run_scan_and_get_exit_code`].
+async fn run_scan_and_get_exit_code_with_receipt(
+    opts: ScanOptions,
+    receipt_path: Option<&str>,
+) -> Result<i32> {
+    // Fail closed before touching anything: an explicitly empty receipt
+    // target is a configuration error, so reject it before retiring the
+    // receipt or a previous output report, and before scanning.
+    if let Some(path) = receipt_path {
+        if path.trim().is_empty() {
+            return Err(anyhow::anyhow!("AEGIS_RECEIPT_FILE must not be empty"));
+        }
+    }
+
     // Fail-closed: remove any existing receipt before scan so a failed scan
     // cannot be confused with a successful one whose result we never persisted.
-    retire_receipt_if_configured();
+    retire_receipt(receipt_path);
     retire_output_file(opts.output_file.as_deref())?;
 
     let result = if opts.scan_stdin {
@@ -610,7 +639,7 @@ pub async fn run_scan_and_get_exit_code(opts: ScanOptions) -> Result<i32> {
         execute_scan(&opts)?
     };
 
-    persist_receipt_if_configured(&result.receipt)?;
+    persist_receipt(receipt_path, &result.receipt)?;
 
     let exit_code = scan_exit_code(&result.receipt);
 
@@ -1367,12 +1396,8 @@ mod tests {
             "precondition: receipt file must exist before scan"
         );
 
-        // Point AEGIS_RECEIPT_FILE at our temp path and run a scan that is
-        // guaranteed to fail (scan_file with a path that does not exist).
-        let guard = OnDropEnvVar::new(
-            "AEGIS_RECEIPT_FILE",
-            receipt_path.to_string_lossy().as_ref(),
-        );
+        // Run a scan that is guaranteed to fail (scan_file with a path
+        // that does not exist), with the receipt target injected directly.
         let opts = ScanOptions {
             path: PathBuf::from("/this/path/does/not/exist/at/all"),
             scan_file: true,
@@ -1393,7 +1418,9 @@ mod tests {
             anomaly_detectors: None,
         };
 
-        let exit_code = run_scan_and_get_exit_code(opts).await;
+        let exit_code =
+            run_scan_and_get_exit_code_with_receipt(opts, Some(receipt_path.to_str().unwrap()))
+                .await;
         // Scan must fail (file does not exist).
         assert!(exit_code.is_err(), "failing scan should propagate error");
         // Receipt file must be gone — not readable as evidence of a scan.
@@ -1402,8 +1429,6 @@ mod tests {
             "stale receipt must be retired; found {} which should not exist",
             receipt_path.display()
         );
-        // Release the first binding before re-pointing the same variable.
-        drop(guard);
 
         // Mode 2: unusable receipt target. A directory cannot be replaced
         // by the receipt file: the atomic rename at persist time fails on
@@ -1413,12 +1438,11 @@ mod tests {
         std::fs::create_dir(&receipt_target).unwrap();
         let scan_path = scan_fixture_path();
 
-        let guard = OnDropEnvVar::new(
-            "AEGIS_RECEIPT_FILE",
-            receipt_target.to_string_lossy().as_ref(),
-        );
-
-        let outcome = run_scan_and_get_exit_code(dir_scan_opts(scan_path.clone())).await;
+        let outcome = run_scan_and_get_exit_code_with_receipt(
+            dir_scan_opts(scan_path.clone()),
+            Some(receipt_target.to_string_lossy().as_ref()),
+        )
+        .await;
         assert!(
             outcome.is_err(),
             "a receipt that cannot be persisted must fail the scan, not pass"
@@ -1428,10 +1452,48 @@ mod tests {
             "the failed persist must not clobber the configured target"
         );
 
-        // Keep the guard alive until the end of the test so its drop can
-        // clean up the process-global environment.
-        let _guard = guard;
+        // An explicitly empty receipt target is a configuration error, not
+        // "unset": the scan must fail rather than silently skip persisting.
+        let empty_outcome =
+            run_scan_and_get_exit_code_with_receipt(dir_scan_opts(scan_path.clone()), Some(""))
+                .await;
+        assert!(
+            empty_outcome
+                .unwrap_err()
+                .to_string()
+                .contains("AEGIS_RECEIPT_FILE must not be empty"),
+            "empty receipt target must be rejected"
+        );
+
         std::fs::remove_dir_all(scan_path).ok();
+    }
+
+    /// An empty `AEGIS_RECEIPT_FILE` is a configuration error and must be
+    /// rejected before any destructive step: the previous output report
+    /// survives, and the config error wins even though the scan input is
+    /// also deliberately missing (which alone would retire the report).
+    #[tokio::test]
+    async fn test_empty_receipt_target_fails_before_retiring_output() {
+        let fixture = tempfile::tempdir().unwrap();
+        let report_path = fixture.path().join("report.sarif");
+        std::fs::write(&report_path, "prior report").unwrap();
+
+        let mut opts = dir_scan_opts(fixture.path().join("missing-input"));
+        opts.output_file = Some(report_path.clone());
+
+        let outcome = run_scan_and_get_exit_code_with_receipt(opts, Some("")).await;
+        assert!(
+            outcome
+                .unwrap_err()
+                .to_string()
+                .contains("AEGIS_RECEIPT_FILE must not be empty"),
+            "empty receipt target must be rejected as a config error"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&report_path).unwrap(),
+            "prior report",
+            "the existing output report must be preserved"
+        );
     }
 
     #[tokio::test]
@@ -1498,29 +1560,6 @@ mod tests {
         let report = std::fs::read_to_string(report_path).unwrap();
         assert!(report.contains("\"version\": \"2.1.0\""));
         assert!(!report.contains("stale report"));
-    }
-
-    /// RAII guard that sets an env var on construction and removes it on drop.
-    struct OnDropEnvVar {
-        key: String,
-        _original: Option<String>,
-    }
-
-    impl OnDropEnvVar {
-        fn new(key: &str, value: &str) -> Self {
-            let original = std::env::var(key).ok();
-            std::env::set_var(key, value);
-            Self {
-                key: key.to_string(),
-                _original: original,
-            }
-        }
-    }
-
-    impl Drop for OnDropEnvVar {
-        fn drop(&mut self) {
-            std::env::remove_var(&self.key);
-        }
     }
 
     /// Fixture directory holding one file with the same known-bad AWS
