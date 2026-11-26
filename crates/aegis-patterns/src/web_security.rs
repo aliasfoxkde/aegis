@@ -359,7 +359,7 @@ pub fn get() -> Vec<Pattern> {
             confidence: "high".to_string(),
             min_entropy: None,
             description: "JWT with 'none' algorithm detected".to_string(),
-            reference: Some("https://wstg.owasp.org/latest/4-Web_Application_Security_Testing/06-Session_Management/10-JSON_Web_Tokens/".to_string()),
+            reference: Some("https://wstg.owasp.org/latest/10-Session_Management/10-JSON_Web_Tokens/".to_string()),
             tags: vec!["jwt".to_string(), "security".to_string(), "algorithm".to_string()],
             env_var: false,
             binary: false,
@@ -401,7 +401,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "xml-external-entity".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r#"(?i)<!ENTITY|SYSTEM\s+\"|PUBLIC\s+\""#.to_string(),
+            match_pattern: r#"(?i)<!ENTITY|SYSTEM[ \t]+\"|PUBLIC[ \t]+\""#.to_string(),
             enabled: true,
             severity: "critical".to_string(),
             confidence: "high".to_string(),
