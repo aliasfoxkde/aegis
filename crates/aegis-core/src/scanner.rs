@@ -419,6 +419,16 @@ impl Scanner {
             .clone_from(&config.path_classes);
         scanner.path_classes = PathClassMatcher::new(&config.path_classes);
 
+        // A baseline, symlink following, and clone detection are carried in
+        // the configuration too, so a daemon or an MCP server can offer the
+        // capabilities the command line does. The baseline path is *not*
+        // read here: loading it is fallible and this constructor must stay
+        // infallible apart from registry errors, so the builder surfaces
+        // resolve it and fail loudly before any scan runs.
+        scanner.options.baseline.clone_from(&config.baseline);
+        scanner.options.follow_symlinks = config.follow_symlinks;
+        scanner.options.detect_clones = config.detect_clones;
+
         Ok(scanner)
     }
 
@@ -454,6 +464,16 @@ impl Scanner {
     #[must_use]
     pub fn max_file_size(&self) -> u64 {
         self.options.max_file_size
+    }
+
+    /// The scan options in force.
+    ///
+    /// Exposed so a caller that builds a scanner from a configuration can
+    /// verify the configuration it handed over — a baseline path, the
+    /// walk options — is the one the scanner carries.
+    #[must_use]
+    pub fn scan_options(&self) -> &ScanOptions {
+        &self.options
     }
 
     /// Update options and rebuild category scanners if needed
@@ -847,8 +867,76 @@ impl Scanner {
 
     /// Scan a string
     /// Scan in-memory content and return findings from all enabled analyzers.
+    ///
+    /// String scans consult the baseline like file scans do: a finding
+    /// whose fingerprint the baseline records is removed. Matching is by
+    /// fingerprint, so in-memory content that reproduces a recorded
+    /// finding is filtered the same way its on-disk original would be.
     pub fn scan_string(&self, content: &str, source: &str) -> Vec<Finding> {
         self.scan_string_with_inspection(content, source).0
+    }
+
+    /// Scan in-memory content and return findings together with the scan
+    /// statistics, including clone pairs when
+    /// [`ScanOptions::detect_clones`] is on — the same treatment the file
+    /// path gets, so a wire surface serving in-memory content reports the
+    /// same channels a file scan does.
+    pub fn scan_string_with_stats(&self, content: &str, source: &str) -> (Vec<Finding>, ScanStats) {
+        let start = Instant::now();
+        let (findings, ast_inspection, suppressed_count) =
+            self.scan_string_with_inspection(content, source);
+
+        let mut clones = Vec::new();
+        let mut clone_error = None;
+        if self.options.detect_clones {
+            match CloneDetector::new().detect_content(content, source) {
+                Ok(detected) => {
+                    clones = detected.iter().map(CloneReport::from_code_clone).collect();
+                }
+                Err(e) => {
+                    tracing::warn!("Clone detection failed for {source}: {e}");
+                    clone_error = Some(e.to_string());
+                }
+            }
+        }
+
+        let mut stats = ScanStats {
+            files_scanned: 1,
+            bytes_scanned: content.len() as u64,
+            suppressed_count,
+            patterns_matched: distinct_patterns(&findings),
+            scan_time_ms: u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX),
+            workers_used: 1,
+            clones,
+            ..Default::default()
+        };
+        stats
+            .inspection_ledger
+            .record(source.to_string(), InspectionStatus::Analyzed, true, None);
+        let ast_status = match ast_inspection.status {
+            AstInspectionStatus::Parsed | AstInspectionStatus::Fallback => {
+                InspectionStatus::Analyzed
+            }
+            AstInspectionStatus::ParseError => InspectionStatus::Failed,
+            AstInspectionStatus::Unsupported | AstInspectionStatus::NotApplicable => {
+                InspectionStatus::Unsupported
+            }
+        };
+        stats.inspection_ledger.record(
+            format!("{source}#ast"),
+            ast_status,
+            ast_inspection.required,
+            ast_inspection.reason,
+        );
+        if let Some(reason) = clone_error {
+            stats.inspection_ledger.record(
+                format!("{source}#clones"),
+                InspectionStatus::Failed,
+                false,
+                Some(reason),
+            );
+        }
+        (findings, stats)
     }
 
     /// Lowercased file extension of a source path, if any
@@ -1459,6 +1547,15 @@ impl Scanner {
             WalkDir::new(root).follow_links(false)
         };
 
+        // Following links must not turn a rooted scan into an unbounded
+        // one: a symlink inside the root can point anywhere on the
+        // filesystem, so every walked file is re-checked against the scan
+        // root and anything that resolves outside it is recorded as a
+        // skipped unit instead of being scanned. The daemon and the MCP
+        // server both promise "only inside the approved directory"; this
+        // check is what keeps that promise when link-following is on.
+        let root_canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+
         // The baseline artifact records findings verbatim, so scanning it
         // would re-flag every secret it documented and keep the exit code
         // red forever. Skip it when it lives inside the scan root. The
@@ -1493,6 +1590,30 @@ impl Scanner {
                             entry.path().display()
                         );
                         continue;
+                    }
+                    // Re-check followed links against the scan root. When
+                    // link-following is off the walk never produces entries
+                    // outside the root, so this only canonicalizes entries
+                    // that could have moved.
+                    if self.options.follow_symlinks {
+                        let escaped = entry.path().canonicalize().map_or_else(
+                            |_| false,
+                            |path| !(path == root_canonical || path.starts_with(&root_canonical)),
+                        );
+                        if escaped {
+                            tracing::debug!(
+                                "skipping {} — follows outside the scan root",
+                                entry.path().display()
+                            );
+                            merged_stats.files_skipped += 1;
+                            merged_stats.inspection_ledger.record(
+                                entry.path().to_string_lossy().into_owned(),
+                                InspectionStatus::Skipped,
+                                false,
+                                Some("followed_symlink_outside_root".to_string()),
+                            );
+                            continue;
+                        }
                     }
                     entries.push(entry);
                 }
@@ -1608,7 +1729,25 @@ impl Scanner {
     }
 
     /// Scan environment variables
+    ///
+    /// The category allow-list, the severity threshold, and the baseline
+    /// apply here exactly as they do to the file pipeline: the flags are
+    /// documented as filters over reported findings, and an environment
+    /// finding that ignores them is a finding the operator asked to filter
+    /// out.
     pub fn scan_env(&self) -> Vec<Finding> {
+        self.scan_env_vars(std::env::vars())
+    }
+
+    /// Scan the given environment variables.
+    ///
+    /// The environment is taken as data rather than read from the process,
+    /// so the filters above can be tested without mutating the environment
+    /// of a test binary that other tests share.
+    pub fn scan_env_vars<I>(&self, vars: I) -> Vec<Finding>
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
         let patterns = if self.options.include_disabled {
             self.registry.all()
         } else {
@@ -1616,7 +1755,7 @@ impl Scanner {
         };
         let mut findings = Vec::new();
 
-        for (key, value) in std::env::vars() {
+        for (key, value) in vars {
             for pattern in &patterns {
                 if !pattern.is_env_var_only() && pattern.category() != "secrets" {
                     continue;
@@ -1635,12 +1774,14 @@ impl Scanner {
                     )
                     .with_kind(FindingKind::Entropy);
 
-                    findings.push(finding);
+                    if self.passes_post_filters(&finding) {
+                        findings.push(finding);
+                    }
                 }
             }
         }
 
-        findings
+        self.filter_baseline(findings)
     }
 }
 
@@ -1888,6 +2029,103 @@ mod tests {
         let (findings, stats) = scanner.scan_file(&temp_file).unwrap();
         assert!(findings.is_empty());
         assert_eq!(stats.files_skipped, 1);
+    }
+
+    /// An environment-only rule that fires on the value used by the
+    /// environment tests below.
+    fn env_definition() -> PatternDefinition {
+        PatternDefinition {
+            name: "aegis-env-token".to_string(),
+            category: "secrets".to_string(),
+            match_pattern: "AEGIS-ENV-TOKEN-[A-Z0-9]+".to_string(),
+            severity: Severity::Medium,
+            confidence: crate::pattern::Confidence::High,
+            description: "A token in an environment variable".to_string(),
+            env_var: true,
+            ..PatternDefinition::default()
+        }
+    }
+
+    /// The environment the environment tests scan: one value the rule
+    /// matches, one it does not.
+    fn env_vars() -> Vec<(String, String)> {
+        vec![
+            (
+                "AEGIS_TEST_TOKEN".to_string(),
+                "AEGIS-ENV-TOKEN-ABC123".to_string(),
+            ),
+            ("AEGIS_TEST_OTHER".to_string(), "nothing to see".to_string()),
+        ]
+    }
+
+    #[test]
+    fn an_environment_finding_honours_the_severity_threshold() {
+        let scanner = Scanner::from_definitions(vec![env_definition()]).unwrap();
+        assert_eq!(
+            scanner.scan_env_vars(env_vars()).len(),
+            1,
+            "the rule fires on the matching value"
+        );
+
+        let filtered = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                severity_threshold: Some("critical".to_string()),
+                ..Default::default()
+            });
+        assert!(
+            filtered.scan_env_vars(env_vars()).is_empty(),
+            "a medium finding must not survive a critical threshold"
+        );
+    }
+
+    #[test]
+    fn an_environment_finding_honours_the_category_list() {
+        let filtered = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                categories: vec!["pii".to_string()],
+                ..Default::default()
+            });
+        assert!(
+            filtered.scan_env_vars(env_vars()).is_empty(),
+            "a secrets finding must not survive a pii-only allow-list"
+        );
+
+        let allowed = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                categories: vec!["secrets".to_string()],
+                ..Default::default()
+            });
+        assert_eq!(allowed.scan_env_vars(env_vars()).len(), 1);
+    }
+
+    #[test]
+    fn an_environment_finding_in_the_baseline_is_suppressed() {
+        let scanner = Scanner::from_definitions(vec![env_definition()]).unwrap();
+        let findings = scanner.scan_env_vars(env_vars());
+        assert_eq!(findings.len(), 1);
+        let fingerprint = findings[0].fingerprint.clone();
+
+        let temp_dir = TempDir::new().unwrap();
+        let baseline = temp_dir.path().join("baseline.json");
+        std::fs::write(
+            &baseline,
+            format!("{{\"findings\": [{{\"fingerprint\": \"{fingerprint}\"}}]}}"),
+        )
+        .unwrap();
+
+        let with_baseline = Scanner::from_definitions(vec![env_definition()])
+            .unwrap()
+            .with_options(ScanOptions {
+                baseline: Some(baseline),
+                ..Default::default()
+            });
+        assert!(
+            with_baseline.scan_env_vars(env_vars()).is_empty(),
+            "a finding recorded in the baseline must not be reported again"
+        );
     }
 
     #[test]
@@ -2160,6 +2398,49 @@ mod tests {
         let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
         // Without following symlinks, should scan the real file
         assert!(stats.files_scanned >= 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_scan_dir_with_follow_symlinks_never_leaves_the_root() {
+        // A symlink inside the scan root pointing at a file outside it is
+        // recorded as skipped, not scanned: a rooted scan must stay rooted
+        // even when link-following is enabled.
+        let temp_dir = TempDir::new().unwrap();
+        let outside_dir = TempDir::new().unwrap();
+        let outside_file = outside_dir.path().join("outside.txt");
+        File::create(&outside_file)
+            .unwrap()
+            .write_all(b"outside content")
+            .unwrap();
+        let inside_file = temp_dir.path().join("inside.txt");
+        File::create(&inside_file)
+            .unwrap()
+            .write_all(b"inside content")
+            .unwrap();
+        let escape_link = temp_dir.path().join("escape.txt");
+        std::os::unix::fs::symlink(&outside_file, &escape_link).unwrap();
+
+        let scanner = Scanner::from_definitions(vec![])
+            .unwrap()
+            .with_options(ScanOptions {
+                follow_symlinks: true,
+                ..Default::default()
+            });
+
+        let (_findings, stats) = scanner.scan_dir(temp_dir.path()).unwrap();
+        assert_eq!(
+            stats.files_scanned, 1,
+            "only the real inside file is scanned"
+        );
+        assert_eq!(
+            stats.files_skipped, 1,
+            "the escaping link is recorded as skipped"
+        );
+        assert!(stats.inspection_ledger.units.iter().any(|unit| {
+            unit.unit_id == escape_link.to_string_lossy()
+                && unit.status == InspectionStatus::Skipped
+        }));
     }
 
     #[cfg(unix)]

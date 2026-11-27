@@ -11,8 +11,9 @@ standalone; release scripts are driven by `.gitforce.yml`.
 | `check-advisory-parity.sh` | Fail unless `cargo-audit` and `cargo-deny` waive the same advisories. |
 | `check-allow-expiry.sh` | Fail when a lint suppression has no dated, owned decision, or its expiry has passed or is near. |
 | `check-fuzz-lock.sh` | Fail unless `fuzz/Cargo.lock` pins the same `aegis-core` version as the workspace. |
-| `check-gate-parity.py` | Fail when a change weakens a configured quality gate — a lint relaxed, a waiver added, a coverage floor dropped. Stdlib only. Tested by `scripts/test_check_gate_parity.py`. |
+| `check-gate-parity.py` | Fail when a change weakens a configured quality gate — a lint relaxed, a waiver added, a coverage floor dropped, or a gate that stopped running (a CI step, a workflow file, `deny.toml`, or `codecov.yml` removed). Stdlib only. Tested by `scripts/test_check_gate_parity.py`. |
 | `check-license-parity.sh` | Fail unless `deny.toml` and `about.toml` carry identical license allow lists. |
+| `check-test-count.py` | Fail when the recorded test count no longer matches the measured one: each test lane measures its own platform's count and checks it against the per-platform table in `docs/PLAN.md`, and the prose in `AGENTS.md` is checked against that table. Stdlib only. Tested by `scripts/test_test_count.py`. |
 | `coverage-floor.sh` | Enforce the workspace line-coverage floor from an lcov report (Codecov cannot, for lack of a token). |
 | `generate_examples.py` | Regenerate `crates/aegis-patterns/src/examples.rs` from a `dump_patterns` output. |
 | `patch-coverage-floor.py` | Enforce a floor on the lines a change adds, from the same lcov report the workspace floor uses: the lines the diff adds are intersected with the report's hit counts and the job fails below the floor. Stdlib only. Tested by `scripts/test_patch_coverage_floor.py`. |
@@ -25,3 +26,4 @@ standalone; release scripts are driven by `.gitforce.yml`.
 | `test_classify_aegis_sarif.py` | Deterministic stdlib unittest for `ci/classify_aegis_sarif.py` (`python3 scripts/test_classify_aegis_sarif.py`). |
 | `test_patch_coverage_floor.py` | Deterministic stdlib unittest for `patch-coverage-floor.py` (`python3 scripts/test_patch_coverage_floor.py`). |
 | `test_release_remap.py` | Deterministic stdlib unittest for the release scripts' path remapping (`python3 scripts/test_release_remap.py`). |
+| `test_test_count.py` | Deterministic stdlib unittest for `check-test-count.py` (`python3 scripts/test_test_count.py`). |

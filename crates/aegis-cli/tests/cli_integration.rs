@@ -38,6 +38,30 @@ fn test_cli_version_matches_package_version() {
 }
 
 #[test]
+fn test_benchmark_rejects_a_zero_run_count() {
+    // Zero runs has nothing to average; the division by zero used to panic.
+    // The count is refused at parse time with a usage error (exit code 2).
+    let cfg = isolated_config();
+    let output = cfg
+        .command()
+        .args(["benchmark", "--runs", "0"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stdout: {} stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("panicked"),
+        "a usage error must not panic, got: {stderr}"
+    );
+}
+
+#[test]
 fn test_scan_detects_aws_key() {
     let cfg = isolated_config();
     let file_path = std::env::temp_dir().join("aegis_test_aws.yaml");

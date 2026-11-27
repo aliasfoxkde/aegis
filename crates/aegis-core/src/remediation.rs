@@ -267,7 +267,8 @@ impl RemediationAdvisor {
                 ],
                 effort_reducer: None,
                 reference_urls: vec![
-                    "https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/08-Testing_for_Error_Handling/01-Testing_for_Error_Code".to_string(),
+                    "https://wstg.owasp.org/latest/12-Error_Handling/01-Improper_Error_Handling/"
+                        .to_string(),
                 ],
             },
         );

@@ -213,6 +213,19 @@ fn remove_socket_if_present(path: &Path) {
     }
 }
 
+/// The persisted pattern state the daemon honors.
+///
+/// The environment is read here, at the edge: `AEGIS_PATTERN_STATE` names
+/// the file, and the default is this account's own configuration
+/// directory. A daemon running under a service account therefore needs the
+/// environment variable to honor the file the operator's `aegis disable`
+/// writes.
+#[cfg(unix)]
+fn pattern_state_path() -> Option<PathBuf> {
+    let explicit = std::env::var_os(aegis_core::pattern_state::STATE_PATH_ENV).map(PathBuf::from);
+    aegis_core::pattern_state::resolve_state_file(explicit.as_deref()).ok()
+}
+
 #[tokio::main]
 #[cfg(unix)]
 async fn main() -> Result<()> {
@@ -226,10 +239,12 @@ async fn main() -> Result<()> {
     println!("Aegis Daemon starting...");
     println!("Socket: {}", socket_path.display());
 
-    let state = Arc::new(DaemonState::try_with_scan_root(
-        socket_path.clone(),
-        &scan_root,
-    )?);
+    let daemon_state = DaemonState::try_with_scan_root(socket_path.clone(), &scan_root)?;
+    let daemon_state = match pattern_state_path() {
+        Some(path) => daemon_state.with_pattern_state(path),
+        None => daemon_state,
+    };
+    let state = Arc::new(daemon_state);
 
     // An operator configuration is applied before the socket is bound, so a
     // configuration that cannot be applied stops the daemon instead of
