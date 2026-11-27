@@ -1,0 +1,2 @@
+aegis-p0 fixture anchor line one (synthetic, harmless, contains no credentials)
+aegis-p0 commit-a filler, baseline content for the first upload
