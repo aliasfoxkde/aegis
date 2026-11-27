@@ -205,6 +205,33 @@ every release are attached to the matching GitHub release.
   in the receipt ledger. Found by the 2026-10-05 audit of
   `run_scan_and_get_exit_code`.
 
+- The `graphql-batch-limit` pattern no longer mistakes the Unix `find
+  -maxdepth` option for a GraphQL depth setting. The scanner's false-positive
+  regression corpus now pins the FireCraft packaging-script shape.
+
+- The MCP server (`aegis-mcp`) no longer serializes request handling.
+  Requests now run as concurrent tasks and responses are written as
+  each completes (matching the reference MCP SDK's delivery model), so
+  a long `scan_dir` no longer blocks a `ping` or other tools; heavy
+  work (directory walks, bundle compilation) moved onto
+  `spawn_blocking` so the async runtime never stalls behind a
+  filesystem-bound scan. At most 32 request handlers run concurrently,
+  and a bounded response queue applies backpressure; excess requests get
+  `-32001`. Clients can now cancel in-flight requests with
+  `notifications/cancelled` (the server stops waiting and emits no
+  response, while already-running blocking work keeps its admission slot
+  until it finishes), every request is walled by a
+  server-side tool timeout (`AEGIS_MCP_TOOL_TIMEOUT_MS`, default
+  600000 ms, `0` disables; timeouts answer `-32000` and leave the
+  session alive), JSON-RPC batch lines are refused with a single
+  `-32600` (MCP stdio is one message per line), and
+  `resources/templates/list` answers with an empty list so probing
+  clients do not misreport the server as broken. `aegis-mcp --version`
+  exists to detect stale installs — a real cause of `-32601 Method not
+  found` storms from MCP clients that launched a pre-lifecycle binary.
+  The wire conformance suite grew cases for all of the above, matching
+  frames by request id in arrival order.
+
 - Release builds: the tarball mtime pin now reads the tag commit's time
   (`git show -s --format=%ct` on the commit, not the tag — on an
   annotated tag the command prints the whole tag-object display, and

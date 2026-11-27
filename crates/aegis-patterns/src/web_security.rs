@@ -624,7 +624,7 @@ pub fn get() -> Vec<Pattern> {
         Pattern {
             name: "graphql-batch-limit".to_string(),
             category: "web-security".to_string(),
-            match_pattern: r"(?i)query\s*depth|maxDepth|batch.*limit".to_string(),
+            match_pattern: r"(?i)query\s*depth|maxDepth\s*[:=]|batch.*limit".to_string(),
             enabled: true,
             severity: "medium".to_string(),
             confidence: "high".to_string(),

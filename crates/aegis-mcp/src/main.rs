@@ -16,11 +16,18 @@ use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::sync::RwLock;
 
+/// Maximum concurrently executing JSON-RPC request handlers. Slow or
+/// cancelled blocking scans keep their permit until the blocking task exits.
+const MAX_IN_FLIGHT_REQUESTS: usize = 32;
+
 /// MCP server state
 pub struct ServerState {
     /// Scanner served to every tool call; installed by the lazy pattern
-    /// initialization and replaced wholesale by `update_bundle`.
-    pub scanner: RwLock<Scanner>,
+    /// initialization and replaced wholesale by `update_bundle`. Held as
+    /// `Arc` so blocking work (synchronous filesystem scans, regex
+    /// compilation) can be moved off the async runtime with
+    /// `spawn_blocking` while scans still see a consistent snapshot.
+    pub scanner: RwLock<Arc<Scanner>>,
     /// Configuration in force for the session, seeded with defaults at
     /// startup.
     ///
@@ -73,7 +80,7 @@ impl ServerState {
     pub fn new() -> Self {
         let config = Config::default();
         Self {
-            scanner: RwLock::new(Scanner::new()),
+            scanner: RwLock::new(Arc::new(Scanner::new())),
             config: RwLock::new(config),
             installed_bundle: RwLock::new(None),
             bundle_version: RwLock::new(String::from("0.0.0")),
@@ -140,7 +147,7 @@ impl ServerState {
                 .await
                 .map_err(|error| format!("scanner rebuild task failed: {error}"))?;
         let scanner = rebuilt?;
-        *self.scanner.write().await = scanner;
+        *self.scanner.write().await = Arc::new(scanner);
         *self.config.write().await = config;
         *self.applied_pattern_state.write().await = disabled;
         // The scanner in force is already built from this configuration, so
@@ -199,8 +206,8 @@ impl ServerState {
                     };
                 match compiled {
                     Ok(scanner) => {
-                        *self.scanner.write().await = scanner;
-                        *self.applied_pattern_state.write().await = disabled;
+*self.scanner.write().await = Arc::new(scanner);
+*self.applied_pattern_state.write().await = disabled;
                         Ok(())
                     }
                     Err(message) => Err(message),
@@ -510,10 +517,14 @@ impl AegisRpcImpl {
         let state = self.state.clone();
         Box::pin(async move {
             state.prepare_scanner().await?;
-            let scanner = state.scanner.read().await;
-            let findings = scanner.scan_string(&content, &source);
-
-            Ok(ScanResponse::for_string(findings, &source, content.len()))
+            let scanner = Arc::clone(&*state.scanner.read().await);
+            let bytes = content.len();
+            let spawned = tokio::task::spawn_blocking(move || {
+                let findings = scanner.scan_string(&content, &source);
+                ScanResponse::for_string(findings, &source, bytes)
+            })
+            .await;
+            spawn_blocking_join(spawned, "string scan failed")
         })
     }
 
@@ -532,19 +543,15 @@ impl AegisRpcImpl {
             }
 
             state.prepare_scanner().await?;
-            let scanner = state.scanner.read().await;
-            let (findings, scan_stats) =
-                scanner.scan_file(&path).map_err(|e| jsonrpc_core::Error {
-                    code: jsonrpc_core::ErrorCode::InternalError,
-                    message: e.to_string(),
-                    data: None,
-                })?;
+            // The scanner does synchronous filesystem IO and regex work
+            // over every file; run it off the async runtime so one heavy
+            // scan cannot stall request handling or the transport loop.
+            let scanner = Arc::clone(&*state.scanner.read().await);
+            let path_display = path.to_string_lossy().to_string();
+            let spawned = tokio::task::spawn_blocking(move || scanner.scan_file(&path)).await;
+            let (findings, scan_stats) = spawn_blocking_result(spawned, "file scan failed")?;
 
-            Ok(ScanResponse::from_parts(
-                findings,
-                scan_stats,
-                path.to_string_lossy().to_string(),
-            ))
+            Ok(ScanResponse::from_parts(findings, scan_stats, path_display))
         })
     }
 
@@ -563,19 +570,15 @@ impl AegisRpcImpl {
             }
 
             state.prepare_scanner().await?;
-            let scanner = state.scanner.read().await;
-            let (findings, scan_stats) =
-                scanner.scan_dir(&path).map_err(|e| jsonrpc_core::Error {
-                    code: jsonrpc_core::ErrorCode::InternalError,
-                    message: e.to_string(),
-                    data: None,
-                })?;
+            // See scan_file: directory scans walk the filesystem
+            // synchronously (plus a rayon parallel pass), so they must
+            // not run on the async reactor.
+            let scanner = Arc::clone(&*state.scanner.read().await);
+            let path_display = path.to_string_lossy().to_string();
+            let spawned = tokio::task::spawn_blocking(move || scanner.scan_dir(&path)).await;
+            let (findings, scan_stats) = spawn_blocking_result(spawned, "directory scan failed")?;
 
-            Ok(ScanResponse::from_parts(
-                findings,
-                scan_stats,
-                path.to_string_lossy().to_string(),
-            ))
+            Ok(ScanResponse::from_parts(findings, scan_stats, path_display))
         })
     }
 
@@ -583,10 +586,13 @@ impl AegisRpcImpl {
         let state = self.state.clone();
         Box::pin(async move {
             state.prepare_scanner().await?;
-            let scanner = state.scanner.read().await;
-            let findings = scanner.scan_env();
-
-            Ok(ScanResponse::for_environment(findings))
+            let scanner = Arc::clone(&*state.scanner.read().await);
+            let spawned = tokio::task::spawn_blocking(move || {
+                let findings = scanner.scan_env();
+                ScanResponse::for_environment(findings)
+            })
+            .await;
+            spawn_blocking_join(spawned, "environment scan failed")
         })
     }
 
@@ -638,69 +644,33 @@ impl AegisRpcImpl {
     ) -> BoxFuture<Result<UpdateResponse>> {
         let state = self.state.clone();
         Box::pin(async move {
-            // If no path provided, use embedded patterns
-            let bundle = if let Some(path) = bundle_path {
-                let path = PathBuf::from(&path);
-
-                // Security: validate path
-                if !sandbox::is_path_safe(&path) {
-                    return Err(jsonrpc_core::Error {
-                        code: jsonrpc_core::ErrorCode::InvalidParams,
-                        message: "Path is outside allowed directory".to_string(),
-                        data: None,
-                    });
+            // Sandbox-validate the requested path before deferring to a
+            // blocking task; rejections must stay `InvalidParams`.
+            let validated = match &bundle_path {
+                Some(path) => {
+                    let path = PathBuf::from(path);
+                    if !sandbox::is_path_safe(&path) {
+                        return Err(invalid_params("Path is outside allowed directory"));
+                    }
+                    Some(path)
                 }
-
-                // Load bundle from file
-                Bundle::load(&path).map_err(|e| jsonrpc_core::Error {
-                    code: jsonrpc_core::ErrorCode::InternalError,
-                    message: format!("Failed to load bundle: {e}"),
-                    data: None,
-                })?
-            } else {
-                // Use the patterns shipped with the binary
-                shipped_bundle()
+                None => None,
             };
-
-            // Validate bundle
-            bundle.validate().map_err(|e| jsonrpc_core::Error {
-                code: jsonrpc_core::ErrorCode::InternalError,
-                message: format!("Invalid bundle: {e}"),
-                data: None,
-            })?;
-
-            // Create the scanner from the bundle with the configuration in
-            // force: an installed rule set answers what to scan, not how
-            // to treat what is found.
-            //
-            // The lock keeps a lazy compilation that is already running
-            // from installing its scanner after this one.
+            // Keep scanner builds serialized with configuration changes and
+            // first-use initialization, but do I/O and regex compilation on
+            // a blocking worker so this request cannot stall the reactor.
             let _guard = state.apply_lock.lock().await;
             let config = state.config.read().await.clone();
-            let pattern_state =
-                load_pattern_state(state.pattern_state_path.as_deref()).map_err(|e| {
-                    jsonrpc_core::Error {
-                        code: jsonrpc_core::ErrorCode::InternalError,
-                        message: format!("Failed to read the pattern state: {e}"),
-                        data: None,
-                    }
-                })?;
-            let disabled = pattern_state.disabled_patterns.clone();
-            let new_scanner =
-                scanner_for_with_state(&bundle, &config, &pattern_state).map_err(|e| {
-                    jsonrpc_core::Error {
-                        code: jsonrpc_core::ErrorCode::InternalError,
-                        message: format!("Failed to create scanner: {e}"),
-                        data: None,
-                    }
-                })?;
+            let prepared =
+                tokio::task::spawn_blocking(move || prepare_bundle(validated, &config)).await;
+            let bundle = spawn_blocking_result(prepared, "bundle update failed")?;
 
             // Update state. The swap flag makes later `ensure_patterns_loaded`
             // calls no-ops so they cannot overwrite this bundle, and it also
             // clears a previously failed lazy compilation.
             {
                 let mut scanner = state.scanner.write().await;
-                *scanner = new_scanner;
+                *scanner = Arc::new(bundle.scanner);
             }
             // The scanner in force was built around this state, so a later
             // refresh does not rebuild the rule set for nothing.
@@ -713,23 +683,22 @@ impl AegisRpcImpl {
             // back to the shipped corpus.
             {
                 let mut installed = state.installed_bundle.write().await;
-                *installed = Some(bundle.clone());
+                *installed = Some(bundle.bundle.clone());
             }
             state.bundle_swapped.store(true, Ordering::Release);
             {
                 let mut version = state.bundle_version.write().await;
-                *version = bundle.metadata().version.to_string();
+                *version = bundle.version;
             }
             {
                 let mut checksum = state.bundle_checksum.write().await;
-                *checksum = bundle.metadata().checksum;
+                *checksum = bundle.checksum;
             }
 
-            let pattern_count = bundle.len();
             Ok(UpdateResponse {
                 success: true,
-                message: format!("Bundle updated with {pattern_count} patterns"),
-                pattern_count,
+                message: format!("Bundle updated with {} patterns", bundle.pattern_count),
+                pattern_count: bundle.pattern_count,
             })
         })
     }
@@ -756,6 +725,45 @@ fn operator_config_path() -> anyhow::Result<Option<PathBuf>> {
     }
 }
 
+/// Outcome of building and compiling a bundle on a blocking task.
+struct PreparedBundle {
+    bundle: Bundle,
+    scanner: Scanner,
+    version: String,
+    checksum: String,
+    pattern_count: usize,
+}
+
+/// Load (or rebuild from embedded patterns), validate, and compile a
+/// bundle. All resource-heavy steps stay on the caller's blocking task.
+fn prepare_bundle(
+    path: Option<PathBuf>,
+    config: &Config,
+) -> std::result::Result<PreparedBundle, String> {
+    let bundle = if let Some(path) = path {
+        Bundle::load(&path).map_err(|e| format!("Failed to load bundle: {e}"))?
+    } else {
+        // Use embedded patterns from the aegis-patterns crate.
+        let patterns = aegis_patterns::all_patterns()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Bundle::new(patterns)
+    };
+    bundle
+        .validate()
+        .map_err(|e| format!("Invalid bundle: {e}"))?;
+    let scanner = scanner_for(&bundle, config)?;
+    let pattern_count = bundle.len();
+    let version = bundle.metadata().version.to_string();
+    let checksum = bundle.metadata().checksum;
+    Ok(PreparedBundle {
+        bundle,
+        scanner,
+        version,
+        checksum,
+        pattern_count,
+    })
 /// The persisted pattern state the server honors.
 ///
 /// The environment is read here, at the edge: `AEGIS_PATTERN_STATE` names
@@ -787,6 +795,36 @@ fn invalid_params<T: std::fmt::Display>(error: T) -> jsonrpc_core::Error {
         message: error.to_string(),
         data: None,
     }
+}
+
+fn internal_error<T: std::fmt::Display>(message: T) -> jsonrpc_core::Error {
+    jsonrpc_core::Error {
+        code: jsonrpc_core::ErrorCode::InternalError,
+        message: message.to_string(),
+        data: None,
+    }
+}
+
+/// Resolve a `spawn_blocking` task result into the JSON-RPC result or an
+/// `InternalError`; a panicked blocking task is reported like any other
+/// failure instead of unwinding into the transport.
+fn spawn_blocking_result<T, E: std::fmt::Display>(
+    spawned: std::result::Result<std::result::Result<T, E>, tokio::task::JoinError>,
+    context: &str,
+) -> Result<T> {
+    match spawned {
+        Ok(value) => value.map_err(|error| internal_error(format!("{context}: {error}"))),
+        Err(join) => Err(internal_error(format!("{context}: task failed: {join}"))),
+    }
+}
+
+/// Resolve a blocking task that returns a value directly, mapping a task
+/// panic into a JSON-RPC `InternalError`.
+fn spawn_blocking_join<T>(
+    spawned: std::result::Result<T, tokio::task::JoinError>,
+    context: &str,
+) -> Result<T> {
+    spawned.map_err(|join| internal_error(format!("{context}: task failed: {join}")))
 }
 
 fn serialize_result<T: Serialize>(value: T) -> Result<Value> {
@@ -843,6 +881,34 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .try_init();
 
+    // `--version` exists so clients (and people) can detect a stale
+    // install of this binary, which is how mixed-method MCP servers
+    // surface as `-32601` storms from real clients.
+    if let Some(arg) = std::env::args().nth(1) {
+        if arg == "--version" || arg == "-V" {
+            println!("aegis-mcp {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        anyhow::bail!(
+            "aegis-mcp takes no arguments (it serves MCP over stdio); --version prints the build"
+        );
+    }
+
+    serve().await
+}
+
+/// Frames flowing to the writer task: either a response produced before
+/// any task had to run (parse/protocol errors), or the spawned task whose
+/// completion yields the response.
+enum Incoming {
+    Ready(String),
+    Task(tokio::task::JoinHandle<Option<String>>),
+}
+
+/// Wire up the JSON-RPC surface and run the stdio transport until EOF or
+/// transport failure.
+async fn serve() -> anyhow::Result<()> {
+    let state = Arc::new(ServerState::new());
     let server_state = ServerState::new();
     let server_state = match pattern_state_path() {
         Some(path) => server_state.with_pattern_state(path),
@@ -927,81 +993,317 @@ async fn main() -> anyhow::Result<()> {
     // session and find the tools; `tools/call` dispatches to the same
     // implementations as the custom methods above, so the two surfaces
     // stay behaviourally identical.
-    protocol::register(&mut io, rpc.clone());
+    let cancellations = protocol::new_cancellation_registry();
+    protocol::register(&mut io, rpc.clone(), cancellations.clone());
 
     // stdout is the JSON-RPC transport; startup diagnostics must not corrupt
     // the protocol stream consumed by MCP clients.
-    eprintln!("Aegis MCP Server starting...");
+    eprintln!(
+        "Aegis MCP Server {} starting (protocol versions: {})",
+        env!("CARGO_PKG_VERSION"),
+        protocol::SUPPORTED_PROTOCOL_VERSIONS.join(", ")
+    );
     eprintln!("Listening on stdin/stdout");
 
-    // JSON-RPC over stdio
-    let stdin = tokio::io::stdin();
-    let mut reader = BufReader::new(stdin);
-    let stdout = tokio::io::stdout();
-    let mut writer = tokio::io::BufWriter::new(stdout);
+    let tool_timeout = protocol::tool_timeout();
+    let io = Arc::new(io);
 
+    let reader = BufReader::new(tokio::io::stdin());
+    let writer = tokio::io::BufWriter::new(tokio::io::stdout());
+    let (tx, rx) = tokio::sync::mpsc::channel::<Incoming>(MAX_IN_FLIGHT_REQUESTS * 2);
+
+    // One task reads and dispatches; one writes responses. Requests are
+    // processed by spawned tasks, so a long scan cannot stall another
+    // request (e.g. `ping`) the way sequential handlers did.
+    let mut reader_task = tokio::spawn(read_frames(
+        reader,
+        io,
+        cancellations,
+        tool_timeout,
+        Arc::new(tokio::sync::Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
+        tx,
+    ));
+    let mut writer_task = tokio::spawn(write_frames(writer, rx));
+
+    // Normal flow: stdin hits EOF, the reader drops its sender, the writer
+    // drains the remaining responses and ends. If either side dies early
+    // (broken stdout, decode failure, panic), the other is stopped.
+    // Whoever ends first decides the outcome: the reader finishing (EOF)
+    // lets the writer drain and exit on its own; a writer failure means
+    // the transport is dead, so the reader must not keep waiting on a
+    // client stdin that may never close.
+    let outcome = tokio::select! {
+        // Polling through `&mut` keeps both handles owned here so the
+        // non-selected side can still be drained or aborted below.
+        reader = &mut reader_task => {
+            let reader_result = reader
+                .map_err(|join| anyhow::anyhow!("reader task failed: {join}"))
+                .and_then(std::convert::identity);
+            // Normal flow: the writer drains remaining responses and ends.
+            let writer_result = writer_task
+                .await
+                .map_err(|join| anyhow::anyhow!("writer task failed: {join}"))
+                .and_then(std::convert::identity);
+            writer_result.and(reader_result)
+        }
+        writer = &mut writer_task => {
+            reader_task.abort();
+            writer
+                .map_err(|join| anyhow::anyhow!("writer task failed: {join}"))
+                .and_then(std::convert::identity)
+        }
+    };
+    outcome
+}
+
+async fn read_frames<R>(
+    mut reader: R,
+    io: Arc<IoHandler>,
+    cancellations: protocol::CancelRegistry,
+    tool_timeout: Option<std::time::Duration>,
+    requests: Arc<tokio::sync::Semaphore>,
+    tx: tokio::sync::mpsc::Sender<Incoming>,
+) -> anyhow::Result<()>
+where
+    R: tokio::io::AsyncBufRead + Unpin,
+{
     let mut line = String::new();
     loop {
         match read_bounded_line(&mut reader, MAX_FRAME_BYTES, &mut line).await {
             Ok(FrameRead::Line) => {}
-            Ok(FrameRead::Eof) | Err(_) => break,
+            Ok(FrameRead::Eof) | Err(_) => return Ok(()),
             Ok(FrameRead::Oversize) => {
                 // The rest of the oversized line is still unread and
                 // unknowable, so framing cannot resume: answer once with a
                 // request error, then end the session.
-                let response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32600,
-                        "message": format!(
-                            "request frame exceeds maximum size ({MAX_FRAME_BYTES} bytes)"
-                        )
-                    },
-                    "id": Value::Null
-                });
-                write_response(&mut writer, &response.to_string())
-                    .await
-                    .map_err(anyhow::Error::from)?;
-                break;
+                return send_frame(
+                    &tx,
+                    Incoming::Ready(protocol_error_frame(
+                        &Value::Null,
+                        -32600,
+                        format!("request frame exceeds maximum size ({MAX_FRAME_BYTES} bytes)")
+                            .as_str(),
+                    )),
+                )
+                .await;
             }
         }
 
-        let line = line.trim();
-        if line.is_empty() {
+        if line.trim().is_empty() {
             continue;
         }
 
         // Parse request
-        let _request: Value = match serde_json::from_str(line) {
-            Ok(v) => v,
-            Err(e) => {
-                let response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32700,
-                        "message": format!("Parse error: {}", e)
-                    },
-                    "id": Value::Null
-                });
-                // A dead stdout means the client is gone; serving on would
-                // spin silently, so the failure terminates the session.
-                write_response(&mut writer, &response.to_string())
-                    .await
-                    .map_err(anyhow::Error::from)?;
+        let request: Value = match serde_json::from_str(line.trim()) {
+            Ok(request) => request,
+            Err(error) => {
+                let response = protocol_error_frame(
+                    &Value::Null,
+                    -32700,
+                    format!("Parse error: {error}").as_str(),
+                );
+                send_frame(&tx, Incoming::Ready(response)).await?;
                 continue;
             }
         };
 
-        // Handle JSON-RPC request
-        let response = io.handle_request(line).await;
-        if let Some(resp) = response {
-            write_response(&mut writer, &resp)
-                .await
-                .map_err(anyhow::Error::from)?;
+        // MCP stdio carries one message per line; JSON-RPC batch arrays
+        // are not part of MCP 2025-03-26+ and can only confuse clients
+        // that never asked for them.
+        if request.is_array() {
+            send_frame(
+                &tx,
+                Incoming::Ready(protocol_error_frame(
+                    &Value::Null,
+                    -32600,
+                    "batched JSON-RPC requests are not supported: one message per line",
+                )),
+            )
+            .await?;
+            continue;
+        }
+
+        let is_cancel_notification =
+            request.get("method").and_then(Value::as_str) == Some("notifications/cancelled");
+        let permit = if is_cancel_notification {
+            // Cancellation must remain serviceable when the scan slots are
+            // saturated; its handler only wakes a waiter and does no scan.
+            None
+        } else if let Ok(permit) = requests.clone().try_acquire_owned() {
+            Some(permit)
+        } else if let Some(id) = request.get("id") {
+            send_frame(
+                &tx,
+                Incoming::Ready(protocol_error_frame(
+                    id,
+                    -32001,
+                    "server is at its concurrent request limit; retry later",
+                )),
+            )
+            .await?;
+            continue;
+        } else {
+            continue;
+        };
+
+        // Track cancellation by the serialized id. Notifications carry no
+        // id and therefore nothing to cancel; `initialize` is tracked too
+        // (the spec forbids clients from cancelling it, which is the
+        // client side of the contract — a stray cancel is simply ignored
+        // server-side).
+        let cancel_state = request
+            .get("id")
+            .map(|id| protocol::track_request(&cancellations, id));
+
+        let io = io.clone();
+        let cancellations = cancellations.clone();
+        let request_id = request.get("id").cloned();
+        let line = line.trim().to_owned();
+        // The worker owns the admission permit. If the client cancels or
+        // times out, dropping its JoinHandle detaches this worker, so the
+        // permit still bounds blocking work until that work actually ends.
+        let work = tokio::spawn(async move {
+            let _permit = permit;
+            io.handle_request(&line).await
+        });
+        let handle = tokio::spawn(async move {
+            // Notifications carry no id: they get no cancellation handle
+            // (nothing to cancel) and no timeout frame (their handlers
+            // run to completion synchronously inside jsonrpc-core).
+            let outcome = run_request(work, cancel_state, request_id.clone(), tool_timeout).await;
+            if let Some(request_id) = &request_id {
+                protocol::untrack_request(&cancellations, request_id);
+            }
+            outcome
+        });
+
+        send_frame(&tx, Incoming::Task(handle)).await?;
+    }
+}
+
+/// Execute one request or notification. Cancellation and timeout stop
+/// waiting for the response; already-running blocking work continues under
+/// its admission permit until it finishes. Cancelled requests emit no
+/// response, and every request is walled by [`protocol::tool_timeout`].
+async fn run_request(
+    mut work: tokio::task::JoinHandle<Option<String>>,
+    cancel_state: Option<Arc<protocol::CancelState>>,
+    request_id: Option<Value>,
+    tool_timeout: Option<std::time::Duration>,
+) -> Option<String> {
+    let raced = async {
+        match &cancel_state {
+            Some(cancel_state) => {
+                tokio::select! {
+                    response = &mut work => Some(response),
+                    // Cancellation wins the race against the work; the
+                    // client was told to ignore a late response anyway.
+                    () = cancel_state.cancelled() => None,
+                }
+            }
+            None => Some(work.await),
+        }
+    };
+    let completed = match tool_timeout {
+        Some(duration) => match tokio::time::timeout(duration, raced).await {
+            Ok(response) => response,
+            Err(_elapsed) => {
+                return request_id.as_ref().map(|request_id| {
+                    timeout_frame(request_id, duration.as_millis().to_string().as_str())
+                });
+            }
+        },
+        None => raced.await,
+    };
+    match completed {
+        Some(Ok(response)) => response,
+        Some(Err(_join)) => request_id
+            .as_ref()
+            .map(|id| protocol_error_frame(id, -32603, "request handler failed")),
+        None => None,
+    }
+}
+
+/// Build one JSON-RPC error frame with an explicit numeric code; used for
+/// the transport-level rejections that never reach jsonrpc-core.
+fn protocol_error_frame(id: &Value, code: i64, message: &str) -> String {
+    serde_json::json!({
+        "jsonrpc": "2.0",
+        "error": { "code": code, "message": message },
+        "id": id
+    })
+    .to_string()
+}
+
+/// Frame for a request that outlived [`protocol::tool_timeout`]. The
+/// request id is echoed so the client can correlate it.
+fn timeout_frame(request_id: &Value, timeout: &str) -> String {
+    protocol_error_frame(
+        request_id,
+        -32000,
+        format!(
+            "request took longer than the tool timeout ({timeout}); set \
+             AEGIS_MCP_TOOL_TIMEOUT_MS=0 or a higher value for longer scans"
+        )
+        .as_str(),
+    )
+}
+
+/// Deliver frames to the writer as request tasks complete, in completion
+/// order — the same behaviour as the reference MCP server SDK. Clients
+/// correlate responses by request id, and the 2025-06-18 stdio transport
+/// imposes no ordering requirement, so a slow scan never delays an
+/// in-flight `ping`.
+async fn write_frames<W>(
+    mut writer: W,
+    mut rx: tokio::sync::mpsc::Receiver<Incoming>,
+) -> anyhow::Result<()>
+where
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    use jsonrpc_core::futures::stream::{FuturesUnordered, StreamExt};
+
+    let mut pending: FuturesUnordered<tokio::task::JoinHandle<Option<String>>> =
+        FuturesUnordered::new();
+    loop {
+        tokio::select! {
+            done = pending.next(), if !pending.is_empty() => match done {
+                Some(Ok(Some(response))) => write_response(&mut writer, &response).await?,
+                // Cancelled or otherwise silent request: no frame.
+                Some(Ok(None)) => {}
+                Some(Err(join)) => return Err(anyhow::anyhow!("request task failed: {join}")),
+                // Unreachable while the guard keeps this arm off an empty
+                // stream, but the match must know it ends.
+                None => return Ok(()),
+            },
+            incoming = rx.recv() => match incoming {
+                Some(Incoming::Ready(response)) => write_response(&mut writer, &response).await?,
+                Some(Incoming::Task(handle)) => pending.push(handle),
+                // Reader ended (stdin EOF); drain responses still queued.
+                None => {
+                    while let Some(done) = pending.next().await {
+                        match done {
+                            Ok(Some(response)) => write_response(&mut writer, &response).await?,
+                            Ok(None) => {}
+                            Err(join) => {
+                                return Err(anyhow::anyhow!("request task failed: {join}"))
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+            },
         }
     }
+}
 
-    Ok(())
+async fn send_frame(
+    tx: &tokio::sync::mpsc::Sender<Incoming>,
+    frame: Incoming,
+) -> anyhow::Result<()> {
+    tx.send(frame)
+        .await
+        .map_err(|_| anyhow::anyhow!("writer has ended; session over"))
 }
 
 /// Write one newline-terminated JSON-RPC frame and flush.
@@ -1024,6 +1326,7 @@ async fn write_response<W: tokio::io::AsyncWrite + Unpin>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn a_config_with_a_baseline_inside_the_sandbox_carries_it_into_the_options() {
@@ -1095,6 +1398,109 @@ mod tests {
         assert!(!patterns.is_empty(), "Scanner should have patterns loaded");
     }
 
+    #[tokio::test]
+    async fn run_request_returns_handler_response() {
+        let work = tokio::spawn(async { Some("response".to_string()) });
+        assert_eq!(
+            run_request(work, None, Some(json!(7)), None).await,
+            Some("response".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn run_request_times_out_with_a_correlated_error() {
+        let work = tokio::spawn(std::future::pending::<Option<String>>());
+        let response = run_request(
+            work,
+            None,
+            Some(json!(9)),
+            Some(std::time::Duration::from_millis(1)),
+        )
+        .await
+        .expect("a timed out request has an error frame");
+        let frame: Value = serde_json::from_str(&response).expect("timeout frame is JSON");
+        assert_eq!(frame["id"], 9);
+        assert_eq!(frame["error"]["code"], -32000);
+    }
+
+    #[tokio::test]
+    async fn run_request_reports_handler_task_failure() {
+        let work = tokio::spawn(async {
+            tokio::task::yield_now().await;
+            panic!("synthetic handler failure")
+        });
+        let response = run_request(work, None, Some(json!(11)), None)
+            .await
+            .expect("a failed request has an error frame");
+        let frame: Value = serde_json::from_str(&response).expect("failure frame is JSON");
+        assert_eq!(frame["id"], 11);
+        assert_eq!(frame["error"]["code"], -32603);
+    }
+
+    #[tokio::test]
+    async fn blocking_task_panic_maps_to_internal_error() {
+        let spawned = tokio::task::spawn_blocking(|| -> std::result::Result<(), &str> {
+            panic!("synthetic blocking worker failure")
+        })
+        .await;
+        let error = spawn_blocking_result(spawned, "fixture worker failed")
+            .expect_err("a worker panic must become an RPC error");
+        assert_eq!(error.code, jsonrpc_core::ErrorCode::InternalError);
+        assert!(error.message.contains("fixture worker failed"));
+    }
+
+    #[tokio::test]
+    async fn saturated_transport_rejects_requests_with_retryable_error() {
+        let request = br#"{"jsonrpc":"2.0","method":"ping","id":42}"#;
+        let reader = BufReader::new(&request[..]);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        read_frames(
+            reader,
+            Arc::new(IoHandler::new()),
+            protocol::new_cancellation_registry(),
+            None,
+            Arc::new(tokio::sync::Semaphore::new(0)),
+            tx,
+        )
+        .await
+        .expect("overload is a protocol response, not a transport failure");
+        match rx.recv().await.expect("overload response is sent") {
+            Incoming::Ready(frame) => {
+                let value: Value = serde_json::from_str(&frame).expect("response is JSON");
+                assert_eq!(value["id"], 42);
+                assert_eq!(value["error"]["code"], -32001);
+            }
+            Incoming::Task(_) => panic!("overload must be answered before dispatch"),
+        }
+    }
+
+    #[test]
+    fn prepare_bundle_builds_shipped_patterns() {
+        let prepared = prepare_bundle(None, &Config::default()).expect("shipped bundle compiles");
+        assert!(prepared.pattern_count > 0);
+        assert_eq!(prepared.pattern_count, prepared.bundle.len());
+        assert_ne!(prepared.version, "");
+        assert_ne!(prepared.checksum, "");
+    }
+
+    #[tokio::test]
+    async fn update_bundle_accepts_a_safe_bundle_path() {
+        let cwd = std::env::current_dir().expect("read cwd");
+        let directory = tempfile::tempdir_in(cwd).expect("create in-sandbox fixture dir");
+        let path = directory.path().join("bundle.json.gz");
+        Bundle::new(Vec::new())
+            .save(&path)
+            .expect("write valid empty bundle");
+
+        let rpc = AegisRpcImpl::new(Arc::new(ServerState::new()));
+        let updated = rpc
+            .update_bundle(Some(path.to_string_lossy().into_owned()), false)
+            .await
+            .expect("safe bundle path loads and installs");
+        assert!(updated.success);
+        assert_eq!(updated.pattern_count, 0);
+    }
+
     #[test]
     fn test_server_state_new() {
         let state = ServerState::new();
@@ -1113,7 +1519,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let scanner = state.scanner.read().await;
         let registry = scanner.registry();
@@ -1196,7 +1602,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.scan_string(String::new(), "test.txt".to_string()).await;
@@ -1210,7 +1616,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc
@@ -1227,7 +1633,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.scan_env().await;
@@ -1239,7 +1645,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_patterns(None).await;
@@ -1253,7 +1659,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_patterns(Some("secrets".to_string())).await;
@@ -1267,7 +1673,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         let rpc = AegisRpcImpl::new(state);
         let result = rpc.list_categories().await;
@@ -1280,7 +1686,7 @@ mod tests {
         let state = Arc::new(ServerState::new());
         {
             let mut scanner = state.scanner.write().await;
-            *scanner = init_scanner().expect("bundled patterns compile");
+            *scanner = Arc::new(init_scanner().expect("bundled patterns compile"));
         }
         state
     }

@@ -9,10 +9,13 @@ Protocol lifecycle and discovery methods — `initialize`,
 across protocol revisions `2024-11-05`, `2025-03-26`, and `2025-06-18`
 (the client-requested version is echoed when supported, otherwise the
 server answers with `2025-06-18`). Only the `tools` capability is
-advertised: `resources/*` and `prompts/*` remain `-32601 Method not
-found`. The seven scanning tools are also reachable directly through
-their original custom JSON-RPC method names, with positional parameters
-(documented below); both surfaces dispatch to the same implementations.
+advertised: `resources/list`, `resources/templates/list`, and
+`prompts/list` answer with empty lists so clients that probe them do
+not misreport the server as broken; everything else unadvertised
+stays `-32601 Method not found`. The seven scanning tools are
+also reachable directly through their original custom JSON-RPC method
+names, with positional parameters (documented below); both surfaces
+dispatch to the same implementations.
 
 Wire behaviour is pinned by a conformance suite
 (`crates/aegis-mcp/tests/fixtures/mcp_wire_conformance.json`, replayed
@@ -24,6 +27,24 @@ contract, not prose.
 (`request frame exceeds maximum size`) and the session ends — framing
 cannot resume inside an oversized line. `scan_string` is for snippets;
 use `scan_file`/`scan_dir` for anything on disk.
+
+**Concurrency, cancellation, and timeouts (since 0.6.5):** requests are
+processed concurrently and responses are written as each task
+completes — the same delivery model as the reference MCP server SDK,
+so a long directory scan never delays a `ping` (clients match
+responses by request id; the 2025-06-18 stdio transport imposes no
+ordering requirement). The server admits at most 32 concurrent request
+handlers and bounds its response queue; excess requests receive JSON-RPC
+`-32001` and can be retried. Clients may cancel an in-flight request with
+`notifications/cancelled`; the server stops waiting for its response and
+emits no frame for it. A blocking scan already underway continues in the
+background and holds its admission slot until it finishes, so cancellation
+does not interrupt filesystem or regex work. Unknown or already-finished
+cancellations are ignored. Every request is also walled by a server-side
+tool timeout — `AEGIS_MCP_TOOL_TIMEOUT_MS`, default 600000, `0`
+disables — which answers a late request with JSON-RPC `-32000` instead
+of hanging. The binary takes no arguments (any argument other than
+`--version` is an error) to avoid accidentally-run REPLs.
 
 ## Starting the Server
 
@@ -273,3 +294,42 @@ default embedded set).
 Malformed parameters also return `-32602`, e.g. calling `scan_file` with
 the wrong number of arguments yields
 `Invalid params: expected exactly one string parameter: ["/path/to/scan/target"]`.
+
+## Troubleshooting
+
+### `-32601 Method not found` storms from a real MCP client
+
+A `Method not found` for standard methods (`initialize`, `tools/list`,
+`ping`) almost always means the client launched a **stale binary**: an
+older `aegis-mcp` installed earlier on `PATH` that predates the MCP
+lifecycle layer. Check the running build:
+
+```bash
+aegis-mcp --version   # prints e.g. "aegis-mcp 0.6.4"
+```
+
+Compare against the workspace version in the root `Cargo.toml`; if it
+differs, rebuild and reinstall:
+
+```bash
+# One-liner (from repo root):
+cargo build --release --package aegis-mcp && cp target/release/aegis-mcp ~/.local/bin/aegis-mcp
+
+# Or use the install helper (builds + installs + prints version):
+./scripts/install-mcp.sh
+```
+
+### Request seems to hang
+
+The server processes requests concurrently and answers `ping`
+immediately even during long scans. A slow `tools/call` that never
+returns is either a genuinely large `scan_dir` (watch stderr, and
+ honour `.gitignore`) or a stuck client; send
+`notifications/cancelled` with the request id — the request produces no
+response and the session keeps working. The scan itself continues until it
+finishes, with its concurrency slot held in the meantime. At most 32
+handlers run at once; excess requests receive `-32001`. To bound request
+time independently of client behaviour, set
+`AEGIS_MCP_TOOL_TIMEOUT_MS=<milliseconds>` (default 600000, `0`
+disables); a timed-out request is answered with JSON-RPC `-32000` and
+the session stays alive.

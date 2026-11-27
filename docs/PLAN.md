@@ -293,6 +293,10 @@ liveness re-proven):**
   Kubernetes does not have. A line regex cannot assert "field missing from
   the block", so the rule now detects the expressible violation
   (`runAsNonRoot: false`) and its description says so.
+- **2026-11-17 follow-up:** `graphql-batch-limit` matched `find -maxdepth`
+  in FireCraft's package smoke scripts because its case-insensitive
+  `maxDepth` alternative was not constrained to a setting. The match is now
+  limited to assignment-shaped `maxDepth` text, with a negative-corpus pin.
 
 **Removed (fake or phantom implementations):**
 

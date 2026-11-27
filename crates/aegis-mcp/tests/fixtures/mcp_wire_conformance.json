@@ -1,5 +1,5 @@
 {
-  "description": "Golden wire fixtures for the aegis-mcp JSON-RPC/stdio surface. Each case is one session: 'requests' are the exact stdin lines in order, 'frames' is the expected subset of each stdout response frame in order (a notification produces no frame), and 'error_code' pins a JSON-RPC error instead of a result. 'text' pins assertions against the JSON payload inside frame.result.content[0].text of tools/call results. Replayed by tests/mcp_wire_conformance.rs; edit both together.",
+  "description": "Golden wire fixtures for the aegis-mcp JSON-RPC/stdio surface. Each case is one session: 'requests' are the exact stdin lines in order, 'frames' is the expected subset of each stdout response frame, matched by request id in any arrival order (the server writes responses in task-completion order, like the reference MCP SDK), and 'error_code' pins a JSON-RPC error instead of a result. 'text.frame' indexes the expected frame list and the target response is located by that frame's request id. Replayed by tests/mcp_wire_conformance.rs; edit both together.",
   "cases": [
     {
       "name": "initialize echoes a supported protocol version",
@@ -136,15 +136,25 @@
       ]
     },
     {
-      "name": "unimplemented MCP surface stays method-not-found",
+      "name": "resources/list returns empty list (prompts/list also implemented)",
       "requests": [
-        "{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"params\":{},\"id\":9}"
+        "{\"jsonrpc\":\"2.0\",\"method\":\"resources/list\",\"params\":{},\"id\":9}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"prompts/list\",\"params\":{},\"id\":10}"
       ],
       "frames": [
         {
           "id": 9,
-          "error_code": -32601,
-          "match": {}
+          "error_code": null,
+          "match": {
+            "result.resources": []
+          }
+        },
+        {
+          "id": 10,
+          "error_code": null,
+          "match": {
+            "result.prompts": []
+          }
         }
       ]
     },
@@ -160,6 +170,56 @@
           "match": {}
         }
       ]
+    },
+    {
+      "name": "resources/templates/list returns an empty template list",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"resources/templates/list\",\"params\":{},\"id\":11}"
+      ],
+      "frames": [
+        {
+          "id": 11,
+          "error_code": null,
+          "match": {
+            "result.resourceTemplates": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "batched JSON-RPC lines are refused, one message per stdio frame",
+      "requests": [
+        "[{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":12}]"
+      ],
+      "frames": [
+        {
+          "id": null,
+          "error_code": -32600,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "a cancellation for an unknown request is ignored and the session stays live",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":999,\"reason\":\"unknown id\"}}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":13}"
+      ],
+      "frames": [
+        {
+          "id": 13,
+          "error_code": null,
+          "match": {}
+        }
+      ]
+    },
+    {
+      "name": "a cancelled in-flight request produces no response frame",
+      "requests": [
+        "{\"jsonrpc\":\"2.0\",\"method\":\"tools/call\",\"params\":{\"name\":\"scan_string\",\"arguments\":{\"content\":\"const x = 1;\",\"source\":\"cancellation\"}},\"id\":14}",
+        "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":14,\"reason\":\"client timeout\"}}"
+      ],
+      "frames": []
     }
   ]
 }
