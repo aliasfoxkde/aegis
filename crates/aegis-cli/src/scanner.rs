@@ -123,7 +123,6 @@ pub fn build_scanner_from_opts(opts: &ScanOptions) -> Result<Scanner> {
         categories: categories.clone(),
         severity_threshold: opts.severity_threshold.clone(),
         include_disabled: opts.all,
-        diff_file: opts.diff.clone(),
         baseline: opts.baseline.clone(),
         anomaly_detectors,
         detect_clones: opts.detect_clones,
@@ -165,14 +164,70 @@ fn stats_with_findings(mut stats: ScanStats, findings: &[Finding]) -> ScanStats 
     stats
 }
 
+/// The scan modes one invocation selected.
+///
+/// Each mode names a different source of content: a diff file, the
+/// process environment, standard input, a single file, the git index, or
+/// the directory tree.
+fn selected_modes(opts: &ScanOptions) -> Vec<&'static str> {
+    let mut modes = Vec::new();
+    if opts.diff.is_some() {
+        modes.push("--diff");
+    }
+    if opts.scan_env {
+        modes.push("--env");
+    }
+    if opts.scan_stdin {
+        modes.push("--stdin");
+    }
+    if opts.scan_file {
+        modes.push("--file");
+    }
+    if opts.staged {
+        modes.push("--staged");
+    }
+    modes
+}
+
+/// Check that the request names one scan mode and one that can be honoured.
+///
+/// The modes used to be picked by a silent precedence chain, so a user who
+/// asked for two scans got one of them and no notice that the other was
+/// dropped. Two modes are a usage error, and a `--file` whose target is a
+/// directory is a usage error too: the flag says "scan this one file", and
+/// scanning the whole tree under it would report work nobody asked for.
+///
+/// # Errors
+///
+/// Returns an error when more than one mode is selected, or when `--file`
+/// names a directory.
+pub fn validate_scan_request(opts: &ScanOptions) -> Result<()> {
+    let modes = selected_modes(opts);
+    if modes.len() > 1 {
+        anyhow::bail!(
+            "the scan modes are exclusive: {} were given together",
+            modes.join(" and ")
+        );
+    }
+    if opts.scan_file && opts.path.is_dir() {
+        anyhow::bail!(
+            "--file scans a single file, but {} is a directory; drop --file to scan the tree",
+            opts.path.display()
+        );
+    }
+    Ok(())
+}
+
 /// Perform scan based on options (testable)
 ///
 /// # Errors
 ///
-/// Returns an error when the diff file cannot be read, when the target file
-/// or directory cannot be scanned, or when `--staged` runs outside a git
-/// repository or contains an oversized/unreadable staged blob.
+/// Returns an error when the request names more than one scan mode, when
+/// the diff file cannot be read, when the target file or directory cannot
+/// be scanned, or when `--staged` runs outside a git repository or
+/// contains an oversized/unreadable staged blob.
 pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Finding>, ScanStats)> {
+    validate_scan_request(opts)?;
     let (findings, stats): (Vec<Finding>, ScanStats) = if let Some(diff_path) = &opts.diff {
         // Scan only changed lines from a diff file
         let diff_content = std::fs::read_to_string(diff_path)?;
@@ -195,14 +250,11 @@ pub fn perform_scan(scanner: &Scanner, opts: &ScanOptions) -> Result<(Vec<Findin
             "internal error: --stdin content must be scanned via execute_scan_with_stdin"
         ));
     } else if opts.scan_file {
-        let path = &opts.path;
-        if path.is_dir() {
-            scanner.scan_dir(path).map_err(|e| anyhow::anyhow!("{e}"))?
-        } else {
-            scanner
-                .scan_file(path)
-                .map_err(|e| anyhow::anyhow!("{e}"))?
-        }
+        // `validate_scan_request` has already refused a directory here, so
+        // this is always the single file the flag names.
+        scanner
+            .scan_file(&opts.path)
+            .map_err(|e| anyhow::anyhow!("{e}"))?
     } else if opts.staged {
         scan_staged(scanner, opts)?
     } else {
@@ -446,6 +498,7 @@ fn persist_receipt(receipt_path: Option<&str>, receipt: &ScanReceipt) -> Result<
 /// baseline), when the scan itself fails, or when the report cannot be
 /// rendered.
 pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
+    validate_scan_request(opts)?;
     let scanner = build_scanner_from_opts(opts)?;
     let (findings, stats) = perform_scan(&scanner, opts)?;
     finish(opts, findings, stats)
@@ -458,6 +511,7 @@ pub fn execute_scan(opts: &ScanOptions) -> Result<ScanResult> {
 /// Returns an error when the scanner cannot be built (bad categories or
 /// baseline) or when the report cannot be rendered.
 pub fn execute_scan_with_stdin(opts: &ScanOptions, stdin_content: &str) -> Result<ScanResult> {
+    validate_scan_request(opts)?;
     let scanner = build_scanner_from_opts(opts)?;
     let findings = scanner.scan_string(stdin_content, "stdin");
     let stats = stats_with_findings(
@@ -668,7 +722,7 @@ async fn read_stdin_content() -> Result<String> {
 ///
 /// Never fails today: patterns ship inside the binary, so there is nothing
 /// to download or write.
-pub async fn update_bundle(_force: bool) -> Result<()> {
+pub async fn update_bundle() -> Result<()> {
     println!("Checking pattern bundle...");
 
     // Patterns are bundled in the aegis-patterns crate
@@ -707,7 +761,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_bundle() {
-        let result = update_bundle(false).await;
+        let result = update_bundle().await;
         assert!(result.is_ok());
     }
 
@@ -814,9 +868,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_update_bundle_with_force() {
-        // Force should still succeed since patterns are bundled
-        let result = update_bundle(true).await;
+    async fn test_update_bundle_reports_the_compiled_in_pattern_set() {
+        // Patterns are compiled into the binary, so an update is a report
+        // rather than a download and cannot fail on a missing network.
+        let result = update_bundle().await;
         assert!(result.is_ok());
     }
 
@@ -1146,14 +1201,15 @@ mod tests {
     }
 
     #[test]
-    fn test_perform_scan_file_dir() {
-        // Test the perform_scan function with scan_file = true and a directory path (lines 82-84)
+    fn test_perform_scan_file_dir_is_refused() {
+        // `--file` names one file. A directory under it used to be scanned
+        // as a whole tree, which reported work nobody asked for.
         let temp_dir = std::env::temp_dir().join("aegis_test_scan_dir");
         std::fs::create_dir_all(&temp_dir).ok();
 
         let opts = ScanOptions {
             path: temp_dir.clone(),
-            scan_file: true, // This triggers the scan_file branch
+            scan_file: true,
             scan_env: false,
             scan_stdin: false,
             follow_symlinks: false,
@@ -1172,10 +1228,44 @@ mod tests {
         };
 
         let scanner = build_scanner_from_opts(&opts).unwrap();
-        let result = perform_scan(&scanner, &opts);
-        assert!(result.is_ok());
+        let error = perform_scan(&scanner, &opts).expect_err("a directory is not a file");
+        assert!(error.to_string().contains("is a directory"), "got: {error}");
 
         std::fs::remove_dir_all(temp_dir).ok();
+    }
+
+    #[test]
+    fn test_perform_scan_file_scans_the_one_file() {
+        let dir = std::env::temp_dir().join("aegis_test_scan_one_file");
+        std::fs::create_dir_all(&dir).ok();
+        let file = dir.join("one.rs");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+
+        let opts = ScanOptions {
+            path: file.clone(),
+            scan_file: true,
+            scan_env: false,
+            scan_stdin: false,
+            follow_symlinks: false,
+            categories: None,
+            severity_threshold: None,
+            output_file: None,
+            baseline: None,
+            all: false,
+            diff: None,
+            format: OutputFormat::Human,
+            quiet: false,
+            staged: false,
+            detect_clones: false,
+            path_classes: Vec::new(),
+            anomaly_detectors: None,
+        };
+
+        let scanner = build_scanner_from_opts(&opts).unwrap();
+        let result = perform_scan(&scanner, &opts).expect("the named file is scanned");
+        assert_eq!(result.1.files_scanned, 1);
+
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
@@ -2134,6 +2224,58 @@ mod tests {
             format: OutputFormat::Human,
             quiet: false,
         }
+    }
+
+    #[test]
+    fn two_scan_modes_at_once_are_refused() {
+        let opts = ScanOptions {
+            scan_env: true,
+            scan_stdin: true,
+            ..dir_scan_opts(PathBuf::from("/test"))
+        };
+
+        let error = validate_scan_request(&opts).expect_err("two modes are a usage error");
+        let message = error.to_string();
+        assert!(message.contains("--env"), "got: {message}");
+        assert!(message.contains("exclusive"), "got: {message}");
+    }
+
+    #[test]
+    fn a_single_scan_mode_is_accepted() {
+        let opts = ScanOptions {
+            scan_env: true,
+            ..dir_scan_opts(PathBuf::from("/test"))
+        };
+        assert!(validate_scan_request(&opts).is_ok());
+
+        let opts = ScanOptions {
+            staged: true,
+            ..dir_scan_opts(PathBuf::from("/test"))
+        };
+        assert!(validate_scan_request(&opts).is_ok());
+    }
+
+    #[tokio::test]
+    async fn an_empty_directory_scans_clean() {
+        // Nothing to inspect is a completed inspection: the receipt proves
+        // the walk happened, so the run is clean rather than incomplete.
+        let empty = tempfile::tempdir().unwrap();
+        let receipt_path = empty.path().join("receipt.json");
+        let scan_path = empty.path().join("tree");
+        std::fs::create_dir(&scan_path).unwrap();
+
+        let exit_code = run_scan_and_get_exit_code_with_receipt(
+            dir_scan_opts(scan_path),
+            Some(receipt_path.to_str().unwrap()),
+        )
+        .await
+        .expect("the scan runs");
+
+        assert_eq!(
+            exit_code, EXIT_CLEAN,
+            "an empty directory is a clean scan, not an incomplete one"
+        );
+        assert!(receipt_path.exists(), "the receipt is persisted");
     }
 
     /// A fixture finding for receipt-construction tests.

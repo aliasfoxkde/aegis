@@ -46,15 +46,15 @@ enum Commands {
         path: PathBuf,
 
         /// Scan a single file
-        #[arg(short, long)]
+        #[arg(short, long, conflicts_with_all = ["env", "stdin", "diff", "staged"])]
         file: bool,
 
         /// Scan environment variables
-        #[arg(short, long)]
+        #[arg(short, long, conflicts_with_all = ["file", "stdin", "diff", "staged"])]
         env: bool,
 
         /// Scan from stdin
-        #[arg(short, long)]
+        #[arg(short, long, conflicts_with_all = ["file", "env", "diff", "staged"])]
         stdin: bool,
 
         /// Follow symbolic links
@@ -83,13 +83,13 @@ enum Commands {
         all: bool,
 
         /// Diff file to scan (only changed lines)
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["file", "env", "stdin", "staged"])]
         diff: Option<PathBuf>,
 
         /// Scan the staged (index) content of the git repository instead
         /// of files on disk — pre-commit mode; `[path]` selects the
         /// repository and defaults to the current directory
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["file", "env", "stdin", "diff"])]
         staged: bool,
 
         /// Comma-separated statistical anomaly detectors to run
@@ -143,11 +143,7 @@ enum Commands {
     },
 
     /// Update pattern bundle
-    Update {
-        /// Force update even if cached
-        #[arg(short, long)]
-        force: bool,
-    },
+    Update,
 
     /// Run benchmark comparison
     Benchmark {
@@ -310,8 +306,8 @@ async fn main() -> Result<()> {
             let path = pattern_state::state_file()?;
             println!("{}", pattern_state::disable_pattern(&path, &pattern)?);
         }
-        Commands::Update { force } => {
-            scanner::update_bundle(force).await?;
+        Commands::Update => {
+            scanner::update_bundle().await?;
         }
         Commands::Benchmark {
             path,

@@ -265,7 +265,7 @@ audits, the progress receipts, and the handoff.
 These were found while re-deriving §2.1 against the code rather than against
 the documentation, and each was re-derived from the source on this baseline.
 The two P1 defects (§4.1, §4.2) and the receipt-path defect found beside
-them (§4.8) are closed; §4.3 through §4.7 are open.
+them (§4.8) are closed; §4.3 through §4.7 are closed as well.
 
 ### 4.1 `aegis scan --env` ignores the severity threshold, the category list, and the baseline — CLOSED by #219
 
@@ -303,7 +303,11 @@ an accident. The integration test
 `test_benchmark_rejects_a_zero_run_count` asserts the exit code and that
 nothing panicked.
 
-### 4.3 `aegis scan --file <dir>` silently scans the whole tree — P3
+### 4.3 `aegis scan --file <dir>` silently scans the whole tree — P3 — CLOSED
+
+**Closed.** `--file` now refuses a directory: the request is validated
+before the scan runs, and a directory under `--file` is a usage error
+naming the path. The tree is scanned when `--file` is dropped.
 
 `--file` is a boolean (`crates/aegis-cli/src/main.rs:48-50`); the target is
 the positional `path`. In `perform_scan` (`crates/aegis-cli/src/scanner.rs:
@@ -317,7 +321,12 @@ single file") does not hold. A user who passes `--file` on a directory gets
 a full-tree scan and no warning. Either the flag rejects a directory, or
 the documentation says what actually happens.
 
-### 4.4 Scanning an empty directory exits 3 — P2
+### 4.4 Scanning an empty directory exits 3 — P2 — CLOSED
+
+**Closed.** An empty tree now records the scan root as an analyzed
+inspection unit, so the receipt certifies that the walk happened and the
+scan exits 0. "Nothing to inspect" is a completed inspection, not an
+unproven one.
 
 `scan_dir` on an empty tree produces no file entries, so the inspection
 ledger stays empty (`crates/aegis-core/src/scanner.rs:1495-1516`); the
@@ -334,7 +343,11 @@ and the pipeline fails. The exit code is the contract: 3 means the receipt
 cannot certify that every required inspection completed, and an empty tree
 has completed every inspection there was.
 
-### 4.5 The scan modes are not exclusive and the precedence is silent — P2
+### 4.5 The scan modes are not exclusive and the precedence is silent — P2 — CLOSED
+
+**Closed.** The mode flags carry clap's `conflicts_with_all`, and the
+library validates the request as well, so two modes are a usage error
+(exit code 2) instead of a silently different scan.
 
 No mode flag carries `conflicts_with` (`crates/aegis-cli/src/main.rs:
 43-116`); the only enforced pair is `--no-anomalies` against
@@ -350,7 +363,14 @@ them and no notice that the other was dropped. Clap's `conflicts_with` is
 the built-in answer, and it makes the mistake a usage error (exit 2) rather
 than a silently different scan.
 
-### 4.6 Path classification does not reach every finding — P2
+### 4.6 Path classification does not reach every finding — P2 — CLOSED
+
+**Closed.** Classification moved into the finding pipeline:
+`Scanner::apply_path_classes` runs over the findings of every entry
+point — the file and directory walks, the statistical anomaly pass, the
+environment scan, a diff, and content read from stdin or from the git
+index — so a finding is classified by where it came from rather than by
+which scanner produced it.
 
 `apply_path_class` (`crates/aegis-core/src/path_class.rs:161-168`) does the
 documented thing where it is called: it adds the class tag, returns early
@@ -372,7 +392,11 @@ Path classification is a per-file side effect of the file scanner rather
 than a property of the finding pipeline. Content that arrives through any
 other entry point escapes it.
 
-### 4.7 Two flags are parsed and then never read — P3
+### 4.7 Two flags are parsed and then never read — P3 — CLOSED
+
+**Closed.** `aegis update --force` is gone: the command reports the
+compiled-in pattern set and has nothing to force. The unread core
+`ScanOptions::diff_file` field is gone with it.
 
 - `aegis update --force` (`crates/aegis-cli/src/main.rs:146-150`) is parsed
   and threaded into `update_bundle`, whose parameter is literally
@@ -448,18 +472,18 @@ next one verifiable.
 3. **Close the wire-surface capability gaps** (§2.1): at minimum `baseline`
    and `follow_symlinks`, expressed in `Config` so every surface can carry
    them.
-4. **Make the scan modes exclusive and the emptiness rule honest** (§4.4,
-   §4.5): `conflicts_with` on the mode flags, and an empty tree reported as
-   clean rather than as an unproven inspection.
-5. **Apply path classification to the findings that currently escape it**
-   (§4.6): move it into the finding pipeline rather than the file scanner,
-   so `--env`, `--diff`, `--stdin`, `--staged`, and the anomaly pass are
-   classified too.
+4. ~~**Make the scan modes exclusive and the emptiness rule honest**
+   (§4.4, §4.5)~~ — **DONE**: `conflicts_with` on the mode flags, and an
+   empty tree reported as clean rather than as an unproven inspection.
+5. ~~**Apply path classification to the findings that currently escape
+   it** (§4.6)~~ — **DONE**: classification moved into the finding
+   pipeline, so `--env`, `--diff`, `--stdin`, `--staged`, and the anomaly
+   pass are classified too.
 6. ~~**Refresh the stale documentation** (§3.2, §3.3)~~ — **DONE, #221**:
    the roadmap snapshot's numbers match the tree and the `docs/README.md`
    index has an entry for every document under `docs/`.
 7. **Record the `code_coverage` ruleset rule as unevaluated** (§5), so the
    ruleset is not read as enforcing a 70% floor that nothing reports.
-8. **Retire the flags that can never fire** (§4.3, §4.7): make `--file`
-   reject a directory or document what it does, and drop `--force` and the
-   unread `diff_file` field.
+8. ~~**Retire the flags that can never fire** (§4.3, §4.7)~~ — **DONE**:
+   `--file` rejects a directory, and `--force` and the unread `diff_file`
+   field are gone.

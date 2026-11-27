@@ -7,6 +7,42 @@ every release are attached to the matching GitHub release.
 
 ## [Unreleased]
 
+### Added
+
+- Path classification now reaches every finding, not only the ones a
+  file scan produced. `--env`, `--diff`, `--stdin`, `--staged`, and the
+  statistical anomaly pass classify their findings against the same
+  rules as a directory scan, so a `--classify-path` rule applies to
+  content that arrives through any entry point.
+
+### Changed
+
+- **The scan modes are exclusive.** `--file`, `--env`, `--stdin`,
+  `--diff`, and `--staged` may not be combined: doing so is a usage
+  error (exit code 2). The modes used to be picked by a silent
+  precedence chain, so a user who asked for two scans got one of them
+  and no notice that the other was dropped.
+
+- **`--file` refuses a directory.** The flag means "scan this one
+  file"; a directory under it was scanned as a whole tree, which
+  reported work nobody asked for. Drop `--file` to scan the tree.
+
+- **Scanning an empty directory exits 0.** The receipt records the
+  scan root as an analyzed inspection unit, so "nothing to inspect" is
+  reported as a completed inspection rather than as an unproven one.
+  Pipelines that scan an empty build directory no longer fail with
+  exit code 3.
+
+### Removed
+
+- **`aegis update --force`.** Patterns ship inside the binary, so there
+  is nothing for the flag to force. It was accepted and ignored; it is
+  now a usage error.
+
+- **The core `ScanOptions::diff_file` field.** It was set by the CLI
+  and read nowhere in `aegis-core`, because the diff route calls
+  `Scanner::scan_diff` directly.
+
 ## [0.6.6] - 2026-11-24
 
 ### Fixed

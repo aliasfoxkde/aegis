@@ -15,7 +15,7 @@ aegis scan [path] [options]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `path` | Path to scan | `.` |
-| `-f, --file` | Treat the path as a single file | `false` |
+| `-f, --file` | Treat the path as a single file. A directory is refused: drop `--file` to scan the tree | `false` |
 | `-e, --env` | Scan environment variables | `false` |
 | `--stdin` | Read the payload to scan from stdin; findings carry the source label `stdin` | `false` |
 | `--follow-symlinks` | Follow symbolic links | `false` |
@@ -35,6 +35,11 @@ aegis scan [path] [options]
 option, so it must come **before** the subcommand
 (`aegis --format json scan .`). `-c, --config <profile>`, `-q, --quiet`,
 and `-v, --verbose` are marked global in clap and may appear anywhere.
+
+**The scan modes are exclusive.** `--file`, `--env`, `--stdin`, `--diff`,
+and `--staged` each name a different source of content, and only one of
+them may be given: combining two is a usage error (exit code 2) rather
+than a scan that silently drops one of them.
 
 `--config` resolves a built-in preset name (`production`, `pipeline`,
 `development`, `mcp-integration`) or a path to a JSON profile file, and
@@ -140,14 +145,12 @@ the binary — there is no bundle download, so this never fetches
 anything:
 
 ```bash
-aegis update [options]
+aegis update
 ```
 
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--force` | Accepted for compatibility; has no effect |
+The command takes no options. A `--force` flag used to be accepted and
+did nothing; it was removed rather than left as a flag that could never
+change the outcome.
 
 ### aegis benchmark
 
@@ -220,6 +223,10 @@ with both the inspection completeness and the finding policy the receipt
 records; informational (`info`) severity findings never affect it. With
 `--baseline`, code 1 means the scan produced findings that are not in the
 baseline; findings already recorded there do not affect the exit code.
+
+A scan of an empty directory has completed every inspection there was,
+so it exits 0 rather than 3: "nothing to inspect" is not the same as
+"nothing was proven".
 
 ### Binaries and unsupported files
 
