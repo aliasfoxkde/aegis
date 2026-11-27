@@ -218,6 +218,23 @@
       ]
     },
     {
+      "name": "list_categories reports the registry categories",
+      "requests": [
+        "{\"method\":\"list_categories\",\"params\":null,\"id\":15}"
+      ],
+      "frames": [
+        {
+          "match": {
+            "success": true,
+            "risk_level": "none",
+            "error": null,
+            "categories.0": "accessibility"
+          },
+          "min_finding_count": 30
+        }
+      ]
+    },
+    {
       "name": "malformed JSON earns a parse error",
       "requests": [
         "{not json"
