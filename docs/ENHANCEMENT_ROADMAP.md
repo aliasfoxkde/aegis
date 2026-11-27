@@ -186,8 +186,10 @@ the shipped work:
 Tracked as standing work alongside features:
 
 - **Coverage gate**: shipped — `cargo llvm-cov --workspace` runs in CI and
-  `codecov.yml` pins real thresholds (90% project / 85% patch); measured
-  97.24% lines, so the gate can be raised as coverage rises
+  `codecov.yml` pins real thresholds (97% project / 90% patch), and the CI
+  job enforces the same floors (97.0 project, 90.0 patch) whether or not
+  the Codecov upload is evaluated; measured 97.61% lines, so the gate can
+  be raised as coverage rises
 - **Benchmarks**: shipped — criterion suite for the pattern-matching hot
   path and for scanner init (`crates/aegis-core/benches/`)
 - **Fuzzing**: shipped — four cargo-fuzz targets for the suppression
@@ -200,9 +202,10 @@ Tracked as standing work alongside features:
   firing example (`crates/aegis-core/tests/pattern_liveness.rs`)
 - **Strict lints**: shipped — workspace `[lints]` with pedantic +
   `missing_docs`, `-D warnings` in CI
-- **Crates.io publishing**: open — `cargo publish` for the library crates
-  in the release workflow (needs a `CARGO_REGISTRY_TOKEN` secret; the
-  workspace version source is already single-sourced for this)
+- **Crates.io publishing**: closed without publishing — Phase 13 of
+  [`PLAN.md`](PLAN.md) decided against publishing the library crates. The
+  GitForge-first pipeline ships the binaries and the source archives
+  instead; see [`guides/RELEASES.md`](guides/RELEASES.md).
 
 ---
 
@@ -230,7 +233,13 @@ table is the authoritative status snapshot.
   plus `aegis_wasm.wasm`, published by `.github/workflows/release.yml` on
   `v*` tags — 9 assets in total
 
+The current release publishes **10** assets: five platform tarballs, the
+WASM module, `source.tar.gz`, `source.zip`, `checksums.txt`, and
+`attestation.json` (`uploaded_assets()` in `scripts/release/lib.sh`). The
+count above describes the pre-GitForge workflow only.
+
 ---
 
-*Last Updated: 2026-09-07*
+*Last Updated: 2026-11-24 — archived snapshot refreshed so the numbers it
+quotes match the tree; the research above is unchanged*
 *Maintained by: Aegis Team*
